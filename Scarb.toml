@@ -1,0 +1,28 @@
+[package]
+name = "opus_lever"
+version = "0.1.0"
+edition = "2024_07"
+
+# See more keys and their definitions at https://docs.swmansion.com/scarb/docs/reference/manifest.html
+
+[dependencies]
+starknet = ">= 2.8.0"
+ekubo = { git = "https://github.com/EkuboProtocol/abis", commit = "edb6de8c9baf515f1053bbab3d86825d54a63bc3" }
+opus = { git = "https://github.com/lindy-labs/opus_interfaces.git", branch = "feat/first_commit" }
+access_control = ">= 0.4.0"
+wadray = ">= 0.5.0"
+
+[dev-dependencies]
+snforge_std = { git = "https://github.com/foundry-rs/starknet-foundry", tag = "v0.33.0" }
+assert_macros = ">= 2.8.0"
+
+[[target.starknet-contract]]
+sierra = true
+
+[scripts]
+test = "snforge test"
+
+[[tool.snforge.fork]]
+name = "MAINNET"
+url = "https://starknet-mainnet.public.blastapi.io/rpc/v0_7"
+block_id.number = "912370"
