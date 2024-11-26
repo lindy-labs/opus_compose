@@ -102,7 +102,9 @@ fn test_lever() {
                     // Check that yang amount does not exceed 4 ETH equivalent
                     // The actual amount is likely lower due to pessimistic oracle and
                     // slippage
-                    assert(*yang_balance.amount <= (4 * WAD_ONE).into(), 'yang exceeds upper limit');
+                    assert(
+                        *yang_balance.amount <= (4 * WAD_ONE).into(), 'yang exceeds upper limit'
+                    );
                 } else {
                     continue;
                 }
