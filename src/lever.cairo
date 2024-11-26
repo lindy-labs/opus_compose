@@ -14,7 +14,6 @@ pub mod lever {
         IFlashMintDispatcherTrait, ISentinelDispatcher, ISentinelDispatcherTrait, IShrineDispatcher,
         IShrineDispatcherTrait
     };
-    use opus::types::AssetBalance;
     use opus_lever::interface::ILever;
     use starknet::{ContractAddress, get_caller_address, get_contract_address};
     use starknet::storage::{StoragePointerReadAccess, StoragePointerWriteAccess};
@@ -213,6 +212,7 @@ pub mod lever {
             let usdc: ContractAddress = USDC.try_into().unwrap();
 
             let shrine = self.shrine.read();
+            let cash = IERC20Dispatcher { contract_address: shrine.contract_address };
             let sentinel = self.sentinel.read();
             let router = self.ekubo_router.read();
             let router_clear = IClearDispatcher { contract_address: router.contract_address };
@@ -220,8 +220,7 @@ pub mod lever {
             if lever_up {
                 let max_forge_fee_pct: u128 = (*call_data.pop_front().unwrap()).try_into().unwrap();
 
-                IERC20Dispatcher { contract_address: shrine.contract_address }
-                    .transfer(router.contract_address, amount);
+                cash.transfer(router.contract_address, amount);
                 let route: Array<RouteNode> = array![
                     self.construct_route_node(token, usdc), self.construct_route_node(usdc, yang)
                 ];
