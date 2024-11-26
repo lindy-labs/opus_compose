@@ -60,6 +60,7 @@ fn test_lever() {
     let whale = mainnet::whale();
     let eth = mainnet::eth();
 
+    // Deposit 2 ETH and leverage to 4 ETH-ish
     let eth_capital: u128 = 2 * WAD_ONE;
     start_cheat_caller_address(eth, whale);
     IERC20Dispatcher { contract_address: eth }.approve(mainnet::eth_gate(), eth_capital.into());
@@ -85,6 +86,8 @@ fn test_lever() {
     let trove_health: Health = shrine.get_trove_health(trove_id);
     assert(trove_health.debt.is_non_zero(), 'lever up failed');
 
+    assert(shrine.is_healthy(trove_id), 'trove unhealthy #1');
+
     let eth_yang_id: u32 = 1;
     // sanity check
     assert_eq!(eth, sentinel.get_yang(eth_yang_id), "wrong yang id for eth");
@@ -96,6 +99,10 @@ fn test_lever() {
             Option::Some(yang_balance) => {
                 if *yang_balance.yang_id == eth_yang_id {
                     eth_yang_amt = *yang_balance.amount;
+                    // Check that yang amount does not exceed 4 ETH equivalent
+                    // The actual amount is likely lower due to pessimistic oracle and
+                    // slippage
+                    assert(*yang_balance.amount <= (4 * WAD_ONE).into(), 'yang exceeds upper limit');
                 } else {
                     continue;
                 }
@@ -110,6 +117,19 @@ fn test_lever() {
 
     let trove_health: Health = shrine.get_trove_health(trove_id);
     assert(trove_health.debt.is_zero(), 'lever down failed');
+    assert(trove_health.value.is_zero(), 'incorrect value');
+
+    let mut trove_deposits: Span<YangBalance> = shrine.get_trove_deposits(trove_id);
+    loop {
+        match trove_deposits.pop_front() {
+            Option::Some(yang_balance) => {
+                assert((*yang_balance.amount).is_zero(), 'incorrect yang amt');
+            },
+            Option::None => { break; },
+        };
+    };
+
+    assert(shrine.is_healthy(trove_id), 'trove unhealthy #2');
 }
 
 
