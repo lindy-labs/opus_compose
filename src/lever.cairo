@@ -25,7 +25,7 @@ pub mod lever {
 
     // The value of keccak256("ERC3156FlashBorrower.onFlashLoan") as per EIP3156
     // it is supposed to be returned from the onFlashLoan function by the receiver
-    pub const ON_FLASH_MINT_SUCCESS: u256 =
+    const ON_FLASH_MINT_SUCCESS: u256 =
         0x439148f0bbc682ca079e46d6e2c2f0c1e3b820f1a291b069d8882abf8cf18dd9_u256;
 
     const USDC: felt252 = 0x053c91253bc9682c04929ca02ed00b3e423f6710d2ee7e0d5ebb06f3ecf368a8;
@@ -132,6 +132,7 @@ pub mod lever {
             // Calldata:
             // - Whether the action is taking on leverage or not (i.e. unwinding)
             // - User calling this function, who is also the trove owner
+            // - Trove ID
             // - Address of collateral asset
             // - Maximum forge fee pct for user
             let mut call_data: Array<felt252> = array![
@@ -171,8 +172,9 @@ pub mod lever {
             // Calldata:
             // - Whether the action is taking on leverage or not (i.e. unwinding)
             // - User calling this function, who is also the trove owner
+            // - Trove ID
             // - Address of collateral asset
-            // - Maximum forge fee pct for user
+            // - Amount of collateral's yang to withdraw
             let mut call_data: Array<felt252> = array![
                 false.into(), caller.into(), trove_id.into(), yang.into(), yang_amt.into()
             ];
