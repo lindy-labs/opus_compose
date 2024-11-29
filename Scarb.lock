@@ -14,8 +14,8 @@ source = "git+https://github.com/EkuboProtocol/abis#edb6de8c9baf515f1053bbab3d86
 
 [[package]]
 name = "opus"
-version = "0.1.0"
-source = "git+https://github.com/lindy-labs/opus_interfaces.git?branch=feat%2Ffirst_commit#0fcd360bf386a8989e91ce5121083ad8e349b505"
+version = "1.0.0"
+source = "git+https://github.com/lindy-labs/opus_interfaces.git?branch=feat%2Ffirst_commit#82707ffc50021fd606e7700c0aae7e731e143e72"
 dependencies = [
  "wadray",
 ]
@@ -34,12 +34,14 @@ dependencies = [
 [[package]]
 name = "snforge_scarb_plugin"
 version = "0.33.0"
-source = "git+https://github.com/foundry-rs/starknet-foundry?tag=v0.33.0#221b1dbff42d650e9855afd4283508da8f8cacba"
+source = "registry+https://scarbs.xyz/"
+checksum = "sha256:b4dd6088372decd367652827091e0589bbf6bc550dfc3957baa3e9c61d6eb449"
 
 [[package]]
 name = "snforge_std"
 version = "0.33.0"
-source = "git+https://github.com/foundry-rs/starknet-foundry?tag=v0.33.0#221b1dbff42d650e9855afd4283508da8f8cacba"
+source = "registry+https://scarbs.xyz/"
+checksum = "sha256:f7dc3349f8a6ef4915c93df447a00bd5a53a31129fd0990a00afa0ad31d91b06"
 dependencies = [
  "snforge_scarb_plugin",
 ]
