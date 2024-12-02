@@ -15,7 +15,8 @@ source = "git+https://github.com/EkuboProtocol/abis#edb6de8c9baf515f1053bbab3d86
 [[package]]
 name = "opus"
 version = "1.0.0"
-source = "git+https://github.com/lindy-labs/opus_interfaces.git?branch=feat%2Ffirst_commit#82707ffc50021fd606e7700c0aae7e731e143e72"
+source = "registry+https://scarbs.xyz/"
+checksum = "sha256:31eeae487ab4117c7db8cf6b7109acc055178057f13becf2fdeeb91ed9bf7844"
 dependencies = [
  "wadray",
 ]
