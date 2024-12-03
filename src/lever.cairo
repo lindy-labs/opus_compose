@@ -1,6 +1,7 @@
 #[starknet::contract]
 pub mod lever {
     use core::num::traits::Zero;
+    use core::cmp::minmax;
     use ekubo::components::clear::{IClearDispatcher, IClearDispatcherTrait};
     use ekubo::interfaces::erc20::{IERC20Dispatcher, IERC20DispatcherTrait};
     use ekubo::interfaces::core::{ICoreDispatcher, ICoreDispatcherTrait};
@@ -315,12 +316,7 @@ pub mod lever {
         fn construct_route_node(
             self: @ContractState, token_to_sell: ContractAddress, token_to_buy: ContractAddress
         ) -> RouteNode {
-            let (token0, token1) = if token_to_sell < token_to_buy {
-                (token_to_sell, token_to_buy)
-            } else {
-                (token_to_buy, token_to_sell)
-            };
-
+            let (token0, token1) = minmax(token_to_sell, token_to_buy);
             let pool_key = PoolKey {
                 token0, token1, fee: POOL_FEE, tick_spacing: TICK_SPACING, extension: Zero::zero(),
             };
