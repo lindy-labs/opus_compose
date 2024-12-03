@@ -14,6 +14,8 @@ on:
 jobs:
   test:
     runs-on: ubuntu-latest
+    env:
+      NODE_URL: ${{ secrets.NODE_URL }}
     steps:
       - uses: actions/checkout@v3
       - uses: software-mansion/setup-scarb@v1
