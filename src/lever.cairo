@@ -194,19 +194,29 @@ pub mod lever {
                 ModifyLeverAction::LeverUp(params) => {
                     let yang_erc20 = IERC20Dispatcher { contract_address: params.yang };
 
+                    // Transfer yin to EKubo's router and swap for collateral
                     yin.transfer(router.contract_address, amount);
                     router.multi_multihop_swap(params.swaps);
-                    // Withdraw the collateral asset from the router to this contract.
+
+                    // Withdraw the collateral asset from Ekubo's router to this contract.
                     let yang_asset_amt: u256 = router_clear.clear_minimum(yang_erc20, 1);
 
-                    // Deposit collateral asset to trove
+                    // Deposit purchased collateral to trove
                     yang_erc20.approve(sentinel.get_gate_address(params.yang), yang_asset_amt);
-
                     let yang_amt: Wad = sentinel
                         .enter(
                             params.yang, get_contract_address(), yang_asset_amt.try_into().unwrap()
                         );
                     shrine.deposit(params.yang, params.trove_id, yang_amt);
+
+                    // Borrow yin from trove and send to this contract to repay the flash mint
+                    shrine
+                        .forge(
+                            initiator,
+                            params.trove_id,
+                            amount.try_into().unwrap(),
+                            params.max_forge_fee_pct
+                        );
 
                     self
                         .emit(
@@ -217,15 +227,6 @@ pub mod lever {
                                 yang_amt,
                                 asset_amt: yang_asset_amt.try_into().unwrap()
                             }
-                        );
-
-                    // Borrow yin from trove and send to this contract to repay the flash mint
-                    shrine
-                        .forge(
-                            initiator,
-                            params.trove_id,
-                            amount.try_into().unwrap(),
-                            params.max_forge_fee_pct
                         );
                 },
                 ModifyLeverAction::LeverDown(params) => {
@@ -238,20 +239,9 @@ pub mod lever {
                     let yang_asset_amt: u128 = sentinel
                         .exit(params.yang, initiator, params.yang_amt);
                     shrine.withdraw(params.yang, params.trove_id, params.yang_amt);
-                    self
-                        .emit(
-                            LeverWithdraw {
-                                user: lever_params.caller,
-                                trove_id: params.trove_id,
-                                yang: params.yang,
-                                yang_amt: params.yang_amt,
-                                asset_amt: yang_asset_amt
-                            }
-                        );
 
-                    // Swap collateral for exact amount of flash minted yin
+                    // Transfer collateral to Ekubo's router and swap for yin
                     yang_erc20.transfer(router.contract_address, yang_asset_amt.into());
-
                     router.multi_multihop_swap(params.swaps);
 
                     // Sanity check to ensure the amount of yin flash minted has been purchased
@@ -265,6 +255,17 @@ pub mod lever {
                     }
                     // Transfer any remainder collateral to the caller
                     router_clear.clear_minimum_to_recipient(yang_erc20, 1, lever_params.caller);
+
+                    self
+                        .emit(
+                            LeverWithdraw {
+                                user: lever_params.caller,
+                                trove_id: params.trove_id,
+                                yang: params.yang,
+                                yang_amt: params.yang_amt,
+                                asset_amt: yang_asset_amt
+                            }
+                        );
                 },
             };
 
