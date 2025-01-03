@@ -25,4 +25,4 @@ test = "snforge test"
 [[tool.snforge.fork]]
 name = "MAINNET"
 url = "$NODE_URL"
-block_id.number = "912370"
+block_id.number = "1034844"

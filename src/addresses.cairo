@@ -43,6 +43,12 @@ pub mod mainnet {
             .expect('invalid WBTC address')
     }
 
+    pub fn strk() -> ContractAddress {
+        0x04718f5a0fc34cc1af16a1cdee98ffb20c31f5cd61d6ab07201858f4287c938d
+            .try_into()
+            .expect('invalid STRK address')
+    }
+
     // deployments
     pub fn abbot() -> ContractAddress {
         0x04d0bb0a4c40012384e7c419e6eb3c637b28e8363fb66958b60d90505b9c072f.try_into().unwrap()
