@@ -9,7 +9,7 @@ use opus::interfaces::{
     IShrineDispatcher, IShrineDispatcherTrait
 };
 use opus::types::{AssetBalance, Health, YangBalance};
-use opus::utils::assertions::assert_equalish;
+use opus::utils::assert_equalish;
 use opus_lever::addresses::mainnet;
 use opus_lever::lever::lever as lever_contract;
 use opus_lever::interface::{ILeverDispatcher, ILeverDispatcherTrait};
