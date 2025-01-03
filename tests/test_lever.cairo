@@ -9,6 +9,7 @@ use opus::interfaces::{
     IShrineDispatcher, IShrineDispatcherTrait
 };
 use opus::types::{AssetBalance, Health, YangBalance};
+use opus::utils::assertions::assert_equalish;
 use opus_lever::addresses::mainnet;
 use opus_lever::lever::lever as lever_contract;
 use opus_lever::interface::{ILeverDispatcher, ILeverDispatcherTrait};
@@ -369,9 +370,14 @@ fn test_lever() {
 
     let whale = mainnet::whale();
     let eth = mainnet::eth();
+    let eth_erc20 = IERC20Dispatcher { contract_address: eth };
 
     let mut spy = spy_events();
     let mut expected_events = array![];
+
+    let forge_fee_pct = shrine.get_forge_fee_pct();
+    let before_eth_balance = eth_erc20.balanceOf(whale);
+    let before_shrine_health = shrine.get_shrine_health();
 
     // Deposit 2 ETH and leverage to 4 ETH-ish
     let eth_capital: u128 = 2 * WAD_ONE;
@@ -473,6 +479,22 @@ fn test_lever() {
     };
 
     assert(shrine.is_healthy(trove_id), 'trove unhealthy #2');
+
+    let after_eth_balance = eth_erc20.balanceOf(whale);
+    let eth_balance_diff = before_eth_balance - after_eth_balance;
+
+    // Check that the caller received the original deposited collateral
+    // after round-tripping, minus the forge fees
+    let expected_eth_paid_to_forge_fee = forge_fee_pct * debt.into() / eth_price;
+    let error_margin: u256 = (WAD_ONE / 100).into();
+    assert_equalish(
+        expected_eth_paid_to_forge_fee.into(),
+        eth_balance_diff,
+        error_margin,
+        'wrong amount after round trip'
+    );
+
+    assert_eq!(before_shrine_health.debt, shrine.get_shrine_health().debt, "Wrong total debt");
 
     expected_events
         .append(
