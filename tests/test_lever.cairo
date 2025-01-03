@@ -10,11 +10,12 @@ use opus::interfaces::{
 };
 use opus::types::{AssetBalance, Health, YangBalance};
 use opus_lever::addresses::mainnet;
+use opus_lever::lever::lever as lever_contract;
 use opus_lever::interface::{ILeverDispatcher, ILeverDispatcherTrait};
 use opus_lever::types::{LeverUpParams, LeverDownParams};
 use snforge_std::{
-    declare, ContractClassTrait, DeclareResultTrait, start_cheat_caller_address,
-    stop_cheat_caller_address
+    declare, ContractClassTrait, DeclareResultTrait, EventSpyAssertionsTrait, spy_events,
+    start_cheat_caller_address, stop_cheat_caller_address
 };
 use wadray::{Wad, WAD_ONE};
 
@@ -369,6 +370,9 @@ fn test_lever() {
     let whale = mainnet::whale();
     let eth = mainnet::eth();
 
+    let mut spy = spy_events();
+    let mut expected_events = array![];
+
     // Deposit 2 ETH and leverage to 4 ETH-ish
     let eth_capital: u128 = 2 * WAD_ONE;
     start_cheat_caller_address(eth, whale);
@@ -397,6 +401,7 @@ fn test_lever() {
 
     lever.up(debt.into(), lever_up_params);
     stop_cheat_caller_address(lever.contract_address);
+
     let trove_health: Health = shrine.get_trove_health(trove_id);
     assert(trove_health.debt.is_non_zero(), 'lever up failed');
 
@@ -427,6 +432,24 @@ fn test_lever() {
         };
     };
 
+    let expected_eth_yang_amt = eth_yang_amt - eth_capital.into();
+    expected_events
+        .append(
+            (
+                lever.contract_address,
+                lever_contract::Event::LeverDeposit(
+                    lever_contract::LeverDeposit {
+                        user: whale,
+                        trove_id,
+                        yang: eth,
+                        yang_amt: expected_eth_yang_amt,
+                        // Should correspond 1:1 at that conversion rate
+                        asset_amt: expected_eth_yang_amt.into()
+                    }
+                )
+            )
+        );
+
     let lever_down_params = LeverDownParams {
         trove_id, yang: eth, yang_amt: eth_yang_amt, swaps: lever_down_swaps()
     };
@@ -450,6 +473,24 @@ fn test_lever() {
     };
 
     assert(shrine.is_healthy(trove_id), 'trove unhealthy #2');
+
+    expected_events
+        .append(
+            (
+                lever.contract_address,
+                lever_contract::Event::LeverWithdraw(
+                    lever_contract::LeverWithdraw {
+                        user: whale,
+                        trove_id,
+                        yang: eth,
+                        yang_amt: eth_yang_amt,
+                        // Should correspond 1:1 at that conversion rate
+                        asset_amt: eth_yang_amt.into()
+                    }
+                )
+            )
+        );
+    spy.assert_emitted(@expected_events);
 }
 
 // Similar to the test for `up` in `test_lever` but with a quarter the collateral
