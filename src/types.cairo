@@ -26,6 +26,6 @@ pub struct LeverUpParams {
 pub struct LeverDownParams {
     pub trove_id: u64,
     pub yang: ContractAddress,
-    pub yang_amt: Wad,
+    pub yang_amt: Wad, // Amount of yang to withdraw
     pub swaps: Array<Swap>
 }

@@ -54,7 +54,6 @@ fn deploy_lever() -> ILeverDispatcher {
 // Helper function to construct the multi-multihop swaps for swapping ~6780 CASH for ETH.
 // Retrieved from Ekubo's API at the time of the given block
 fn lever_up_swaps() -> Array<Swap> {
-    // From Ekubo's API
     array![
         // Swap 3363 CASH for ETH via CASH/USDC and USDC/ETH
         Swap {

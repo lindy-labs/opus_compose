@@ -2,7 +2,7 @@
 pub mod lever {
     use ekubo::components::clear::{IClearDispatcher, IClearDispatcherTrait};
     use ekubo::interfaces::erc20::{IERC20Dispatcher, IERC20DispatcherTrait};
-    use ekubo::router_lite::{IRouterLiteDispatcher, IRouterLiteDispatcherTrait,};
+    use ekubo::router_lite::{IRouterLiteDispatcher, IRouterLiteDispatcherTrait};
     use opus::interfaces::{
         IAbbotDispatcher, IAbbotDispatcherTrait, IFlashBorrower, IFlashMintDispatcher,
         IFlashMintDispatcherTrait, ISentinelDispatcher, ISentinelDispatcherTrait, IShrineDispatcher,
@@ -100,10 +100,10 @@ pub mod lever {
     impl ILeverImpl of ILever<ContractState> {
         // Take a long position on a specific collateral for a Trove
         // Steps are as follows:
-        // 1. Flash mint CASH to this contract
-        // 2. Purchase collateral asset with flash-minted CASH via Ekubo
+        // 1. Flash mint yin to this contract
+        // 2. Purchase collateral asset with flash-minted yin via Ekubo
         // 3. Deposit purchased collateral asset to caller's trove
-        // 4. Borrow CASH from caller's trove
+        // 4. Borrow yin from caller's trove and mint to this contract
         fn up(ref self: ContractState, amount: Wad, lever_up_params: LeverUpParams) {
             let caller: ContractAddress = get_caller_address();
             assert(
@@ -115,12 +115,6 @@ pub mod lever {
                 'LEV: Not trove owner'
             );
 
-            // Calldata:
-            // - Whether the action is taking on leverage or not (i.e. unwinding)
-            // - User calling this function, who is also the trove owner
-            // - Trove ID
-            // - Address of collateral asset
-            // - Maximum forge fee pct for user
             let mut call_data: Array<felt252> = array![];
             let modify_lever_params = ModifyLeverParams {
                 caller, action: ModifyLeverAction::LeverUp(lever_up_params)
@@ -140,10 +134,10 @@ pub mod lever {
 
         // Unwind a position for a specific collateral for a Trove
         // Steps are as follows:
-        // 1. Flash mint CASH to this contract
-        // 2. Repay CASH for trove
+        // 1. Flash mint yin to this contract
+        // 2. Repay yin for trove
         // 3. Withdraw collateral asset from trove
-        // 4. Purchase CASH with withdrawn collateral asset via Ekubo
+        // 4. Purchase yin with withdrawn collateral asset via Ekubo
         // 5. Transfer remainder collateral asset to user
         fn down(ref self: ContractState, amount: Wad, lever_down_params: LeverDownParams) {
             let caller: ContractAddress = get_caller_address();
@@ -155,13 +149,6 @@ pub mod lever {
                     .expect('Non-existent trove'),
                 'LEV: Not trove owner'
             );
-
-            // Calldata:
-            // - Whether the action is taking on leverage or not (i.e. unwinding)
-            // - User calling this function, who is also the trove owner
-            // - Trove ID
-            // - Address of collateral asset
-            // - Amount of collateral's yang to withdraw
             let modify_lever_params = ModifyLeverParams {
                 caller, action: ModifyLeverAction::LeverDown(lever_down_params)
             };
@@ -198,7 +185,7 @@ pub mod lever {
                 .unwrap();
 
             let shrine = self.shrine.read();
-            let cash = IERC20Dispatcher { contract_address: shrine.contract_address };
+            let yin = IERC20Dispatcher { contract_address: shrine.contract_address };
             let sentinel = self.sentinel.read();
             let router = self.ekubo_router.read();
             let router_clear = IClearDispatcher { contract_address: router.contract_address };
@@ -207,10 +194,9 @@ pub mod lever {
                 ModifyLeverAction::LeverUp(params) => {
                     let yang_erc20 = IERC20Dispatcher { contract_address: params.yang };
 
-                    cash.transfer(router.contract_address, amount);
+                    yin.transfer(router.contract_address, amount);
                     router.multi_multihop_swap(params.swaps);
-                    // Sanity check to ensure the collateral asset has been purchased and can be
-                    // withdrawn
+                    // Withdraw the collateral asset from the router to this contract.
                     let yang_asset_amt: u256 = router_clear.clear_minimum(yang_erc20, 1);
 
                     // Deposit collateral asset to trove
@@ -233,7 +219,7 @@ pub mod lever {
                             }
                         );
 
-                    // Borrow CASH from trove and send to this contract to repay the flash mint
+                    // Borrow yin from trove and send to this contract to repay the flash mint
                     shrine
                         .forge(
                             initiator,
@@ -245,7 +231,7 @@ pub mod lever {
                 ModifyLeverAction::LeverDown(params) => {
                     let yang_erc20 = IERC20Dispatcher { contract_address: params.yang };
 
-                    // Use the flash minted CASH to repay the trove's debt
+                    // Use the flash minted yin to repay the trove's debt
                     self.abbot.read().melt(params.trove_id, amount.try_into().unwrap());
 
                     // Withdraw collateral to this contract
@@ -263,20 +249,21 @@ pub mod lever {
                             }
                         );
 
-                    // Swap collateral for exact amount of flash minted CASH
+                    // Swap collateral for exact amount of flash minted yin
                     yang_erc20.transfer(router.contract_address, yang_asset_amt.into());
 
                     router.multi_multihop_swap(params.swaps);
 
-                    // Sanity check to ensure the amount of CASH flash minted has been purchased
+                    // Sanity check to ensure the amount of yin flash minted has been purchased
                     // and can be withdrawn
-                    router_clear.clear_minimum(cash, amount);
-                    let cash_amount = cash.balanceOf(get_contract_address());
+                    router_clear.clear_minimum(yin, amount);
+                    let yin_amount = yin.balanceOf(get_contract_address());
 
-                    // Transfer any excess CASH back to the caller.
-                    if cash_amount > amount {
-                        cash.transfer(lever_params.caller, cash_amount - amount);
+                    // Transfer any excess yin back to the caller.
+                    if yin_amount > amount {
+                        yin.transfer(lever_params.caller, yin_amount - amount);
                     }
+                    // Transfer any remainder collateral to the caller
                     router_clear.clear_minimum_to_recipient(yang_erc20, 1, lever_params.caller);
                 },
             };
@@ -284,7 +271,5 @@ pub mod lever {
             ON_FLASH_MINT_SUCCESS
         }
     }
-    // #[generate_trait]
-// impl LeverHelpers of LeverHelpersTrait {}
 }
 

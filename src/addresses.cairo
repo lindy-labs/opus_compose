@@ -37,12 +37,6 @@ pub mod mainnet {
             .expect('invalid ETH address')
     }
 
-    pub fn wbtc() -> ContractAddress {
-        0x03fe2b97c1fd336e750087d68b9b867997fd64a2661ff3ca5a7c771641e8e7ac
-            .try_into()
-            .expect('invalid WBTC address')
-    }
-
     pub fn strk() -> ContractAddress {
         0x04718f5a0fc34cc1af16a1cdee98ffb20c31f5cd61d6ab07201858f4287c938d
             .try_into()
@@ -70,16 +64,7 @@ pub mod mainnet {
         0x0498edfaf50ca5855666a700c25dd629d577eb9afccdf3b5977aec79aee55ada.try_into().unwrap()
     }
 
-    pub fn wbtc_gate() -> ContractAddress {
-        0x05bc1c8a78667fac3bf9617903dbf2c1bfe3937e1d37ada3d8b86bf70fb7926e.try_into().unwrap()
-    }
-
     // Ekubo
-
-    pub fn ekubo_core() -> ContractAddress {
-        0x00000005dd3D2F4429AF886cD1a3b08289DBcEa99A294197E9eB43b0e0325b4b.try_into().unwrap()
-    }
-
     pub fn ekubo_router() -> ContractAddress {
         0x0199741822c2dc722f6f605204f35e56dbc23bceed54818168c4c49e4fb8737e.try_into().unwrap()
     }

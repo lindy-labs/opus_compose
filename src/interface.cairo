@@ -1,7 +1,6 @@
 use opus_lever::types::{LeverUpParams, LeverDownParams};
 use wadray::Wad;
 
-
 #[starknet::interface]
 pub trait ILever<TContractState> {
     // external
