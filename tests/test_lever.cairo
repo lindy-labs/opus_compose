@@ -8,7 +8,7 @@ use opus::interfaces::{
     IAbbotDispatcher, IAbbotDispatcherTrait, ISentinelDispatcher, ISentinelDispatcherTrait,
     IShrineDispatcher, IShrineDispatcherTrait
 };
-use opus::types::{AssetBalance, Health, YangBalance};
+use opus::types::{AssetBalance, Health};
 use opus::utils::assert_equalish;
 use opus_lever::addresses::mainnet;
 use opus_lever::constants::{SENTINEL_ROLES_FOR_LEVER, SHRINE_ROLES_FOR_LEVER};
@@ -374,6 +374,8 @@ fn test_lever() {
     let before_eth_balance = eth_erc20.balanceOf(whale);
     let before_shrine_health = shrine.get_shrine_health();
 
+    let before_up_eth_gate_balance = eth_erc20.balanceOf(mainnet::eth_gate());
+
     // Deposit 2 ETH and leverage to 4 ETH-ish
     let eth_capital: u128 = 2 * WAD_ONE;
     start_cheat_caller_address(eth, whale);
@@ -412,26 +414,10 @@ fn test_lever() {
     // sanity check
     assert_eq!(eth, sentinel.get_yang(eth_yang_id), "wrong yang id for eth");
 
-    let mut trove_deposits: Span<YangBalance> = shrine.get_trove_deposits(trove_id);
-    let mut eth_yang_amt: Wad = Default::default();
-    loop {
-        match trove_deposits.pop_front() {
-            Option::Some(yang_balance) => {
-                if *yang_balance.yang_id == eth_yang_id {
-                    eth_yang_amt = *yang_balance.amount;
-                    // Check that yang amount does not exceed 4 ETH equivalent
-                    // The actual amount is likely lower due to pessimistic oracle and
-                    // slippage
-                    assert(
-                        *yang_balance.amount <= (4 * WAD_ONE).into(), 'yang exceeds upper limit'
-                    );
-                } else {
-                    continue;
-                }
-            },
-            Option::None => { break; },
-        };
-    };
+    let eth_yang_amt: Wad = shrine.get_deposit(eth, trove_id);
+    // Check that yang amount does not exceed 4 ETH equivalent
+    // The actual amount is likely lower due to pessimistic oracle and slippage
+    assert(eth_yang_amt <= (4 * WAD_ONE).into(), 'yang exceeds upper limit');
 
     let expected_eth_yang_amt = eth_yang_amt - eth_capital.into();
     expected_events
@@ -463,15 +449,7 @@ fn test_lever() {
     assert(trove_health.debt.is_zero(), 'lever down failed');
     assert(trove_health.value.is_zero(), 'incorrect value');
 
-    let mut trove_deposits: Span<YangBalance> = shrine.get_trove_deposits(trove_id);
-    loop {
-        match trove_deposits.pop_front() {
-            Option::Some(yang_balance) => {
-                assert((*yang_balance.amount).is_zero(), 'incorrect yang amt');
-            },
-            Option::None => { break; },
-        };
-    };
+    assert(shrine.get_deposit(eth, trove_id).is_zero(), 'incorrect yang amt');
 
     assert(shrine.is_healthy(trove_id), 'trove unhealthy #2');
 
@@ -489,7 +467,13 @@ fn test_lever() {
         'wrong amount after round trip'
     );
 
-    assert_eq!(before_shrine_health.debt, shrine.get_shrine_health().debt, "Wrong total debt");
+    // Check various protocol parameters after round trip
+    let after_shrine_health = shrine.get_shrine_health();
+    assert_eq!(before_shrine_health.debt, after_shrine_health.debt, "Wrong total debt");
+    assert_eq!(before_shrine_health.value, after_shrine_health.value, "Wrong total value");
+
+    let after_down_eth_gate_balance = eth_erc20.balanceOf(mainnet::eth_gate());
+    assert_eq!(before_up_eth_gate_balance, after_down_eth_gate_balance, "Wrong gate balance");
 
     expected_events
         .append(
@@ -594,21 +578,8 @@ fn test_lever_down_unhealthy_fail() {
     // sanity check
     assert_eq!(eth, sentinel.get_yang(eth_yang_id), "wrong yang id for eth");
 
-    let mut trove_deposits: Span<YangBalance> = shrine.get_trove_deposits(trove_id);
-    let mut eth_yang_amt: Wad = Default::default();
-    loop {
-        match trove_deposits.pop_front() {
-            Option::Some(yang_balance) => {
-                if *yang_balance.yang_id == eth_yang_id {
-                    let eth_yang_amt_u128: u128 = (*yang_balance.amount).into();
-                    eth_yang_amt = (eth_yang_amt_u128 / 10).into();
-                } else {
-                    continue;
-                }
-            },
-            Option::None => { break; },
-        };
-    };
+    let eth_yang_amt: u128 = shrine.get_deposit(eth, trove_id).into();
+    let eth_yang_amt: Wad = (eth_yang_amt / 10).into();
 
     start_cheat_caller_address(lever.contract_address, whale);
     let lever_down_params = LeverDownParams {
@@ -662,21 +633,8 @@ fn test_lever_down_insufficient_trove_yang_fail() {
     // sanity check
     assert_eq!(eth, sentinel.get_yang(eth_yang_id), "wrong yang id for eth");
 
-    let mut trove_deposits: Span<YangBalance> = shrine.get_trove_deposits(trove_id);
-    let mut eth_yang_amt: Wad = Default::default();
-    loop {
-        match trove_deposits.pop_front() {
-            Option::Some(yang_balance) => {
-                if *yang_balance.yang_id == eth_yang_id {
-                    let eth_yang_amt_u128: u128 = (*yang_balance.amount).into();
-                    eth_yang_amt = (eth_yang_amt_u128 + 1).into();
-                } else {
-                    continue;
-                }
-            },
-            Option::None => { break; },
-        };
-    };
+    let eth_yang_amt: u128 = shrine.get_deposit(eth, trove_id).into();
+    let eth_yang_amt: Wad = (eth_yang_amt + 1).into();
 
     start_cheat_caller_address(lever.contract_address, whale);
     let lever_down_params = LeverDownParams {
