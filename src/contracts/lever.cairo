@@ -8,7 +8,7 @@ pub mod lever {
         IFlashMintDispatcherTrait, ISentinelDispatcher, ISentinelDispatcherTrait, IShrineDispatcher,
         IShrineDispatcherTrait
     };
-    use opus_lever::interface::ILever;
+    use opus_lever::interfaces::lever::ILever;
     use opus_lever::types::{LeverDownParams, LeverUpParams, ModifyLeverAction, ModifyLeverParams};
     use starknet::{ContractAddress, get_caller_address, get_contract_address};
     use starknet::storage::{StoragePointerReadAccess, StoragePointerWriteAccess};
@@ -22,7 +22,6 @@ pub mod lever {
     // it is supposed to be returned from the onFlashLoan function by the receiver
     const ON_FLASH_MINT_SUCCESS: u256 =
         0x439148f0bbc682ca079e46d6e2c2f0c1e3b820f1a291b069d8882abf8cf18dd9_u256;
-
 
     //
     // Storage
