@@ -47,6 +47,7 @@ pub mod lever {
         LeverWithdraw: LeverWithdraw
     }
 
+    // This mirrors `Deposit` event in Abbot
     #[derive(Copy, Drop, starknet::Event, PartialEq)]
     pub struct LeverDeposit {
         #[key]
@@ -59,6 +60,7 @@ pub mod lever {
         pub asset_amt: u128
     }
 
+    // This mirrors `Withdraw` event in Abbot
     #[derive(Copy, Drop, starknet::Event, PartialEq)]
     pub struct LeverWithdraw {
         #[key]
@@ -97,8 +99,7 @@ pub mod lever {
 
     #[abi(embed_v0)]
     impl ILeverImpl of ILever<ContractState> {
-        // Take a long position on a specific collateral for a Trove
-        // Steps are as follows:
+        // Take on leverage to acquire a specific collateral for a Trove
         // 1. Flash mint yin to this contract
         // 2. Purchase collateral asset with flash-minted yin via Ekubo
         // 3. Deposit purchased collateral asset to caller's trove
@@ -132,7 +133,6 @@ pub mod lever {
         }
 
         // Unwind a position for a specific collateral for a Trove
-        // Steps are as follows:
         // 1. Flash mint yin to this contract
         // 2. Repay yin for trove
         // 3. Withdraw collateral asset from trove

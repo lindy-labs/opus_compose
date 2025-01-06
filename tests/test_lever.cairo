@@ -11,6 +11,7 @@ use opus::interfaces::{
 use opus::types::{AssetBalance, Health, YangBalance};
 use opus::utils::assert_equalish;
 use opus_lever::addresses::mainnet;
+use opus_lever::constants::{SENTINEL_ROLES_FOR_LEVER, SHRINE_ROLES_FOR_LEVER};
 use opus_lever::contracts::lever::lever as lever_contract;
 use opus_lever::interfaces::lever::{ILeverDispatcher, ILeverDispatcherTrait};
 use opus_lever::types::{LeverUpParams, LeverDownParams};
@@ -19,12 +20,6 @@ use snforge_std::{
     start_cheat_caller_address, stop_cheat_caller_address
 };
 use wadray::{Wad, WAD_ONE};
-
-// Forge, deposit and withdraw
-const SHRINE_ROLES_FOR_LEVER: u128 = 8 + 32 + 524288;
-
-// Enter and exit
-const SENTINEL_ROLES_FOR_LEVER: u128 = 2 + 4;
 
 
 fn deploy_lever() -> ILeverDispatcher {
