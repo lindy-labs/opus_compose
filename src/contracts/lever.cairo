@@ -178,7 +178,7 @@ pub mod lever {
             fee: u256,
             mut call_data: Span<felt252>
         ) -> u256 {
-            let lever_params: ModifyLeverParams = Serde::<
+            let ModifyLeverParams { caller, action } = Serde::<
                 ModifyLeverParams
             >::deserialize(ref call_data)
                 .unwrap();
@@ -189,59 +189,53 @@ pub mod lever {
             let router = self.ekubo_router.read();
             let router_clear = IClearDispatcher { contract_address: router.contract_address };
 
-            match lever_params.action {
+            match action {
                 ModifyLeverAction::LeverUp(params) => {
-                    let yang_erc20 = IERC20Dispatcher { contract_address: params.yang };
+                    let LeverUpParams { trove_id, yang, max_forge_fee_pct, swaps } = params;
+                    let yang_erc20 = IERC20Dispatcher { contract_address: yang };
 
                     // Transfer yin to EKubo's router and swap for collateral
                     yin.transfer(router.contract_address, amount);
-                    router.multi_multihop_swap(params.swaps);
+                    router.multi_multihop_swap(swaps);
 
                     // Withdraw the collateral asset from Ekubo's router to this contract.
                     let yang_asset_amt: u256 = router_clear.clear_minimum(yang_erc20, 1);
 
                     // Deposit purchased collateral to trove
-                    yang_erc20.approve(sentinel.get_gate_address(params.yang), yang_asset_amt);
+                    yang_erc20.approve(sentinel.get_gate_address(yang), yang_asset_amt);
                     let yang_amt: Wad = sentinel
-                        .enter(
-                            params.yang, get_contract_address(), yang_asset_amt.try_into().unwrap()
-                        );
-                    shrine.deposit(params.yang, params.trove_id, yang_amt);
+                        .enter(yang, get_contract_address(), yang_asset_amt.try_into().unwrap());
+                    shrine.deposit(yang, trove_id, yang_amt);
 
                     // Borrow yin from trove and send to this contract to repay the flash mint
                     shrine
-                        .forge(
-                            initiator,
-                            params.trove_id,
-                            amount.try_into().unwrap(),
-                            params.max_forge_fee_pct
-                        );
+                        .forge(initiator, trove_id, amount.try_into().unwrap(), max_forge_fee_pct);
 
                     self
                         .emit(
                             LeverDeposit {
-                                user: lever_params.caller,
-                                trove_id: params.trove_id,
-                                yang: params.yang,
+                                user: caller,
+                                trove_id,
+                                yang,
                                 yang_amt,
                                 asset_amt: yang_asset_amt.try_into().unwrap()
                             }
                         );
                 },
                 ModifyLeverAction::LeverDown(params) => {
-                    let yang_erc20 = IERC20Dispatcher { contract_address: params.yang };
+                    let LeverDownParams { trove_id, yang, yang_amt, swaps } = params;
+                    let yang_erc20 = IERC20Dispatcher { contract_address: yang };
 
                     // Use the flash minted yin to repay the trove's debt
-                    self.abbot.read().melt(params.trove_id, amount.try_into().unwrap());
+                    self.abbot.read().melt(trove_id, amount.try_into().unwrap());
 
                     // Withdraw collateral to this contract
-                    let yang_asset_amt: u128 = sentinel
-                        .exit(params.yang, initiator, params.yang_amt);
-                    shrine.withdraw(params.yang, params.trove_id, params.yang_amt);
+                    let yang_asset_amt: u128 = sentinel.exit(yang, initiator, yang_amt);
+                    shrine.withdraw(yang, trove_id, yang_amt);
 
                     // Transfer collateral to Ekubo's router and swap for yin
                     yang_erc20.transfer(router.contract_address, yang_asset_amt.into());
-                    router.multi_multihop_swap(params.swaps);
+                    router.multi_multihop_swap(swaps);
 
                     // Sanity check to ensure the amount of yin flash minted has been purchased
                     // and can be withdrawn
@@ -250,18 +244,18 @@ pub mod lever {
 
                     // Transfer any excess yin back to the caller.
                     if yin_amount > amount {
-                        yin.transfer(lever_params.caller, yin_amount - amount);
+                        yin.transfer(caller, yin_amount - amount);
                     }
                     // Transfer any remainder collateral to the caller
-                    router_clear.clear_minimum_to_recipient(yang_erc20, 1, lever_params.caller);
+                    router_clear.clear_minimum_to_recipient(yang_erc20, 1, caller);
 
                     self
                         .emit(
                             LeverWithdraw {
-                                user: lever_params.caller,
-                                trove_id: params.trove_id,
-                                yang: params.yang,
-                                yang_amt: params.yang_amt,
+                                user: caller,
+                                trove_id,
+                                yang,
+                                yang_amt,
                                 asset_amt: yang_asset_amt
                             }
                         );
@@ -272,4 +266,3 @@ pub mod lever {
         }
     }
 }
-
