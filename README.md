@@ -1,6 +1,6 @@
 # Opus Lever
 
-Leverage on [Opus](https://github.com/lindy-labs/opus_contracts) using flash mint.
+Leverage on [Opus](https://github.com/lindy-labs/opus_contracts) using flash mint. This relies on Ekubo's router API for [swaps](https://petstore3.swagger.io/?url=https://mainnet-api.ekubo.org/openapi.json#/Swap/get_GetQuote).
 
 Leveraging (or up) occurs in the following steps:
 
