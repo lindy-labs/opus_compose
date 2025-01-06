@@ -252,11 +252,7 @@ pub mod lever {
                     self
                         .emit(
                             LeverWithdraw {
-                                user: caller,
-                                trove_id,
-                                yang,
-                                yang_amt,
-                                asset_amt: yang_asset_amt
+                                user: caller, trove_id, yang, yang_amt, asset_amt: yang_asset_amt
                             }
                         );
                 },
