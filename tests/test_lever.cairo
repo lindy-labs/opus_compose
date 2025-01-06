@@ -11,8 +11,8 @@ use opus::interfaces::{
 use opus::types::{AssetBalance, Health, YangBalance};
 use opus::utils::assert_equalish;
 use opus_lever::addresses::mainnet;
-use opus_lever::lever::lever as lever_contract;
-use opus_lever::interface::{ILeverDispatcher, ILeverDispatcherTrait};
+use opus_lever::contracts::lever::lever as lever_contract;
+use opus_lever::interfaces::lever::{ILeverDispatcher, ILeverDispatcherTrait};
 use opus_lever::types::{LeverUpParams, LeverDownParams};
 use snforge_std::{
     declare, ContractClassTrait, DeclareResultTrait, EventSpyAssertionsTrait, spy_events,
@@ -449,7 +449,7 @@ fn test_lever() {
                         trove_id,
                         yang: eth,
                         yang_amt: expected_eth_yang_amt,
-                        // Should correspond 1:1 at that conversion rate
+                        // Should correspond 1:1 at the prevailing conversion rate
                         asset_amt: expected_eth_yang_amt.into()
                     }
                 )
@@ -506,7 +506,7 @@ fn test_lever() {
                         trove_id,
                         yang: eth,
                         yang_amt: eth_yang_amt,
-                        // Should correspond 1:1 at that conversion rate
+                        // Should correspond 1:1 at the prevailing conversion rate
                         asset_amt: eth_yang_amt.into()
                     }
                 )
@@ -607,6 +607,74 @@ fn test_lever_down_unhealthy_fail() {
                 if *yang_balance.yang_id == eth_yang_id {
                     let eth_yang_amt_u128: u128 = (*yang_balance.amount).into();
                     eth_yang_amt = (eth_yang_amt_u128 / 10).into();
+                } else {
+                    continue;
+                }
+            },
+            Option::None => { break; },
+        };
+    };
+
+    start_cheat_caller_address(lever.contract_address, whale);
+    let lever_down_params = LeverDownParams {
+        trove_id, yang: eth, yang_amt: eth_yang_amt, swaps: lever_down_swaps()
+    };
+    lever.down(trove_health.debt, lever_down_params)
+}
+
+#[test]
+#[fork("MAINNET")]
+#[should_panic(expected: 'SH: Insufficient yang balance')]
+fn test_lever_down_insufficient_trove_yang_fail() {
+    let lever: ILeverDispatcher = deploy_lever();
+
+    let shrine = IShrineDispatcher { contract_address: mainnet::shrine() };
+    let sentinel = ISentinelDispatcher { contract_address: mainnet::sentinel() };
+    let abbot = IAbbotDispatcher { contract_address: mainnet::abbot() };
+
+    let whale = mainnet::whale();
+    let eth = mainnet::eth();
+
+    let eth_capital: u128 = 2 * WAD_ONE;
+    start_cheat_caller_address(eth, whale);
+    IERC20Dispatcher { contract_address: eth }.approve(mainnet::eth_gate(), eth_capital.into());
+    stop_cheat_caller_address(eth);
+
+    start_cheat_caller_address(abbot.contract_address, whale);
+    let trove_id: u64 = abbot
+        .open_trove(
+            array![AssetBalance { address: eth, amount: eth_capital }].span(),
+            1_u128.into(),
+            WAD_ONE.into(),
+        );
+    stop_cheat_caller_address(abbot.contract_address);
+
+    let (eth_price, _, _) = shrine.get_current_yang_price(eth);
+    let debt: u128 = eth_price.into() * 2;
+
+    start_cheat_caller_address(lever.contract_address, whale);
+    let max_forge_fee_pct: Wad = WAD_ONE.into();
+    let lever_up_params = LeverUpParams {
+        trove_id, yang: eth, max_forge_fee_pct, swaps: lever_up_swaps()
+    };
+    lever.up(debt.into(), lever_up_params);
+    stop_cheat_caller_address(lever.contract_address);
+
+    let trove_health: Health = shrine.get_trove_health(trove_id);
+    assert(trove_health.debt.is_non_zero(), 'lever up failed');
+
+    let eth_yang_id: u32 = 1;
+    // sanity check
+    assert_eq!(eth, sentinel.get_yang(eth_yang_id), "wrong yang id for eth");
+
+    let mut trove_deposits: Span<YangBalance> = shrine.get_trove_deposits(trove_id);
+    let mut eth_yang_amt: Wad = Default::default();
+    loop {
+        match trove_deposits.pop_front() {
+            Option::Some(yang_balance) => {
+                if *yang_balance.yang_id == eth_yang_id {
+                    let eth_yang_amt_u128: u128 = (*yang_balance.amount).into();
+                    eth_yang_amt = (eth_yang_amt_u128 + 1).into();
                 } else {
                     continue;
                 }
