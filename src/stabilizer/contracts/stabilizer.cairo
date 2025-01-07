@@ -61,7 +61,7 @@ pub mod stabilizer {
     #[derive(Copy, Drop, starknet::Event)]
     pub struct Claimed {
         #[key]
-        pub caller: ContractAddress,
+        pub user: ContractAddress,
         pub amount: u256,
     }
 
@@ -79,17 +79,17 @@ pub mod stabilizer {
     #[derive(Copy, Drop, starknet::Event)]
     pub struct Staked {
         #[key]
-        pub caller: ContractAddress,
+        pub user: ContractAddress,
         #[key]
         pub token_id: u64,
-        pub stake: Stake,
         pub total_liquidity: u128,
+        pub stake: Stake,
     }
 
     #[derive(Copy, Drop, starknet::Event)]
     pub struct Unstaked {
         #[key]
-        pub caller: ContractAddress,
+        pub user: ContractAddress,
         #[key]
         pub token_id: u64,
         pub total_liquidity: u128,
@@ -131,8 +131,13 @@ pub mod stabilizer {
             self.total_liquidity.read()
         }
 
-        fn get_token_id_for_user(self: @ContractState, user: ContractAddress) -> u64 {
-            self.user_to_token_id.read(user)
+        fn get_token_id_for_user(self: @ContractState, user: ContractAddress) -> Option<u64> {
+            let token_id: u64 = self.user_to_token_id.read(user);
+            if token_id.is_zero() {
+                Option::None
+            } else {
+                Option::Some(token_id)
+            }
         }
 
         // Note that this should not be used to check if a user has an active stake because
@@ -154,11 +159,11 @@ pub mod stabilizer {
         // 2. the parameters for the position NFT must correspond exactly to the parameters
         //    provided at deployment time.
         fn stake(ref self: ContractState, token_id: u64) {
-            let caller = get_caller_address();
-            assert!(self.user_to_token_id.read(caller).is_zero(), "STB: Already staked");
+            let user = get_caller_address();
+            assert!(self.get_token_id_for_user(user).is_none(), "STB: Already staked");
 
             let ekubo_positions_nft = self.ekubo_positions_nft.read();
-            assert!(ekubo_positions_nft.owner_of(token_id.into()) == caller, "STB: Not owner");
+            assert!(ekubo_positions_nft.owner_of(token_id.into()) == user, "STB: Not owner");
 
             // Read position from Ekubo
             let position: GetTokenInfoResult = self
@@ -174,7 +179,7 @@ pub mod stabilizer {
             let yield_state = self.harvest();
 
             self.yield_state.write(yield_state);
-            self.user_to_token_id.write(caller, token_id);
+            self.user_to_token_id.write(user, token_id);
 
             let total_liquidity: u128 = self.total_liquidity.read() + position.liquidity;
             self.total_liquidity.write(total_liquidity);
@@ -183,7 +188,7 @@ pub mod stabilizer {
                 liquidity: position.liquidity,
                 yin_per_liquidity_snapshot: yield_state.yin_per_liquidity,
             };
-            self.stakes.write(caller, stake);
+            self.stakes.write(user, stake);
 
             // Transfer NFT to this contract
             let stabilizer = get_contract_address();
@@ -191,75 +196,64 @@ pub mod stabilizer {
                 ekubo_positions_nft.get_approved(token_id.into()) == stabilizer,
                 "STB: Token not approved",
             );
-            ekubo_positions_nft.transfer_from(caller, stabilizer, token_id.into());
+            ekubo_positions_nft.transfer_from(user, stabilizer, token_id.into());
 
-            self.emit(Staked { caller, token_id, stake, total_liquidity });
+            self.emit(Staked { user, token_id, stake, total_liquidity });
         }
 
-        // Transfers an Ekubo position NFT from this contract to the caller, provided the caller
+        // Transfers an Ekubo position NFT from this contract to the user, provided the user
         // deposited the position NFT to this contract previously.
-        // Any outstanding accrued yield is also transferred to the caller.
+        // Any outstanding accrued yield is also transferred to the user.
         fn unstake(ref self: ContractState) {
-            let caller: ContractAddress = get_caller_address();
-            let token_id = self.get_valid_token_id_for_user(caller);
+            let user: ContractAddress = get_caller_address();
+            let token_id = match self.get_token_id_for_user(user) {
+                Option::Some(value) => value,
+                Option::None => panic!("STB: No stake found"),
+            };
 
             let yield_state = self.harvest();
-            let (stake, yield) = self.compute_user_stake_and_yield(caller, yield_state);
+            let (stake, yield) = self.compute_stake_and_yield(user, yield_state);
 
             // Perform storage updates
             // We can skip updating the user's Stake because it is constructed anew
             // if the user stakes again.
-            self.user_to_token_id.write(caller, Zero::zero());
+            self.user_to_token_id.write(user, Zero::zero());
 
             let total_liquidity: u128 = self.total_liquidity.read() - stake.liquidity;
             self.total_liquidity.write(total_liquidity);
 
             // Updated yield state is written to storage in `withdraw_yield`
-            self.withdraw_yield(caller, yield_state, yield);
+            self.withdraw_yield(user, yield_state, yield);
 
             // Transfer NFT to user
             self
                 .ekubo_positions_nft
                 .read()
-                .transfer_from(get_contract_address(), caller, token_id.into());
+                .transfer_from(get_contract_address(), user, token_id.into());
 
-            self.emit(Unstaked { caller, token_id, total_liquidity });
+            self.emit(Unstaked { user, token_id, total_liquidity });
         }
 
-        // Transfer outstanding accrued yield to the caller for an existing staked position.
+        // Transfer outstanding accrued yield to the user for an existing staked position.
         fn claim(ref self: ContractState) {
-            let caller: ContractAddress = get_caller_address();
-            self.get_valid_token_id_for_user(caller);
+            let user: ContractAddress = get_caller_address();
+            match self.get_token_id_for_user(user) {
+                Option::Some(_) => {},
+                Option::None => panic!("STB: No stake found"),
+            };
 
             let yield_state = self.harvest();
-            let (stake, yield) = self.compute_user_stake_and_yield(caller, yield_state);
+            let (stake, yield) = self.compute_stake_and_yield(user, yield_state);
 
-            self.stakes.write(caller, stake);
+            self.stakes.write(user, stake);
 
             // Updated yield state is written to storage in `withdraw_yield`
-            self.withdraw_yield(caller, yield_state, yield);
+            self.withdraw_yield(user, yield_state, yield);
         }
     }
 
     #[generate_trait]
     impl StabilizerHelpers of StabilizerHelpersTrait {
-        //
-        // Assertion helper
-        //
-
-        // Helper function that returns the Ekubo position NFT ID staked by a user, and otherwise
-        // throws if the user does not have a staked position.
-        fn get_valid_token_id_for_user(self: @ContractState, user: ContractAddress) -> u64 {
-            let token_id = self.user_to_token_id.read(user);
-            assert!(token_id.is_non_zero(), "STB: No stake found");
-
-            token_id
-        }
-
-        //
-        // Internal functions
-        //
-
         // Account for any increase in this contract's yin balance, and distribute it to
         // existing staked liquidity by incrementing the accumulator value.
         // Note that this helper function returns the updated YieldState, and does not write it
@@ -303,10 +297,10 @@ pub mod stabilizer {
         // accrued yield in the form of yin.
         // Note that this helper function updates the Stake's accumulator value snapshot to the
         // latest, and does not write it to storage.
-        fn compute_user_stake_and_yield(
-            self: @ContractState, caller: ContractAddress, yield_state: YieldState,
+        fn compute_stake_and_yield(
+            self: @ContractState, user: ContractAddress, yield_state: YieldState,
         ) -> (Stake, u256) {
-            let mut stake = self.stakes.read(caller);
+            let mut stake = self.stakes.read(user);
 
             let cumulative_delta = yield_state.yin_per_liquidity - stake.yin_per_liquidity_snapshot;
             stake.yin_per_liquidity_snapshot = yield_state.yin_per_liquidity;
@@ -321,17 +315,17 @@ pub mod stabilizer {
         // this contract to a staker.
         fn withdraw_yield(
             ref self: ContractState,
-            caller: ContractAddress,
+            user: ContractAddress,
             mut yield_state: YieldState,
             amount: u256,
         ) {
             yield_state.yin_balance_snapshot -= amount;
             self.yield_state.write(yield_state);
 
-            self.yin.read().transfer(caller, amount);
+            self.yin.read().transfer(user, amount);
 
             self.emit(YieldStateUpdated { yield_state });
-            self.emit(Claimed { caller, amount });
+            self.emit(Claimed { user, amount });
         }
     }
 }

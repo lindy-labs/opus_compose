@@ -11,7 +11,7 @@ pub trait IStabilizer<TContractState> {
     fn get_pool_key(self: @TContractState) -> PoolKey;
     fn get_bounds(self: @TContractState) -> Bounds;
     fn get_total_liquidity(self: @TContractState) -> u128;
-    fn get_token_id_for_user(self: @TContractState, user: ContractAddress) -> u64;
+    fn get_token_id_for_user(self: @TContractState, user: ContractAddress) -> Option<u64>;
     // Note that this should not be used to check if a user has an active stake because
     // it is not updated when a user unstakes. Use `get_token_id_for_user` instead.
     fn get_stake(self: @TContractState, user: ContractAddress) -> Stake;
