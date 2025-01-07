@@ -347,7 +347,7 @@ fn test_claim_small_surplus_precision_loss() {
     );
     stake_ekubo_position(positions_nft, stabilizer, staker, position_id);
 
-    // Equalizer has a surplus of 1 wei, so we can allocate it directly
+    // Equalizer has a 1 wei of CASH at the given block, so we can allocate it directly
     let surplus: Wad = 1_u128.into(); // 1 wei (Wad)
     assert_eq!(yin.balance_of(mainnet::equalizer()), surplus.into(), "Wrong equalizer balance");
     IEqualizerDispatcher { contract_address: mainnet::equalizer() }.allocate();
