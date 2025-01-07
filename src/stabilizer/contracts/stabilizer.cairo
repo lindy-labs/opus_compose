@@ -161,13 +161,13 @@ pub mod stabilizer {
             assert!(ekubo_positions_nft.owner_of(token_id.into()) == caller, "STB: Not owner");
 
             // Read position from Ekubo
-            let position_info: GetTokenInfoResult = self
+            let position: GetTokenInfoResult = self
                 .ekubo_positions
                 .read()
                 .get_token_info(
                     token_id.into(), self.pool_key.read().into(), self.bounds.read().into(),
                 );
-            assert!(position_info.liquidity.is_non_zero(), "STB: No liquidity found");
+            assert!(position.liquidity.is_non_zero(), "STB: No liquidity found");
 
             // Get updated yield state based on total liquidity before adding this position's
             // liquidity to the total.
@@ -176,11 +176,11 @@ pub mod stabilizer {
             self.yield_state.write(yield_state);
             self.user_to_token_id.write(caller, token_id);
 
-            let total_liquidity: u128 = self.total_liquidity.read() + position_info.liquidity;
+            let total_liquidity: u128 = self.total_liquidity.read() + position.liquidity;
             self.total_liquidity.write(total_liquidity);
 
             let stake = Stake {
-                liquidity: position_info.liquidity,
+                liquidity: position.liquidity,
                 yin_per_liquidity_snapshot: yield_state.yin_per_liquidity,
             };
             self.stakes.write(caller, stake);
@@ -311,9 +311,9 @@ pub mod stabilizer {
             let cumulative_delta = yield_state.yin_per_liquidity - stake.yin_per_liquidity_snapshot;
             stake.yin_per_liquidity_snapshot = yield_state.yin_per_liquidity;
 
-            let amount: u256 = get_accumulated_yin(stake.liquidity, cumulative_delta);
+            let yield: u256 = get_accumulated_yin(stake.liquidity, cumulative_delta);
 
-            (stake, amount)
+            (stake, yield)
         }
 
         // Helper function to withdraw accrued yield in the form of yin to a staker, and
