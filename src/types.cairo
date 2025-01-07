@@ -10,7 +10,7 @@ pub enum ModifyLeverAction {
 
 #[derive(Serde, Drop)]
 pub struct ModifyLeverParams {
-    pub caller: ContractAddress,
+    pub user: ContractAddress,
     pub action: ModifyLeverAction
 }
 

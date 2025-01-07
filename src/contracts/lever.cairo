@@ -106,9 +106,9 @@ pub mod lever {
         // 3. Deposit purchased collateral asset to caller's trove
         // 4. Borrow yin from caller's trove and mint to this contract
         fn up(ref self: ContractState, amount: Wad, lever_up_params: LeverUpParams) {
-            let caller: ContractAddress = get_caller_address();
+            let user: ContractAddress = get_caller_address();
             assert(
-                caller == self
+                user == self
                     .abbot
                     .read()
                     .get_trove_owner(lever_up_params.trove_id)
@@ -118,7 +118,7 @@ pub mod lever {
 
             let mut call_data: Array<felt252> = array![];
             let modify_lever_params = ModifyLeverParams {
-                caller, action: ModifyLeverAction::LeverUp(lever_up_params)
+                user, action: ModifyLeverAction::LeverUp(lever_up_params)
             };
             modify_lever_params.serialize(ref call_data);
 
@@ -140,9 +140,9 @@ pub mod lever {
         // 4. Purchase yin with withdrawn collateral asset via Ekubo
         // 5. Transfer remainder collateral asset to user
         fn down(ref self: ContractState, amount: Wad, lever_down_params: LeverDownParams) {
-            let caller: ContractAddress = get_caller_address();
+            let user: ContractAddress = get_caller_address();
             assert(
-                caller == self
+                user == self
                     .abbot
                     .read()
                     .get_trove_owner(lever_down_params.trove_id)
@@ -150,7 +150,7 @@ pub mod lever {
                 'LEV: Not trove owner'
             );
             let modify_lever_params = ModifyLeverParams {
-                caller, action: ModifyLeverAction::LeverDown(lever_down_params)
+                user, action: ModifyLeverAction::LeverDown(lever_down_params)
             };
             let mut call_data: Array<felt252> = array![];
             modify_lever_params.serialize(ref call_data);
@@ -170,7 +170,7 @@ pub mod lever {
     #[abi(embed_v0)]
     impl IFlashBorrowerImpl of IFlashBorrower<ContractState> {
         // This contract needs to call `shrine.forge` and `shrine.deposit` directly to get around
-        // the checks in Abbot that the caller is the trove owner.
+        // the checks in Abbot that the caller of Abbot is the trove owner.
         fn on_flash_loan(
             ref self: ContractState,
             initiator: ContractAddress,
@@ -179,7 +179,7 @@ pub mod lever {
             fee: u256,
             mut call_data: Span<felt252>
         ) -> u256 {
-            let ModifyLeverParams { caller, action } = Serde::<
+            let ModifyLeverParams { user, action } = Serde::<
                 ModifyLeverParams
             >::deserialize(ref call_data)
                 .unwrap();
@@ -203,28 +203,19 @@ pub mod lever {
                     router.multi_multihop_swap(swaps);
 
                     // Withdraw the collateral asset from Ekubo's router to this contract.
-                    let yang_asset_amt: u256 = router_clear.clear_minimum(yang_erc20, 1);
+                    let asset_amt: u256 = router_clear.clear_minimum(yang_erc20, 1);
 
                     // Deposit purchased collateral to trove
-                    yang_erc20.approve(gate, yang_asset_amt);
-                    let yang_amt: Wad = sentinel
-                        .enter(yang, get_contract_address(), yang_asset_amt.try_into().unwrap());
+                    yang_erc20.approve(gate, asset_amt);
+                    let asset_amt: u128 = asset_amt.try_into().unwrap();
+                    let yang_amt: Wad = sentinel.enter(yang, get_contract_address(), asset_amt);
                     shrine.deposit(yang, trove_id, yang_amt);
 
                     // Borrow yin from trove and send to this contract to repay the flash mint
                     shrine
                         .forge(initiator, trove_id, amount.try_into().unwrap(), max_forge_fee_pct);
 
-                    self
-                        .emit(
-                            LeverDeposit {
-                                user: caller,
-                                trove_id,
-                                yang,
-                                yang_amt,
-                                asset_amt: yang_asset_amt.try_into().unwrap()
-                            }
-                        );
+                    self.emit(LeverDeposit { user, trove_id, yang, yang_amt, asset_amt, });
                 },
                 ModifyLeverAction::LeverDown(params) => {
                     let LeverDownParams { trove_id, yang, yang_amt, swaps } = params;
@@ -237,11 +228,11 @@ pub mod lever {
                     self.abbot.read().melt(trove_id, amount.try_into().unwrap());
 
                     // Withdraw collateral to this contract
-                    let yang_asset_amt: u128 = sentinel.exit(yang, initiator, yang_amt);
+                    let asset_amt: u128 = sentinel.exit(yang, initiator, yang_amt);
                     shrine.withdraw(yang, trove_id, yang_amt);
 
                     // Transfer collateral to Ekubo's router and swap for yin
-                    yang_erc20.transfer(router.contract_address, yang_asset_amt.into());
+                    yang_erc20.transfer(router.contract_address, asset_amt.into());
                     router.multi_multihop_swap(swaps);
 
                     // Sanity check to ensure the amount of yin flash minted has been purchased
@@ -249,19 +240,14 @@ pub mod lever {
                     router_clear.clear_minimum(yin, amount);
                     let yin_amount = yin.balanceOf(get_contract_address());
 
-                    // Transfer any excess yin back to the caller.
+                    // Transfer any excess yin back to the user.
                     if yin_amount > amount {
-                        yin.transfer(caller, yin_amount - amount);
+                        yin.transfer(user, yin_amount - amount);
                     }
-                    // Transfer any remainder collateral to the caller
-                    router_clear.clear_minimum_to_recipient(yang_erc20, 1, caller);
+                    // Transfer any remainder collateral to the user
+                    router_clear.clear_minimum_to_recipient(yang_erc20, 1, user);
 
-                    self
-                        .emit(
-                            LeverWithdraw {
-                                user: caller, trove_id, yang, yang_amt, asset_amt: yang_asset_amt
-                            }
-                        );
+                    self.emit(LeverWithdraw { user, trove_id, yang, yang_amt, asset_amt });
                 },
             };
 
