@@ -18,8 +18,12 @@ use snforge_std::{
     declare, ContractClassTrait, DeclareResultTrait, EventSpyAssertionsTrait, spy_events,
     start_cheat_caller_address, stop_cheat_caller_address
 };
+use starknet::ContractAddress;
 use wadray::{Wad, WAD_ONE};
 
+//
+// Helpers
+//
 
 fn deploy_lever() -> ILeverDispatcher {
     let lever_class = declare("lever").unwrap().contract_class();
@@ -45,6 +49,58 @@ fn deploy_lever() -> ILeverDispatcher {
     stop_cheat_caller_address(mainnet::sentinel());
 
     ILeverDispatcher { contract_address: lever_addr }
+}
+
+// Helper function to open a trove with 2 ETH.
+// Returns the trove ID.
+fn open_trove_helper(user: ContractAddress, eth_asset_amt: u128) -> u64 {
+    let abbot = IAbbotDispatcher { contract_address: mainnet::abbot() };
+
+    let eth = mainnet::eth();
+    let gate = mainnet::eth_gate();
+
+    start_cheat_caller_address(eth, user);
+    IERC20Dispatcher { contract_address: eth }.approve(gate, eth_asset_amt.into());
+    stop_cheat_caller_address(eth);
+
+    start_cheat_caller_address(abbot.contract_address, user);
+    let trove_id: u64 = abbot
+        .open_trove(
+            array![AssetBalance { address: eth, amount: eth_asset_amt }].span(),
+            1_u128.into(),
+            WAD_ONE.into(),
+        );
+    stop_cheat_caller_address(abbot.contract_address);
+
+    trove_id
+}
+
+// Helper function to open a trove with 2 ETH, then lever up by an
+// amount of debt equal to the value of 2 ETH.
+// Returns a tuple of the trove ID and the amount of debt forged
+fn open_trove_and_lever_up(
+    lever: ILeverDispatcher, user: ContractAddress, eth_asset_amt: u128
+) -> (u64, Wad) {
+    let shrine = IShrineDispatcher { contract_address: mainnet::shrine() };
+
+    let eth = mainnet::eth();
+
+    let trove_id: u64 = open_trove_helper(user, eth_asset_amt);
+
+    let (eth_price, _, _) = shrine.get_current_yang_price(eth);
+    // ETH price is ~3,363 (Wad) in Shrine, so debt is ~6,726 (Wad)
+    let debt: Wad = (eth_price * eth_asset_amt.into());
+
+    let max_forge_fee_pct: Wad = WAD_ONE.into();
+    let lever_up_params = LeverUpParams {
+        trove_id, yang: eth, max_forge_fee_pct, swaps: lever_up_swaps()
+    };
+
+    start_cheat_caller_address(lever.contract_address, user);
+    lever.up(debt, lever_up_params);
+    stop_cheat_caller_address(lever.contract_address);
+
+    (trove_id, debt)
 }
 
 // Helper function to construct the multi-multihop swaps for swapping ~6780 CASH for ETH.
@@ -353,13 +409,16 @@ fn lever_down_swaps() -> Array<Swap> {
     ]
 }
 
+//
+// Tests
+//
+
 #[test]
 #[fork("MAINNET")]
 fn test_lever() {
     let lever: ILeverDispatcher = deploy_lever();
 
     let shrine = IShrineDispatcher { contract_address: mainnet::shrine() };
-    let abbot = IAbbotDispatcher { contract_address: mainnet::abbot() };
 
     let whale = mainnet::whale();
     let eth = mainnet::eth();
@@ -376,32 +435,7 @@ fn test_lever() {
 
     // Deposit 2 ETH and leverage to 4 ETH-ish
     let eth_capital: u128 = 2 * WAD_ONE;
-    start_cheat_caller_address(eth, whale);
-    IERC20Dispatcher { contract_address: eth }.approve(mainnet::eth_gate(), eth_capital.into());
-    stop_cheat_caller_address(eth);
-
-    start_cheat_caller_address(abbot.contract_address, whale);
-    let trove_id: u64 = abbot
-        .open_trove(
-            array![AssetBalance { address: eth, amount: eth_capital }].span(),
-            1_u128.into(),
-            WAD_ONE.into(),
-        );
-    stop_cheat_caller_address(abbot.contract_address);
-
-    let (eth_price, _, _) = shrine.get_current_yang_price(eth);
-    // ETH price is ~3,363 (Wad) in Shrine, so debt is ~6,726 (Wad)
-    let debt: u128 = eth_price.into() * 2;
-
-    start_cheat_caller_address(lever.contract_address, whale);
-    let max_forge_fee_pct: Wad = WAD_ONE.into();
-
-    let lever_up_params = LeverUpParams {
-        trove_id, yang: eth, max_forge_fee_pct, swaps: lever_up_swaps()
-    };
-
-    lever.up(debt.into(), lever_up_params);
-    stop_cheat_caller_address(lever.contract_address);
+    let (trove_id, debt) = open_trove_and_lever_up(lever, whale, eth_capital);
 
     let trove_health: Health = shrine.get_trove_health(trove_id);
     assert(trove_health.debt.is_non_zero(), 'lever up failed');
@@ -452,7 +486,8 @@ fn test_lever() {
 
     // Check that the caller received the original deposited collateral
     // after round-tripping, minus the forge fees
-    let expected_eth_paid_to_forge_fee = forge_fee_pct * debt.into() / eth_price;
+    let (eth_price, _, _) = shrine.get_current_yang_price(eth);
+    let expected_eth_paid_to_forge_fee = forge_fee_pct * debt / eth_price;
     let error_margin: u256 = (WAD_ONE / 100).into();
     assert_equalish(
         expected_eth_paid_to_forge_fee.into(),
@@ -496,32 +531,22 @@ fn test_lever_up_unhealthy_fail() {
     let lever: ILeverDispatcher = deploy_lever();
 
     let shrine = IShrineDispatcher { contract_address: mainnet::shrine() };
-    let abbot = IAbbotDispatcher { contract_address: mainnet::abbot() };
 
     let whale = mainnet::whale();
     let eth = mainnet::eth();
 
     let eth_capital: u128 = (WAD_ONE / 4);
-    start_cheat_caller_address(eth, whale);
-    IERC20Dispatcher { contract_address: eth }.approve(mainnet::eth_gate(), eth_capital.into());
-    stop_cheat_caller_address(eth);
-
-    start_cheat_caller_address(abbot.contract_address, whale);
-    let trove_id: u64 = abbot
-        .open_trove(
-            array![AssetBalance { address: eth, amount: eth_capital }].span(),
-            1_u128.into(),
-            WAD_ONE.into(),
-        );
+    let trove_id: u64 = open_trove_helper(whale, eth_capital);
 
     let (eth_price, _, _) = shrine.get_current_yang_price(eth);
     let debt: u128 = eth_price.into() * 2;
 
-    start_cheat_caller_address(lever.contract_address, whale);
     let max_forge_fee_pct: Wad = WAD_ONE.into();
     let lever_up_params = LeverUpParams {
         trove_id, yang: eth, max_forge_fee_pct, swaps: lever_up_swaps()
     };
+
+    start_cheat_caller_address(lever.contract_address, whale);
     lever.up(debt.into(), lever_up_params);
 }
 
@@ -548,35 +573,19 @@ fn test_unauthorized_lever_up_fail() {
 fn test_lever_up_invalid_yang_fail() {
     let lever: ILeverDispatcher = deploy_lever();
 
-    let shrine = IShrineDispatcher { contract_address: mainnet::shrine() };
-    let abbot = IAbbotDispatcher { contract_address: mainnet::abbot() };
-
     let whale = mainnet::whale();
-    let eth = mainnet::eth();
 
-    let eth_capital: u128 = (WAD_ONE / 4);
-    start_cheat_caller_address(eth, whale);
-    IERC20Dispatcher { contract_address: eth }.approve(mainnet::eth_gate(), eth_capital.into());
-    stop_cheat_caller_address(eth);
+    let eth_capital: u128 = 2 * WAD_ONE;
+    let trove_id: u64 = open_trove_helper(whale, eth_capital);
 
-    start_cheat_caller_address(abbot.contract_address, whale);
-    let trove_id: u64 = abbot
-        .open_trove(
-            array![AssetBalance { address: eth, amount: eth_capital }].span(),
-            1_u128.into(),
-            WAD_ONE.into(),
-        );
-
-    let (eth_price, _, _) = shrine.get_current_yang_price(eth);
-    let debt: u128 = eth_price.into() * 2;
-
-    start_cheat_caller_address(lever.contract_address, whale);
+    let debt: u128 = WAD_ONE.into();
     let invalid_yang = mainnet::ekubo();
     let max_forge_fee_pct: Wad = WAD_ONE.into();
-    //
     let lever_up_params = LeverUpParams {
         trove_id, yang: invalid_yang, max_forge_fee_pct, swaps: lever_up_swaps()
     };
+
+    start_cheat_caller_address(lever.contract_address, whale);
     lever.up(debt.into(), lever_up_params);
 }
 
@@ -586,14 +595,13 @@ fn test_lever_up_invalid_yang_fail() {
 fn test_unauthorized_lever_down_fail() {
     let lever: ILeverDispatcher = deploy_lever();
 
-    start_cheat_caller_address(lever.contract_address, mainnet::whale());
     let debt: Wad = WAD_ONE.into();
+    let trove_id = 1;
     let lever_down_params = LeverDownParams {
-        trove_id: 1,
-        yang: mainnet::eth(),
-        yang_amt: 1000000000_u128.into(),
-        swaps: lever_down_swaps()
+        trove_id, yang: mainnet::eth(), yang_amt: 1000000000_u128.into(), swaps: lever_down_swaps()
     };
+
+    start_cheat_caller_address(lever.contract_address, mainnet::whale());
     lever.down(debt, lever_down_params);
 }
 
@@ -606,35 +614,12 @@ fn test_lever_down_unhealthy_fail() {
     let lever: ILeverDispatcher = deploy_lever();
 
     let shrine = IShrineDispatcher { contract_address: mainnet::shrine() };
-    let abbot = IAbbotDispatcher { contract_address: mainnet::abbot() };
 
     let whale = mainnet::whale();
     let eth = mainnet::eth();
 
     let eth_capital: u128 = 2 * WAD_ONE;
-    start_cheat_caller_address(eth, whale);
-    IERC20Dispatcher { contract_address: eth }.approve(mainnet::eth_gate(), eth_capital.into());
-    stop_cheat_caller_address(eth);
-
-    start_cheat_caller_address(abbot.contract_address, whale);
-    let trove_id: u64 = abbot
-        .open_trove(
-            array![AssetBalance { address: eth, amount: eth_capital }].span(),
-            1_u128.into(),
-            WAD_ONE.into(),
-        );
-    stop_cheat_caller_address(abbot.contract_address);
-
-    let (eth_price, _, _) = shrine.get_current_yang_price(eth);
-    let debt: u128 = eth_price.into() * 2;
-
-    start_cheat_caller_address(lever.contract_address, whale);
-    let max_forge_fee_pct: Wad = WAD_ONE.into();
-    let lever_up_params = LeverUpParams {
-        trove_id, yang: eth, max_forge_fee_pct, swaps: lever_up_swaps()
-    };
-    lever.up(debt.into(), lever_up_params);
-    stop_cheat_caller_address(lever.contract_address);
+    let (trove_id, _debt) = open_trove_and_lever_up(lever, whale, eth_capital);
 
     let trove_health: Health = shrine.get_trove_health(trove_id);
     assert(trove_health.debt.is_non_zero(), 'lever up failed');
@@ -656,35 +641,12 @@ fn test_lever_down_insufficient_trove_yang_fail() {
     let lever: ILeverDispatcher = deploy_lever();
 
     let shrine = IShrineDispatcher { contract_address: mainnet::shrine() };
-    let abbot = IAbbotDispatcher { contract_address: mainnet::abbot() };
 
     let whale = mainnet::whale();
     let eth = mainnet::eth();
 
     let eth_capital: u128 = 2 * WAD_ONE;
-    start_cheat_caller_address(eth, whale);
-    IERC20Dispatcher { contract_address: eth }.approve(mainnet::eth_gate(), eth_capital.into());
-    stop_cheat_caller_address(eth);
-
-    start_cheat_caller_address(abbot.contract_address, whale);
-    let trove_id: u64 = abbot
-        .open_trove(
-            array![AssetBalance { address: eth, amount: eth_capital }].span(),
-            1_u128.into(),
-            WAD_ONE.into(),
-        );
-    stop_cheat_caller_address(abbot.contract_address);
-
-    let (eth_price, _, _) = shrine.get_current_yang_price(eth);
-    let debt: u128 = eth_price.into() * 2;
-
-    start_cheat_caller_address(lever.contract_address, whale);
-    let max_forge_fee_pct: Wad = WAD_ONE.into();
-    let lever_up_params = LeverUpParams {
-        trove_id, yang: eth, max_forge_fee_pct, swaps: lever_up_swaps()
-    };
-    lever.up(debt.into(), lever_up_params);
-    stop_cheat_caller_address(lever.contract_address);
+    let (trove_id, _debt) = open_trove_and_lever_up(lever, whale, eth_capital);
 
     let trove_health: Health = shrine.get_trove_health(trove_id);
     assert(trove_health.debt.is_non_zero(), 'lever up failed');
@@ -706,42 +668,18 @@ fn test_lever_down_invalid_yang_fail() {
     let lever: ILeverDispatcher = deploy_lever();
 
     let shrine = IShrineDispatcher { contract_address: mainnet::shrine() };
-    let abbot = IAbbotDispatcher { contract_address: mainnet::abbot() };
 
     let whale = mainnet::whale();
-    let eth = mainnet::eth();
 
     let eth_capital: u128 = 2 * WAD_ONE;
-    start_cheat_caller_address(eth, whale);
-    IERC20Dispatcher { contract_address: eth }.approve(mainnet::eth_gate(), eth_capital.into());
-    stop_cheat_caller_address(eth);
-
-    start_cheat_caller_address(abbot.contract_address, whale);
-    let trove_id: u64 = abbot
-        .open_trove(
-            array![AssetBalance { address: eth, amount: eth_capital }].span(),
-            1_u128.into(),
-            WAD_ONE.into(),
-        );
-    stop_cheat_caller_address(abbot.contract_address);
-
-    let (eth_price, _, _) = shrine.get_current_yang_price(eth);
-    let debt: u128 = eth_price.into() * 2;
-
-    start_cheat_caller_address(lever.contract_address, whale);
-    let max_forge_fee_pct: Wad = WAD_ONE.into();
-    let lever_up_params = LeverUpParams {
-        trove_id, yang: eth, max_forge_fee_pct, swaps: lever_up_swaps()
-    };
-    lever.up(debt.into(), lever_up_params);
-    stop_cheat_caller_address(lever.contract_address);
+    let (trove_id, _debt) = open_trove_and_lever_up(lever, whale, eth_capital);
 
     let trove_health: Health = shrine.get_trove_health(trove_id);
     let invalid_yang = mainnet::ekubo();
-
-    start_cheat_caller_address(lever.contract_address, whale);
     let lever_down_params = LeverDownParams {
         trove_id, yang: invalid_yang, yang_amt: Zero::zero(), swaps: lever_down_swaps()
     };
+
+    start_cheat_caller_address(lever.contract_address, whale);
     lever.down(trove_health.debt, lever_down_params)
 }
