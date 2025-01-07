@@ -82,8 +82,8 @@ pub mod stabilizer {
         pub user: ContractAddress,
         #[key]
         pub token_id: u64,
-        pub total_liquidity: u128,
         pub stake: Stake,
+        pub total_liquidity: u128,
     }
 
     #[derive(Copy, Drop, starknet::Event)]
@@ -92,6 +92,7 @@ pub mod stabilizer {
         pub user: ContractAddress,
         #[key]
         pub token_id: u64,
+        pub stake: Stake,
         pub total_liquidity: u128,
     }
 
@@ -231,7 +232,7 @@ pub mod stabilizer {
                 .read()
                 .transfer_from(get_contract_address(), user, token_id.into());
 
-            self.emit(Unstaked { user, token_id, total_liquidity });
+            self.emit(Unstaked { user, token_id, stake, total_liquidity });
         }
 
         // Transfer outstanding accrued yield to the user for an existing staked position.

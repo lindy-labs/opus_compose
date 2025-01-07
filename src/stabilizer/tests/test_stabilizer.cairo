@@ -12,7 +12,7 @@ use opus_compose::stabilizer::constants::{BOUNDS, LOWER_TICK_MAG, UPPER_TICK_MAG
 use opus_compose::stabilizer::contracts::stabilizer::stabilizer as stabilizer_contract;
 use opus_compose::stabilizer::interfaces::stabilizer::IStabilizerDispatcherTrait;
 use opus_compose::stabilizer::math::get_cumulative_delta;
-use opus_compose::stabilizer::types::YieldState;
+use opus_compose::stabilizer::types::{Stake, YieldState};
 use opus_compose::stabilizer::tests::utils::stabilizer_utils::{
     create_surplus, create_ekubo_position, create_valid_ekubo_position, fund_three_users, setup,
     stake_ekubo_position,
@@ -92,7 +92,7 @@ fn test_stake() {
             stabilizer.contract_address,
             stabilizer_contract::Event::Staked(
                 stabilizer_contract::Staked {
-                    user, token_id: position_id, total_liquidity: after_total_liquidity, stake,
+                    user, token_id: position_id, stake, total_liquidity: after_total_liquidity,
                 },
             ),
         ),
@@ -478,12 +478,19 @@ fn test_unstake() {
         yin_balance_snapshot: yin.balance_of(stabilizer.contract_address) + yin_claimed,
         yin_per_liquidity: after_yield_state.yin_per_liquidity,
     };
+    let expected_stake_for_unstaked_event = Stake {
+        liquidity: before_stake.liquidity,
+        yin_per_liquidity_snapshot: after_yield_state.yin_per_liquidity,
+    };
     let expected_events = array![
         (
             stabilizer.contract_address,
             stabilizer_contract::Event::Unstaked(
                 stabilizer_contract::Unstaked {
-                    user, token_id: position_id, total_liquidity: after_total_liquidity,
+                    user,
+                    token_id: position_id,
+                    stake: expected_stake_for_unstaked_event,
+                    total_liquidity: after_total_liquidity,
                 },
             ),
         ),
