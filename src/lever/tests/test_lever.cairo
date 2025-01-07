@@ -414,7 +414,7 @@ fn lever_down_swaps() -> Array<Swap> {
 //
 
 #[test]
-#[fork("MAINNET")]
+#[fork("MAINNET_LEVER")]
 fn test_lever() {
     let lever: ILeverDispatcher = deploy_lever();
 
@@ -525,7 +525,7 @@ fn test_lever() {
 
 // Similar to the test for `up` in `test_lever` but with a quarter the collateral
 #[test]
-#[fork("MAINNET")]
+#[fork("MAINNET_LEVER")]
 #[should_panic(expected: 'SH: Trove LTV > threshold')]
 fn test_lever_up_unhealthy_fail() {
     let lever: ILeverDispatcher = deploy_lever();
@@ -551,7 +551,7 @@ fn test_lever_up_unhealthy_fail() {
 }
 
 #[test]
-#[fork("MAINNET")]
+#[fork("MAINNET_LEVER")]
 #[should_panic(expected: 'LEV: Not trove owner')]
 fn test_unauthorized_lever_up_fail() {
     let lever: ILeverDispatcher = deploy_lever();
@@ -568,7 +568,7 @@ fn test_unauthorized_lever_up_fail() {
 }
 
 #[test]
-#[fork("MAINNET")]
+#[fork("MAINNET_LEVER")]
 #[should_panic(expected: 'LEV: Invalid yang')]
 fn test_lever_up_invalid_yang_fail() {
     let lever: ILeverDispatcher = deploy_lever();
@@ -590,7 +590,7 @@ fn test_lever_up_invalid_yang_fail() {
 }
 
 #[test]
-#[fork("MAINNET")]
+#[fork("MAINNET_LEVER")]
 #[should_panic(expected: 'LEV: Not trove owner')]
 fn test_unauthorized_lever_down_fail() {
     let lever: ILeverDispatcher = deploy_lever();
@@ -608,7 +608,7 @@ fn test_unauthorized_lever_down_fail() {
 // Similar to the test for `down` in `test_lever` but with less collateral withdrawn
 // such that it is insufficient to pay for the debt.
 #[test]
-#[fork("MAINNET")]
+#[fork("MAINNET_LEVER")]
 #[should_panic(expected: 'u256_sub Overflow')]
 fn test_lever_down_unhealthy_fail() {
     let lever: ILeverDispatcher = deploy_lever();
@@ -635,7 +635,7 @@ fn test_lever_down_unhealthy_fail() {
 }
 
 #[test]
-#[fork("MAINNET")]
+#[fork("MAINNET_LEVER")]
 #[should_panic(expected: 'SH: Insufficient yang balance')]
 fn test_lever_down_insufficient_trove_yang_fail() {
     let lever: ILeverDispatcher = deploy_lever();
@@ -662,7 +662,7 @@ fn test_lever_down_insufficient_trove_yang_fail() {
 }
 
 #[test]
-#[fork("MAINNET")]
+#[fork("MAINNET_LEVER")]
 #[should_panic(expected: 'LEV: Invalid yang')]
 fn test_lever_down_invalid_yang_fail() {
     let lever: ILeverDispatcher = deploy_lever();

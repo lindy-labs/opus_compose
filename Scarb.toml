@@ -23,6 +23,12 @@ sierra = true
 test = "snforge test"
 
 [[tool.snforge.fork]]
-name = "MAINNET"
+name = "MAINNET_LEVER"
 url = "$NODE_URL"
 block_id.number = "1034844"
+
+
+[[tool.snforge.fork]]
+name = "MAINNET_STABILIZER"
+url = "$NODE_URL"
+block_id.number = "1047705"
