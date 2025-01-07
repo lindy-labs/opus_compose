@@ -255,6 +255,7 @@ pub mod lever {
         }
     }
 
+    // Helper function to fetch the gate address for a yang, or otherwise throw.
     fn get_valid_gate(sentinel: ISentinelDispatcher, yang: ContractAddress) -> ContractAddress {
         let gate = sentinel.get_gate_address(yang);
         assert(gate.is_non_zero(), 'LEV: Invalid yang');
