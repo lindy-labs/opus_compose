@@ -22,7 +22,7 @@ dependencies = [
 ]
 
 [[package]]
-name = "opus_lever"
+name = "opus_compose"
 version = "0.1.0"
 dependencies = [
  "access_control",
@@ -34,15 +34,15 @@ dependencies = [
 
 [[package]]
 name = "snforge_scarb_plugin"
-version = "0.33.0"
+version = "0.35.0"
 source = "registry+https://scarbs.xyz/"
-checksum = "sha256:b4dd6088372decd367652827091e0589bbf6bc550dfc3957baa3e9c61d6eb449"
+checksum = "sha256:20bd6a488fda7201ce2a5fd680d8e715b10e3545147b276747ad079c96c3d5d2"
 
 [[package]]
 name = "snforge_std"
-version = "0.33.0"
+version = "0.35.0"
 source = "registry+https://scarbs.xyz/"
-checksum = "sha256:f7dc3349f8a6ef4915c93df447a00bd5a53a31129fd0990a00afa0ad31d91b06"
+checksum = "sha256:fe4e1b1526c815441183baed7f93e73bc76a6393d23e1f9c34fbe227bfaedfd6"
 dependencies = [
  "snforge_scarb_plugin",
 ]

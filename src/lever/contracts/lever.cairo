@@ -9,8 +9,10 @@ pub mod lever {
         IFlashMintDispatcherTrait, ISentinelDispatcher, ISentinelDispatcherTrait, IShrineDispatcher,
         IShrineDispatcherTrait
     };
-    use opus_lever::interfaces::lever::ILever;
-    use opus_lever::types::{LeverDownParams, LeverUpParams, ModifyLeverAction, ModifyLeverParams};
+    use opus_compose::lever::interfaces::lever::ILever;
+    use opus_compose::lever::types::{
+        LeverDownParams, LeverUpParams, ModifyLeverAction, ModifyLeverParams
+    };
     use starknet::{ContractAddress, get_caller_address, get_contract_address};
     use starknet::storage::{StoragePointerReadAccess, StoragePointerWriteAccess};
     use wadray::Wad;

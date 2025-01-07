@@ -9,11 +9,11 @@ use opus::interfaces::{
 };
 use opus::types::{AssetBalance, Health};
 use opus::utils::assert_equalish;
-use opus_lever::addresses::mainnet;
-use opus_lever::constants::{SENTINEL_ROLES_FOR_LEVER, SHRINE_ROLES_FOR_LEVER};
-use opus_lever::contracts::lever::lever as lever_contract;
-use opus_lever::interfaces::lever::{ILeverDispatcher, ILeverDispatcherTrait};
-use opus_lever::types::{LeverUpParams, LeverDownParams};
+use opus_compose::addresses::mainnet;
+use opus_compose::lever::constants::{SENTINEL_ROLES_FOR_LEVER, SHRINE_ROLES_FOR_LEVER};
+use opus_compose::lever::contracts::lever::lever as lever_contract;
+use opus_compose::lever::interfaces::lever::{ILeverDispatcher, ILeverDispatcherTrait};
+use opus_compose::lever::types::{LeverUpParams, LeverDownParams};
 use snforge_std::{
     declare, ContractClassTrait, DeclareResultTrait, EventSpyAssertionsTrait, spy_events,
     start_cheat_caller_address, stop_cheat_caller_address
