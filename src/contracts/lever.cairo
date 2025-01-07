@@ -173,8 +173,8 @@ pub mod lever {
         // the checks in Abbot that the caller of Abbot is the trove owner.
         fn on_flash_loan(
             ref self: ContractState,
-            initiator: ContractAddress,
-            token: ContractAddress,
+            initiator: ContractAddress, // this contract
+            token: ContractAddress, // yin
             amount: u256,
             fee: u256,
             mut call_data: Span<felt252>
@@ -185,7 +185,7 @@ pub mod lever {
                 .unwrap();
 
             let shrine = self.shrine.read();
-            let yin = IERC20Dispatcher { contract_address: shrine.contract_address };
+            let yin = IERC20Dispatcher { contract_address: token };
             let sentinel = self.sentinel.read();
             let router = self.ekubo_router.read();
             let router_clear = IClearDispatcher { contract_address: router.contract_address };
@@ -208,14 +208,14 @@ pub mod lever {
                     // Deposit purchased collateral to trove
                     yang_erc20.approve(gate, asset_amt);
                     let asset_amt: u128 = asset_amt.try_into().unwrap();
-                    let yang_amt: Wad = sentinel.enter(yang, get_contract_address(), asset_amt);
+                    let yang_amt: Wad = sentinel.enter(yang, initiator, asset_amt);
                     shrine.deposit(yang, trove_id, yang_amt);
 
                     // Borrow yin from trove and send to this contract to repay the flash mint
                     shrine
                         .forge(initiator, trove_id, amount.try_into().unwrap(), max_forge_fee_pct);
 
-                    self.emit(LeverDeposit { user, trove_id, yang, yang_amt, asset_amt, });
+                    self.emit(LeverDeposit { user, trove_id, yang, yang_amt, asset_amt });
                 },
                 ModifyLeverAction::LeverDown(params) => {
                     let LeverDownParams { trove_id, yang, yang_amt, swaps } = params;
@@ -238,7 +238,7 @@ pub mod lever {
                     // Sanity check to ensure the amount of yin flash minted has been purchased
                     // and can be withdrawn
                     router_clear.clear_minimum(yin, amount);
-                    let yin_amount = yin.balanceOf(get_contract_address());
+                    let yin_amount = yin.balanceOf(initiator);
 
                     // Transfer any excess yin back to the user.
                     if yin_amount > amount {
