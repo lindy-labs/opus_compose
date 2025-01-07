@@ -43,6 +43,12 @@ pub mod mainnet {
             .expect('invalid STRK address')
     }
 
+    pub fn ekubo() -> ContractAddress {
+        0x075afe6402ad5a5c20dd25e10ec3b3986acaa647b77e4ae24b0cbc9a54a27a87
+            .try_into()
+            .expect('invalid EKUBO address')
+    }
+
     // deployments
     pub fn abbot() -> ContractAddress {
         0x04d0bb0a4c40012384e7c419e6eb3c637b28e8363fb66958b60d90505b9c072f.try_into().unwrap()

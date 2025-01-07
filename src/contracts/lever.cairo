@@ -1,5 +1,6 @@
 #[starknet::contract]
 pub mod lever {
+    use core::num::traits::Zero;
     use ekubo::components::clear::{IClearDispatcher, IClearDispatcherTrait};
     use ekubo::interfaces::erc20::{IERC20Dispatcher, IERC20DispatcherTrait};
     use ekubo::router_lite::{IRouterLiteDispatcher, IRouterLiteDispatcherTrait};
@@ -194,6 +195,9 @@ pub mod lever {
                     let LeverUpParams { trove_id, yang, max_forge_fee_pct, swaps } = params;
                     let yang_erc20 = IERC20Dispatcher { contract_address: yang };
 
+                    // Catch invalid yangs properly
+                    let gate = get_valid_gate(sentinel, yang);
+
                     // Transfer yin to EKubo's router and swap for collateral
                     yin.transfer(router.contract_address, amount);
                     router.multi_multihop_swap(swaps);
@@ -202,7 +206,7 @@ pub mod lever {
                     let yang_asset_amt: u256 = router_clear.clear_minimum(yang_erc20, 1);
 
                     // Deposit purchased collateral to trove
-                    yang_erc20.approve(sentinel.get_gate_address(yang), yang_asset_amt);
+                    yang_erc20.approve(gate, yang_asset_amt);
                     let yang_amt: Wad = sentinel
                         .enter(yang, get_contract_address(), yang_asset_amt.try_into().unwrap());
                     shrine.deposit(yang, trove_id, yang_amt);
@@ -225,6 +229,9 @@ pub mod lever {
                 ModifyLeverAction::LeverDown(params) => {
                     let LeverDownParams { trove_id, yang, yang_amt, swaps } = params;
                     let yang_erc20 = IERC20Dispatcher { contract_address: yang };
+
+                    // Catch invalid yangs properly
+                    get_valid_gate(sentinel, yang);
 
                     // Use the flash minted yin to repay the trove's debt
                     self.abbot.read().melt(trove_id, amount.try_into().unwrap());
@@ -260,5 +267,11 @@ pub mod lever {
 
             ON_FLASH_MINT_SUCCESS
         }
+    }
+
+    fn get_valid_gate(sentinel: ISentinelDispatcher, yang: ContractAddress) -> ContractAddress {
+        let gate = sentinel.get_gate_address(yang);
+        assert(gate.is_non_zero(), 'LEV: Invalid yang');
+        gate
     }
 }
