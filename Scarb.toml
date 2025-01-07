@@ -1,0 +1,28 @@
+[package]
+name = "opus_compose"
+version = "0.1.0"
+edition = "2024_07"
+
+# See more keys and their definitions at https://docs.swmansion.com/scarb/docs/reference/manifest.html
+
+[dependencies]
+starknet = ">= 2.9.0"
+ekubo = { git = "https://github.com/EkuboProtocol/abis", commit = "edb6de8c9baf515f1053bbab3d86825d54a63bc3" }
+opus = "1.0.2"
+access_control = ">= 0.4.0"
+wadray = ">= 0.5.0"
+
+[dev-dependencies]
+snforge_std = ">= 0.35.0"
+assert_macros = ">= 2.8.0"
+
+[[target.starknet-contract]]
+sierra = true
+
+[scripts]
+test = "snforge test"
+
+[[tool.snforge.fork]]
+name = "MAINNET"
+url = "$NODE_URL"
+block_id.number = "1034844"

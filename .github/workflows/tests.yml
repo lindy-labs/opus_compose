@@ -1,0 +1,26 @@
+name: Cairo tests
+
+on:
+  push:
+    branches:
+      - main
+    paths-ignore:
+      - "**.md"
+  pull_request:
+    types: [opened, synchronize, reopened, ready_for_review]
+    paths-ignore:
+      - "**.md"
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    env:
+      NODE_URL: ${{ secrets.NODE_URL }}
+    steps:
+      - uses: actions/checkout@v3
+      - uses: software-mansion/setup-scarb@v1
+      - run: scarb fmt --check
+      - run: scarb build
+
+      - uses: foundry-rs/setup-snfoundry@v3
+      - run: snforge test
