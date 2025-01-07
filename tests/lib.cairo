@@ -1,3 +1,3 @@
 mod lever {
-    mod test_lever;    
+    mod test_lever;
 }

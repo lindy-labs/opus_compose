@@ -7,11 +7,11 @@ pub mod lever {
     use opus::interfaces::{
         IAbbotDispatcher, IAbbotDispatcherTrait, IFlashBorrower, IFlashMintDispatcher,
         IFlashMintDispatcherTrait, ISentinelDispatcher, ISentinelDispatcherTrait, IShrineDispatcher,
-        IShrineDispatcherTrait
+        IShrineDispatcherTrait,
     };
     use opus_compose::lever::interfaces::lever::ILever;
     use opus_compose::lever::types::{
-        LeverDownParams, LeverUpParams, ModifyLeverAction, ModifyLeverParams
+        LeverDownParams, LeverUpParams, ModifyLeverAction, ModifyLeverParams,
     };
     use starknet::{ContractAddress, get_caller_address, get_contract_address};
     use starknet::storage::{StoragePointerReadAccess, StoragePointerWriteAccess};
@@ -36,7 +36,7 @@ pub mod lever {
         sentinel: ISentinelDispatcher,
         abbot: IAbbotDispatcher,
         flash_mint: IFlashMintDispatcher,
-        ekubo_router: IRouterLiteDispatcher
+        ekubo_router: IRouterLiteDispatcher,
     }
 
     //
@@ -47,7 +47,7 @@ pub mod lever {
     #[derive(Copy, Drop, starknet::Event)]
     pub enum Event {
         LeverDeposit: LeverDeposit,
-        LeverWithdraw: LeverWithdraw
+        LeverWithdraw: LeverWithdraw,
     }
 
     // This mirrors `Deposit` event in Abbot
@@ -60,7 +60,7 @@ pub mod lever {
         #[key]
         pub yang: ContractAddress,
         pub yang_amt: Wad,
-        pub asset_amt: u128
+        pub asset_amt: u128,
     }
 
     // This mirrors `Withdraw` event in Abbot
@@ -73,7 +73,7 @@ pub mod lever {
         #[key]
         pub yang: ContractAddress,
         pub yang_amt: Wad,
-        pub asset_amt: u128
+        pub asset_amt: u128,
     }
 
     //
@@ -87,7 +87,7 @@ pub mod lever {
         sentinel: ContractAddress,
         abbot: ContractAddress,
         flash_mint: ContractAddress,
-        ekubo_router: ContractAddress
+        ekubo_router: ContractAddress,
     ) {
         self.shrine.write(IShrineDispatcher { contract_address: shrine });
         self.sentinel.write(ISentinelDispatcher { contract_address: sentinel });
@@ -115,12 +115,12 @@ pub mod lever {
                     .read()
                     .get_trove_owner(lever_up_params.trove_id)
                     .expect('Non-existent trove'),
-                'LEV: Not trove owner'
+                'LEV: Not trove owner',
             );
 
             let mut call_data: Array<felt252> = array![];
             let modify_lever_params = ModifyLeverParams {
-                user, action: ModifyLeverAction::LeverUp(lever_up_params)
+                user, action: ModifyLeverAction::LeverUp(lever_up_params),
             };
             modify_lever_params.serialize(ref call_data);
 
@@ -131,7 +131,7 @@ pub mod lever {
                     get_contract_address(), // receiver
                     self.shrine.read().contract_address, // token
                     amount.into(),
-                    call_data.span()
+                    call_data.span(),
                 );
         }
 
@@ -149,10 +149,10 @@ pub mod lever {
                     .read()
                     .get_trove_owner(lever_down_params.trove_id)
                     .expect('Non-existent trove'),
-                'LEV: Not trove owner'
+                'LEV: Not trove owner',
             );
             let modify_lever_params = ModifyLeverParams {
-                user, action: ModifyLeverAction::LeverDown(lever_down_params)
+                user, action: ModifyLeverAction::LeverDown(lever_down_params),
             };
             let mut call_data: Array<felt252> = array![];
             modify_lever_params.serialize(ref call_data);
@@ -164,7 +164,7 @@ pub mod lever {
                     get_contract_address(), // receiver
                     self.shrine.read().contract_address, // token
                     amount.into(),
-                    call_data.span()
+                    call_data.span(),
                 );
         }
     }
@@ -179,12 +179,11 @@ pub mod lever {
             token: ContractAddress, // yin
             amount: u256,
             fee: u256,
-            mut call_data: Span<felt252>
+            mut call_data: Span<felt252>,
         ) -> u256 {
-            let ModifyLeverParams { user, action } = Serde::<
-                ModifyLeverParams
-            >::deserialize(ref call_data)
-                .unwrap();
+            let ModifyLeverParams {
+                user, action,
+            } = Serde::<ModifyLeverParams>::deserialize(ref call_data).unwrap();
 
             let shrine = self.shrine.read();
             let yin = IERC20Dispatcher { contract_address: token };
