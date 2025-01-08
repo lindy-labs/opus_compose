@@ -552,7 +552,7 @@ fn test_lever_up_unhealthy_fail() {
 
 #[test]
 #[fork("MAINNET_LEVER")]
-#[should_panic(expected: 'LEV: Not trove owner')]
+#[should_panic(expected: "LEV: Not trove owner")]
 fn test_unauthorized_lever_up_fail() {
     let lever: ILeverDispatcher = deploy_lever();
 
@@ -569,7 +569,7 @@ fn test_unauthorized_lever_up_fail() {
 
 #[test]
 #[fork("MAINNET_LEVER")]
-#[should_panic(expected: 'LEV: Invalid yang')]
+#[should_panic(expected: "LEV: Invalid yang")]
 fn test_lever_up_invalid_yang_fail() {
     let lever: ILeverDispatcher = deploy_lever();
 
@@ -591,7 +591,7 @@ fn test_lever_up_invalid_yang_fail() {
 
 #[test]
 #[fork("MAINNET_LEVER")]
-#[should_panic(expected: 'LEV: Not trove owner')]
+#[should_panic(expected: "LEV: Not trove owner")]
 fn test_unauthorized_lever_down_fail() {
     let lever: ILeverDispatcher = deploy_lever();
 
@@ -663,7 +663,7 @@ fn test_lever_down_insufficient_trove_yang_fail() {
 
 #[test]
 #[fork("MAINNET_LEVER")]
-#[should_panic(expected: 'LEV: Invalid yang')]
+#[should_panic(expected: "LEV: Invalid yang")]
 fn test_lever_down_invalid_yang_fail() {
     let lever: ILeverDispatcher = deploy_lever();
 

@@ -109,13 +109,13 @@ pub mod lever {
         // 4. Borrow yin from caller's trove and mint to this contract
         fn up(ref self: ContractState, amount: Wad, lever_up_params: LeverUpParams) {
             let user: ContractAddress = get_caller_address();
-            assert(
+            assert!(
                 user == self
                     .abbot
                     .read()
                     .get_trove_owner(lever_up_params.trove_id)
                     .expect('Non-existent trove'),
-                'LEV: Not trove owner',
+                "LEV: Not trove owner",
             );
 
             let mut call_data: Array<felt252> = array![];
@@ -143,13 +143,13 @@ pub mod lever {
         // 5. Transfer remainder collateral asset to user
         fn down(ref self: ContractState, amount: Wad, lever_down_params: LeverDownParams) {
             let user: ContractAddress = get_caller_address();
-            assert(
+            assert!(
                 user == self
                     .abbot
                     .read()
                     .get_trove_owner(lever_down_params.trove_id)
                     .expect('Non-existent trove'),
-                'LEV: Not trove owner',
+                "LEV: Not trove owner",
             );
             let modify_lever_params = ModifyLeverParams {
                 user, action: ModifyLeverAction::LeverDown(lever_down_params),
@@ -259,7 +259,7 @@ pub mod lever {
     // Helper function to fetch the gate address for a yang, or otherwise throw.
     fn get_valid_gate(sentinel: ISentinelDispatcher, yang: ContractAddress) -> ContractAddress {
         let gate = sentinel.get_gate_address(yang);
-        assert(gate.is_non_zero(), 'LEV: Invalid yang');
+        assert!(gate.is_non_zero(), "LEV: Invalid yang");
         gate
     }
 }
