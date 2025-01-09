@@ -1,4 +1,4 @@
-# Opus Compositions
+# Opus Compose
 
 This repository contains contracts that extend the core functionality of [Opus](https://github.com/lindy-labs/opus_contracts).
 
