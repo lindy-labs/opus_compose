@@ -1,0 +1,6 @@
+[sncast.mainnet]
+account = "mainnet_admin.json"
+keystore = "mainnet_admin_keystore.json"
+url = "https://free-rpc.nethermind.io/mainnet-juno"
+block-explorer = "Voyager"
+show-explorer-links = true
