@@ -16,6 +16,8 @@ wadray = ">= 0.5.0"
 snforge_std = ">= 0.35.0"
 assert_macros = ">= 2.8.0"
 
+[lib]
+
 [[target.starknet-contract]]
 sierra = true
 

@@ -1,0 +1,24 @@
+[package]
+name = "deployment"
+version = "0.1.0"
+edition = "2024_07"
+
+# See more keys and their definitions at https://docs.swmansion.com/scarb/docs/reference/manifest.html
+
+[dependencies]
+sncast_std = ">= 0.35.0"
+starknet = ">=2.9.2"
+opus_compose = { path = "../../" }
+
+[[target.starknet-contract]]
+build-external-contracts = [
+    "opus_compose::lever::contracts::lever::lever",
+    "opus_compose::stabilizer::contracts::stabilizer::stabilizer",
+]
+
+[scripts]
+deploy_lever = "sncast --profile mainnet script run deploy_lever"
+deploy_stabilizer = "sncast --profile mainnet script run deploy_stabilizer"
+
+[profile.mainnet]
+inherits = "release"

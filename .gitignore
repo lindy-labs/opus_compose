@@ -1,3 +1,6 @@
 target
 .snfoundry_cache/
 .env
+
+scripts/deployment/mainnet_admin.json
+scripts/deployment/mainnet_admin_keystore.json
