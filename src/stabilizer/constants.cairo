@@ -7,7 +7,7 @@ use opus_compose::addresses::mainnet;
 pub const POOL_FEE: u128 = 34028236692093847977029636859101184; // 0.01%
 pub const POOL_TICK_SPACING: u128 = 200; // 0.02%
 
-pub const LOWER_TICK_MAG: u128 = 27641000; // 0.990084
+pub const LOWER_TICK_MAG: u128 = 27641600; // 0.989491
 pub const UPPER_TICK_MAG: u128 = 27626000; // 1.00505
 
 pub fn POOL_KEY() -> PoolKey {

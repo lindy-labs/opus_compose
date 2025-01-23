@@ -26,6 +26,9 @@ pub mod stabilizer {
         pub mod stabilizer;
     }
     pub mod math;
+    pub mod periphery {
+        pub mod frontend_data_provider;
+    }
     pub mod types;
 
     #[cfg(test)]
