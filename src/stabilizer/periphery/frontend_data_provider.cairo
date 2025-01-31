@@ -33,7 +33,7 @@ pub trait IFrontendDataProvider<TContractState> {
 }
 
 #[starknet::contract]
-pub mod frontend_data_provider {
+pub mod stabilizer_fdp {
     use core::num::traits::{WideMul, Zero};
     use core::integer::{u512, u512_safe_div_rem_by_u256};
     use ekubo::interfaces::core::{ICoreDispatcher, ICoreDispatcherTrait};
@@ -49,29 +49,14 @@ pub mod frontend_data_provider {
     };
     use opus_compose::stabilizer::types::PoolInfo;
     use starknet::ContractAddress;
-    use starknet::storage::{StoragePointerReadAccess, StoragePointerWriteAccess};
     use super::{IFrontendDataProvider, IOracleDispatcher, IOracleDispatcherTrait};
     use wadray::{rmul_wr, Wad, WAD_DECIMALS, Ray};
 
     const TWO_POW_128: u256 = 0x100000000000000000000000000000000;
     const TWAP_PERIOD: u64 = 5 * 60; // 5 minutes x 60s
 
-    //
-    // Storage
-    //
-
     #[storage]
     struct Storage {
-        ekubo_core: ICoreDispatcher,
-        ekubo_oracle: IOracleDispatcher,
-    }
-
-    #[constructor]
-    fn constructor(
-        ref self: ContractState, ekubo_core: ContractAddress, ekubo_oracle: ContractAddress,
-    ) {
-        self.ekubo_core.write(ICoreDispatcher { contract_address: ekubo_core });
-        self.ekubo_oracle.write(IOracleDispatcher { contract_address: ekubo_oracle });
     }
 
     //
@@ -132,7 +117,7 @@ pub mod frontend_data_provider {
         ) -> PoolInfo {
             let math = mathlib();
         
-            let ekubo_core = self.ekubo_core.read();
+            let ekubo_core = ICoreDispatcher { contract_address: mainnet::ekubo_core() };
             let pool_liquidity: u128 = ekubo_core.get_pool_liquidity(pool_key);
             let pool_price: PoolPrice = ekubo_core.get_pool_price(pool_key);
 
@@ -169,9 +154,7 @@ pub mod frontend_data_provider {
             };
 
             let other_token_price: Wad = convert_ekubo_oracle_price_to_wad(
-                self
-                    .ekubo_oracle
-                    .read()
+                IOracleDispatcher { contract_address: mainnet::ekubo_oracle() }
                     .get_price_x128_over_last(other_token, mainnet::shrine(), TWAP_PERIOD),
                 IERC20Dispatcher { contract_address: other_token }.decimals(),
                 WAD_DECIMALS,

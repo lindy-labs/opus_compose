@@ -70,11 +70,8 @@ pub mod stabilizer_utils {
             .grant_role(adjust_budget_role, mainnet::multisig());
         stop_cheat_caller_address(mainnet::shrine());
 
-        let fdp_class = declare("frontend_data_provider").unwrap().contract_class();
-        let mut calldata: Array<felt252> = array![
-            mainnet::ekubo_core().into(), mainnet::ekubo_oracle().into(),
-        ];
-        let (fdp_addr, _) = fdp_class.deploy(@calldata).unwrap();
+        let fdp_class = declare("stabilizer_fdp").unwrap().contract_class();
+        let (fdp_addr, _) = fdp_class.deploy(@array![]).unwrap();
 
         StabilizerTestConfig {
             stabilizer: IStabilizerDispatcher { contract_address: stabilizer_addr },
