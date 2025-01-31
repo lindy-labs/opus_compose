@@ -14,6 +14,7 @@ opus_compose = { path = "../../" }
 build-external-contracts = [
     "opus_compose::lever::contracts::lever::lever",
     "opus_compose::stabilizer::contracts::stabilizer::stabilizer",
+    "opus_compose::stabilizer::periphery::frontend_data_provider::stabilizer_fdp",
 ]
 
 [scripts]

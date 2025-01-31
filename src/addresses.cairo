@@ -93,6 +93,18 @@ pub mod mainnet {
     }
 
     // Ekubo
+    pub fn ekubo_core() -> ContractAddress {
+        contract_address_const::<
+            0x00000005dd3d2f4429af886cd1a3b08289dbcea99a294197e9eb43b0e0325b4b,
+        >()
+    }
+
+    pub fn ekubo_oracle() -> ContractAddress {
+        contract_address_const::<
+            0x005e470ff654d834983a46b8f29dfa99963d5044b993cb7b9c92243a69dab38f,
+        >()
+    }
+
     pub fn ekubo_positions() -> ContractAddress {
         contract_address_const::<
             0x02e0af29598b407c8716b17f6d2795eca1b471413fa03fb145a5e33722184067,

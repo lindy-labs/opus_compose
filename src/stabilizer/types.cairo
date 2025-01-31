@@ -79,3 +79,15 @@ pub struct YieldState {
     // small `u128` value, 256 bits are used to prevent overflows.
     pub yin_per_liquidity: u256,
 }
+
+//
+// Frontend Data Provider
+//
+
+#[derive(Copy, Drop, Serde)]
+pub struct PoolInfo {
+    pub liquidity: u128,
+    pub sqrt_ratio: u256,
+    pub token0_amount: u256,
+    pub token1_amount: u256,
+}

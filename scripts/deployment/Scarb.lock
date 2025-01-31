@@ -22,9 +22,9 @@ source = "git+https://github.com/EkuboProtocol/abis#edb6de8c9baf515f1053bbab3d86
 
 [[package]]
 name = "opus"
-version = "1.0.2"
+version = "1.0.3"
 source = "registry+https://scarbs.xyz/"
-checksum = "sha256:61b1e2a8606bcf7c57e5ee9223ca0ad0b159380f101d5762e62d70b59302540a"
+checksum = "sha256:f8f67a67633e535a9b16ddfd983c64b44e2b61bf57fe51228521e0c686e06abc"
 dependencies = [
  "wadray",
 ]
