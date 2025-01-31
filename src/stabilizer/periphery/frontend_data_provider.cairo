@@ -56,8 +56,7 @@ pub mod stabilizer_fdp {
     const TWAP_PERIOD: u64 = 5 * 60; // 5 minutes x 60s
 
     #[storage]
-    struct Storage {
-    }
+    struct Storage {}
 
     //
     // External functions
@@ -101,7 +100,7 @@ pub mod stabilizer_fdp {
             } else {
                 Zero::zero()
             };
-            
+
             get_proportionate_tvl(pool_tvl, staked_liquidity, pool_info.liquidity)
         }
     }
@@ -116,7 +115,7 @@ pub mod stabilizer_fdp {
             self: @ContractState, pool_key: PoolKey, bounds: Bounds,
         ) -> PoolInfo {
             let math = mathlib();
-        
+
             let ekubo_core = ICoreDispatcher { contract_address: mainnet::ekubo_core() };
             let pool_liquidity: u128 = ekubo_core.get_pool_liquidity(pool_key);
             let pool_price: PoolPrice = ekubo_core.get_pool_price(pool_key);

@@ -16,7 +16,7 @@ use opus_compose::stabilizer::periphery::frontend_data_provider::IFrontendDataPr
 use opus_compose::stabilizer::types::{Stake, YieldState};
 use opus_compose::stabilizer::tests::utils::stabilizer_utils::{
     create_surplus, create_ekubo_position, create_valid_ekubo_position, fund_three_users, setup,
-    stake_ekubo_position, StabilizerTestConfig, USDC_DECIMALS_DIFF_SCALE
+    stake_ekubo_position, StabilizerTestConfig, USDC_DECIMALS_DIFF_SCALE,
 };
 use snforge_std::{
     declare, DeclareResultTrait, start_cheat_caller_address, stop_cheat_caller_address, spy_events,
@@ -649,7 +649,12 @@ fn test_multi_users() {
     let pool_info = fdp.get_pool_info(stabilizer.contract_address);
     // Sanity check that the pool does not consist entirely of one token
     assert!(pool_info.token0_amount >= (100 * WAD_ONE).into(), "token0 sanity check");
-    assert!(pool_info.token0_amount >= (100 * WAD_ONE / USDC_DECIMALS_DIFF_SCALE.try_into().unwrap()).into(), "token1 sanity check");
+    assert!(
+        pool_info
+            .token0_amount >= (100 * WAD_ONE / USDC_DECIMALS_DIFF_SCALE.try_into().unwrap())
+            .into(),
+        "token1 sanity check",
+    );
 
     let tvl = fdp.get_staked_tvl(stabilizer.contract_address);
     let expected_tvl: Wad = (user1_yin_amt + user2_yin_amt + user3_yin_amt).try_into().unwrap();
