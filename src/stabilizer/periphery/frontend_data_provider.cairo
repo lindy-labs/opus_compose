@@ -39,7 +39,6 @@ pub mod frontend_data_provider {
     use ekubo::interfaces::core::{ICoreDispatcher, ICoreDispatcherTrait};
     use ekubo::interfaces::mathlib::{IMathLibDispatcherTrait, dispatcher as mathlib};
     use ekubo::types::bounds::Bounds;
-    use ekubo::types::i129::i129;
     use ekubo::types::keys::PoolKey;
     use ekubo::types::pool_price::{PoolPrice};
     use opus::utils::math::convert_ekubo_oracle_price_to_wad;

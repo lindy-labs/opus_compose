@@ -15,6 +15,9 @@ pub mod stabilizer_utils {
     use opus_compose::stabilizer::interfaces::stabilizer::{
         IStabilizerDispatcher, IStabilizerDispatcherTrait,
     };
+    use opus_compose::stabilizer::periphery::frontend_data_provider::{
+        IFrontendDataProviderDispatcher,
+    };
     use snforge_std::{
         declare, cheat_caller_address, CheatSpan, ContractClass, ContractClassTrait,
         DeclareResultTrait, start_cheat_caller_address, stop_cheat_caller_address,
@@ -24,11 +27,17 @@ pub mod stabilizer_utils {
 
     pub const USDC_DECIMALS_DIFF_SCALE: u256 = 1000000000000; // 10 ** 12
 
+    #[derive(Copy, Drop)]
+    pub struct StabilizerTestConfig {
+        pub stabilizer: IStabilizerDispatcher,
+        pub fdp: IFrontendDataProviderDispatcher,
+    }
+
     //
     // Test setup helpers
     //
 
-    pub fn setup(stabilizer_class: Option<ContractClass>) -> IStabilizerDispatcher {
+    pub fn setup(stabilizer_class: Option<ContractClass>) -> StabilizerTestConfig {
         let stabilizer_class = match stabilizer_class {
             Option::Some(class) => class,
             Option::None => *(declare("stabilizer").unwrap().contract_class()),
@@ -61,7 +70,16 @@ pub mod stabilizer_utils {
             .grant_role(adjust_budget_role, mainnet::multisig());
         stop_cheat_caller_address(mainnet::shrine());
 
-        IStabilizerDispatcher { contract_address: stabilizer_addr }
+        let fdp_class = declare("frontend_data_provider").unwrap().contract_class();
+        let mut calldata: Array<felt252> = array![
+            mainnet::ekubo_core().into(), mainnet::ekubo_oracle().into(),
+        ];
+        let (fdp_addr, _) = fdp_class.deploy(@calldata).unwrap();
+
+        StabilizerTestConfig {
+            stabilizer: IStabilizerDispatcher { contract_address: stabilizer_addr },
+            fdp: IFrontendDataProviderDispatcher { contract_address: fdp_addr },
+        }
     }
 
     pub fn fund_three_users(
