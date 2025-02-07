@@ -109,15 +109,6 @@ pub mod lever {
         // 4. Borrow yin from caller's trove and mint to this contract
         fn up(ref self: ContractState, amount: Wad, lever_up_params: LeverUpParams) {
             let user: ContractAddress = get_caller_address();
-            assert!(
-                user == self
-                    .abbot
-                    .read()
-                    .get_trove_owner(lever_up_params.trove_id)
-                    .expect('Non-existent trove'),
-                "LEV: Not trove owner",
-            );
-
             let mut call_data: Array<felt252> = array![];
             let modify_lever_params = ModifyLeverParams {
                 user, action: ModifyLeverAction::LeverUp(lever_up_params),
@@ -143,14 +134,6 @@ pub mod lever {
         // 5. Transfer remainder collateral asset to user
         fn down(ref self: ContractState, amount: Wad, lever_down_params: LeverDownParams) {
             let user: ContractAddress = get_caller_address();
-            assert!(
-                user == self
-                    .abbot
-                    .read()
-                    .get_trove_owner(lever_down_params.trove_id)
-                    .expect('Non-existent trove'),
-                "LEV: Not trove owner",
-            );
             let modify_lever_params = ModifyLeverParams {
                 user, action: ModifyLeverAction::LeverDown(lever_down_params),
             };
@@ -181,14 +164,13 @@ pub mod lever {
             fee: u256,
             mut call_data: Span<felt252>,
         ) -> u256 {
-            assert!(
-                get_caller_address() == self.flash_mint.read().contract_address,
-                "LEV: Not flash mint",
-            );
+            assert!(initiator == get_contract_address(), "LEV: Unauthorized initiator");
 
             let ModifyLeverParams {
                 user, action,
             } = Serde::<ModifyLeverParams>::deserialize(ref call_data).unwrap();
+
+            let caller: ContractAddress = get_caller_address();
 
             let shrine = self.shrine.read();
             let yin = IERC20Dispatcher { contract_address: token };
@@ -200,6 +182,8 @@ pub mod lever {
                 ModifyLeverAction::LeverUp(params) => {
                     let LeverUpParams { trove_id, yang, max_forge_fee_pct, swaps } = params;
                     let yang_erc20 = IERC20Dispatcher { contract_address: yang };
+
+                    self.assert_caller_is_trove_owner(caller, trove_id);
 
                     // Catch invalid yangs properly
                     let gate = get_valid_gate(sentinel, yang);
@@ -226,6 +210,8 @@ pub mod lever {
                 ModifyLeverAction::LeverDown(params) => {
                     let LeverDownParams { trove_id, yang, yang_amt, swaps } = params;
                     let yang_erc20 = IERC20Dispatcher { contract_address: yang };
+
+                    self.assert_caller_is_trove_owner(caller, trove_id);
 
                     // Catch invalid yangs properly
                     get_valid_gate(sentinel, yang);
@@ -258,6 +244,18 @@ pub mod lever {
             };
 
             ON_FLASH_MINT_SUCCESS
+        }
+    }
+
+    #[generate_trait]
+    impl LeverHelpers of LeverHelpersTrait {
+        fn assert_caller_is_trove_owner(
+            self: @ContractState, caller: ContractAddress, trove_id: u64,
+        ) {
+            assert!(
+                caller == self.abbot.read().get_trove_owner(trove_id).expect('Non-existent trove'),
+                "LEV: Not trove owner",
+            );
         }
     }
 
