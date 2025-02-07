@@ -37,6 +37,10 @@ pub mod lever {
         abbot: IAbbotDispatcher,
         flash_mint: IFlashMintDispatcher,
         ekubo_router: IRouterLiteDispatcher,
+        // Used as transient storage to ensure the callback function was entered
+        // into via either `lever.up` or `lever.down`.
+        // It should be reset to zero after each transaction.
+        caller: ContractAddress,
     }
 
     //
@@ -109,6 +113,16 @@ pub mod lever {
         // 4. Borrow yin from caller's trove and mint to this contract
         fn up(ref self: ContractState, amount: Wad, lever_up_params: LeverUpParams) {
             let user: ContractAddress = get_caller_address();
+            assert!(
+                user == self
+                    .abbot
+                    .read()
+                    .get_trove_owner(lever_up_params.trove_id)
+                    .expect('Non-existent trove'),
+                "LEV: Not trove owner",
+            );
+            self.caller.write(user);
+
             let mut call_data: Array<felt252> = array![];
             let modify_lever_params = ModifyLeverParams {
                 user, action: ModifyLeverAction::LeverUp(lever_up_params),
@@ -134,6 +148,16 @@ pub mod lever {
         // 5. Transfer remainder collateral asset to user
         fn down(ref self: ContractState, amount: Wad, lever_down_params: LeverDownParams) {
             let user: ContractAddress = get_caller_address();
+            assert!(
+                user == self
+                    .abbot
+                    .read()
+                    .get_trove_owner(lever_down_params.trove_id)
+                    .expect('Non-existent trove'),
+                "LEV: Not trove owner",
+            );
+            self.caller.write(user);
+
             let modify_lever_params = ModifyLeverParams {
                 user, action: ModifyLeverAction::LeverDown(lever_down_params),
             };
@@ -166,13 +190,14 @@ pub mod lever {
         ) -> u256 {
             assert!(initiator == get_contract_address(), "LEV: Initiator must be lever");
 
-            let ModifyLeverParams {
-                user, action,
-            } = Serde::<ModifyLeverParams>::deserialize(ref call_data).unwrap();
-
             // Note that in the expected flow, `get_caller_address()` returns the original
             // caller to `lever.up` or `lever.down` instead of the flash mint contract.
             let caller: ContractAddress = get_caller_address();
+            assert!(caller == self.caller.read(), "LEV: Illegal callback");
+
+            let ModifyLeverParams {
+                user, action,
+            } = Serde::<ModifyLeverParams>::deserialize(ref call_data).unwrap();
 
             let shrine = self.shrine.read();
             let yin = IERC20Dispatcher { contract_address: token };
@@ -184,8 +209,6 @@ pub mod lever {
                 ModifyLeverAction::LeverUp(params) => {
                     let LeverUpParams { trove_id, yang, max_forge_fee_pct, swaps } = params;
                     let yang_erc20 = IERC20Dispatcher { contract_address: yang };
-
-                    self.assert_caller_is_trove_owner(caller, trove_id);
 
                     // Catch invalid yangs properly
                     let gate = get_valid_gate(sentinel, yang);
@@ -212,8 +235,6 @@ pub mod lever {
                 ModifyLeverAction::LeverDown(params) => {
                     let LeverDownParams { trove_id, yang, yang_amt, swaps } = params;
                     let yang_erc20 = IERC20Dispatcher { contract_address: yang };
-
-                    self.assert_caller_is_trove_owner(caller, trove_id);
 
                     // Catch invalid yangs properly
                     get_valid_gate(sentinel, yang);
@@ -245,19 +266,10 @@ pub mod lever {
                 },
             };
 
-            ON_FLASH_MINT_SUCCESS
-        }
-    }
+            // Reset caller to zero at the end of transaction
+            self.caller.write(Zero::zero());
 
-    #[generate_trait]
-    impl LeverHelpers of LeverHelpersTrait {
-        fn assert_caller_is_trove_owner(
-            self: @ContractState, caller: ContractAddress, trove_id: u64,
-        ) {
-            assert!(
-                caller == self.abbot.read().get_trove_owner(trove_id).expect('Non-existent trove'),
-                "LEV: Not trove owner",
-            );
+            ON_FLASH_MINT_SUCCESS
         }
     }
 

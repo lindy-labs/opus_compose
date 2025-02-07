@@ -687,9 +687,10 @@ fn test_lever_down_invalid_yang_fail() {
     lever.down(trove_health.debt, lever_down_params)
 }
 
+// Non-trove owner calls callback function directly with valid params
 #[test]
 #[fork("MAINNET_LEVER")]
-#[should_panic(expected: "LEV: Not trove owner")]
+#[should_panic(expected: "LEV: Illegal callback")]
 fn test_unauthorized_callback_fail() {
     let lever: ILeverDispatcher = deploy_lever();
 
@@ -724,6 +725,7 @@ fn test_unauthorized_callback_fail() {
         );
 }
 
+// Trove owner calls callback function directly with invalid initiator
 #[test]
 #[fork("MAINNET_LEVER")]
 #[should_panic(expected: "LEV: Initiator must be lever")]
@@ -761,10 +763,11 @@ fn test_invalid_initiator_in_callback_fail() {
         );
 }
 
+// Trove owner calls fallback function directly with valid params
 #[test]
 #[fork("MAINNET_LEVER")]
-#[should_panic(expected: 'SH: Insufficient yin balance')]
-fn test_trove_owner_callback() {
+#[should_panic(expected: "LEV: Illegal callback")]
+fn test_trove_owner_callback_fail() {
     let lever: ILeverDispatcher = deploy_lever();
 
     let shrine = IShrineDispatcher { contract_address: mainnet::shrine() };
