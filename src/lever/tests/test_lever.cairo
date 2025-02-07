@@ -567,7 +567,7 @@ fn test_lever_up_exceeds_max_ltv_fail() {
     let whale = mainnet::whale();
     let eth = mainnet::eth();
 
-    let eth_capital: u128 = (WAD_ONE / 4);
+    let eth_capital: u128 = WAD_ONE * 2;
     let trove_id: u64 = open_trove_helper(whale, eth_capital);
 
     let (eth_price, _, _) = shrine.get_current_yang_price(eth);
