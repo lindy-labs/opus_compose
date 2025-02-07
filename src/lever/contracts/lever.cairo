@@ -9,13 +9,14 @@ pub mod lever {
         IFlashMintDispatcherTrait, ISentinelDispatcher, ISentinelDispatcherTrait, IShrineDispatcher,
         IShrineDispatcherTrait,
     };
+    use opus::types::Health;
     use opus_compose::lever::interfaces::lever::ILever;
     use opus_compose::lever::types::{
         LeverDownParams, LeverUpParams, ModifyLeverAction, ModifyLeverParams,
     };
     use starknet::{ContractAddress, get_caller_address, get_contract_address};
     use starknet::storage::{StoragePointerReadAccess, StoragePointerWriteAccess};
-    use wadray::Wad;
+    use wadray::{Ray, Wad};
 
     //
     // Constants
@@ -193,7 +194,9 @@ pub mod lever {
 
             match action {
                 ModifyLeverAction::LeverUp(params) => {
-                    let LeverUpParams { trove_id, yang, max_forge_fee_pct, swaps } = params;
+                    let LeverUpParams {
+                        trove_id, max_ltv, yang, max_forge_fee_pct, swaps,
+                    } = params;
                     let yang_erc20 = IERC20Dispatcher { contract_address: yang };
 
                     // Catch invalid yangs properly
@@ -216,10 +219,12 @@ pub mod lever {
                     shrine
                         .forge(initiator, trove_id, amount.try_into().unwrap(), max_forge_fee_pct);
 
+                    self.assert_below_max_ltv(trove_id, max_ltv);
+
                     self.emit(LeverDeposit { user, trove_id, yang, yang_amt, asset_amt });
                 },
                 ModifyLeverAction::LeverDown(params) => {
-                    let LeverDownParams { trove_id, yang, yang_amt, swaps } = params;
+                    let LeverDownParams { trove_id, max_ltv, yang, yang_amt, swaps } = params;
                     let yang_erc20 = IERC20Dispatcher { contract_address: yang };
 
                     // Catch invalid yangs properly
@@ -248,11 +253,21 @@ pub mod lever {
                     // Transfer any remainder collateral to the user
                     router_clear.clear_minimum_to_recipient(yang_erc20, 1, user);
 
+                    self.assert_below_max_ltv(trove_id, max_ltv);
+
                     self.emit(LeverWithdraw { user, trove_id, yang, yang_amt, asset_amt });
                 },
             };
 
             ON_FLASH_MINT_SUCCESS
+        }
+    }
+
+    #[generate_trait]
+    impl LeverHelpers of LeverHelpersTrait {
+        fn assert_below_max_ltv(self: @ContractState, trove_id: u64, max_ltv: Ray) {
+            let trove_health: Health = self.shrine.read().get_trove_health(trove_id);
+            assert!(trove_health.ltv <= max_ltv, "LEV: Exceeds max LTV");
         }
     }
 
