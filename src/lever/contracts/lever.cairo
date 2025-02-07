@@ -181,6 +181,11 @@ pub mod lever {
             fee: u256,
             mut call_data: Span<felt252>,
         ) -> u256 {
+            assert!(
+                get_caller_address() == self.flash_mint.read().contract_address,
+                "LEV: Not flash mint",
+            );
+
             let ModifyLeverParams {
                 user, action,
             } = Serde::<ModifyLeverParams>::deserialize(ref call_data).unwrap();
