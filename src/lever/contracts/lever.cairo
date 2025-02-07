@@ -190,8 +190,12 @@ pub mod lever {
         ) -> u256 {
             assert!(initiator == get_contract_address(), "LEV: Initiator must be lever");
 
-            // Note that in the expected flow, `get_caller_address()` returns the original
-            // caller to `lever.up` or `lever.down` instead of the flash mint contract.
+            // Note that in the expected flow, `get_caller_address()` here returns the original
+            // caller to `lever.up` or `lever.down` although it should have been the flash mint contract.
+            // Therefore, we move the check one layer up by storing the caller address in `lever.up` and 
+            // `lever.down` in storage, and asserting that the return value of `get_caller_address()` matches
+            // the caller in storage to ensure that this callback function was entered via `lever.up` or 
+            // `lever.down`.
             let caller: ContractAddress = get_caller_address();
             assert!(caller == self.caller.read(), "LEV: Illegal callback");
 
