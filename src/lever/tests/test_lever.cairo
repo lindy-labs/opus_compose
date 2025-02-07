@@ -5,7 +5,8 @@ use ekubo::router_lite::{RouteNode, Swap, TokenAmount};
 use ekubo::types::i129::i129;
 use ekubo::types::keys::PoolKey;
 use opus::interfaces::{
-    IAbbotDispatcher, IAbbotDispatcherTrait, IShrineDispatcher, IShrineDispatcherTrait,
+    IAbbotDispatcher, IAbbotDispatcherTrait, IFlashBorrowerDispatcher,
+    IFlashBorrowerDispatcherTrait, IShrineDispatcher, IShrineDispatcherTrait,
 };
 use opus::types::{AssetBalance, Health};
 use opus::utils::assert_equalish;
@@ -682,4 +683,15 @@ fn test_lever_down_invalid_yang_fail() {
 
     start_cheat_caller_address(lever.contract_address, whale);
     lever.down(trove_health.debt, lever_down_params)
+}
+
+#[test]
+#[fork("MAINNET_LEVER")]
+#[should_panic(expected: "LEV: Not flash mint")]
+fn test_unauthorized_callback_fail() {
+    let lever: ILeverDispatcher = deploy_lever();
+
+    start_cheat_caller_address(lever.contract_address, mainnet::whale());
+    IFlashBorrowerDispatcher { contract_address: lever.contract_address }
+        .on_flash_loan(lever.contract_address, mainnet::shrine(), 0_u256, 0_256, array![].span());
 }
