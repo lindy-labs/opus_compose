@@ -722,3 +722,39 @@ fn test_unauthorized_callback_fail() {
             call_data.span(),
         );
 }
+
+#[test]
+#[fork("MAINNET_LEVER")]
+#[should_panic(expected: "LEV: Initiator must be lever")]
+fn test_invalid_initiator_in_callback_fail() {
+    let lever: ILeverDispatcher = deploy_lever();
+
+    let shrine = IShrineDispatcher { contract_address: mainnet::shrine() };
+
+    let whale = mainnet::whale();
+
+    let eth_capital: u128 = 2 * WAD_ONE;
+    let (trove_id, _debt) = open_trove_and_lever_up(lever, whale, eth_capital);
+
+    let trove_health: Health = shrine.get_trove_health(trove_id);
+    let invalid_yang = mainnet::ekubo();
+    let lever_down_params = LeverDownParams {
+        trove_id, yang: invalid_yang, yang_amt: Zero::zero(), swaps: lever_down_swaps(),
+    };
+    let modify_lever_params = ModifyLeverParams {
+        user: whale, action: ModifyLeverAction::LeverDown(lever_down_params),
+    };
+    let mut call_data: Array<felt252> = Default::default();
+    modify_lever_params.serialize(ref call_data);
+
+    // Trove owner calls the callback function directly with the wrong initiator
+    start_cheat_caller_address(lever.contract_address, mainnet::whale());
+    IFlashBorrowerDispatcher { contract_address: lever.contract_address }
+        .on_flash_loan(
+            mainnet::multisig(),
+            mainnet::shrine(),
+            trove_health.debt.into(),
+            0_256,
+            call_data.span(),
+        );
+}
