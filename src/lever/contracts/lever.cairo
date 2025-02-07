@@ -164,7 +164,7 @@ pub mod lever {
             fee: u256,
             mut call_data: Span<felt252>,
         ) -> u256 {
-            assert!(initiator == get_contract_address(), "LEV: Unauthorized initiator");
+            assert!(initiator == get_contract_address(), "LEV: Initiator must be lever");
 
             let ModifyLeverParams {
                 user, action,
