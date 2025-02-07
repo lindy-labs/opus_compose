@@ -170,6 +170,8 @@ pub mod lever {
                 user, action,
             } = Serde::<ModifyLeverParams>::deserialize(ref call_data).unwrap();
 
+            // Note that in the expected flow, `get_caller_address()` returns the original
+            // caller to `lever.up` or `lever.down` instead of the flash mint contract.
             let caller: ContractAddress = get_caller_address();
 
             let shrine = self.shrine.read();
