@@ -14,7 +14,9 @@ use opus_compose::addresses::mainnet;
 use opus_compose::lever::constants::{SENTINEL_ROLES_FOR_LEVER, SHRINE_ROLES_FOR_LEVER};
 use opus_compose::lever::contracts::lever::lever as lever_contract;
 use opus_compose::lever::interfaces::lever::{ILeverDispatcher, ILeverDispatcherTrait};
-use opus_compose::lever::types::{LeverUpParams, LeverDownParams};
+use opus_compose::lever::types::{
+    LeverUpParams, LeverDownParams, ModifyLeverAction, ModifyLeverParams,
+};
 use snforge_std::{
     declare, ContractClassTrait, DeclareResultTrait, EventSpyAssertionsTrait, spy_events,
     start_cheat_caller_address, stop_cheat_caller_address,
@@ -687,11 +689,36 @@ fn test_lever_down_invalid_yang_fail() {
 
 #[test]
 #[fork("MAINNET_LEVER")]
-#[should_panic(expected: "LEV: Not flash mint")]
+#[should_panic(expected: "LEV: Not trove owner")]
 fn test_unauthorized_callback_fail() {
     let lever: ILeverDispatcher = deploy_lever();
 
-    start_cheat_caller_address(lever.contract_address, mainnet::whale());
+    let shrine = IShrineDispatcher { contract_address: mainnet::shrine() };
+
+    let whale = mainnet::whale();
+
+    let eth_capital: u128 = 2 * WAD_ONE;
+    let (trove_id, _debt) = open_trove_and_lever_up(lever, whale, eth_capital);
+
+    let trove_health: Health = shrine.get_trove_health(trove_id);
+    let invalid_yang = mainnet::ekubo();
+    let lever_down_params = LeverDownParams {
+        trove_id, yang: invalid_yang, yang_amt: Zero::zero(), swaps: lever_down_swaps(),
+    };
+    let modify_lever_params = ModifyLeverParams {
+        user: whale, action: ModifyLeverAction::LeverDown(lever_down_params),
+    };
+    let mut call_data: Array<felt252> = Default::default();
+    modify_lever_params.serialize(ref call_data);
+
+    // Non-trove owner calls the callback function
+    start_cheat_caller_address(lever.contract_address, mainnet::multisig());
     IFlashBorrowerDispatcher { contract_address: lever.contract_address }
-        .on_flash_loan(lever.contract_address, mainnet::shrine(), 0_u256, 0_256, array![].span());
+        .on_flash_loan(
+            lever.contract_address,
+            mainnet::shrine(),
+            trove_health.debt.into(),
+            0_256,
+            call_data.span(),
+        );
 }
