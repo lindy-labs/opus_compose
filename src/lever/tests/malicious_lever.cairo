@@ -38,34 +38,6 @@ pub mod malicious_lever {
     #[event]
     #[derive(Copy, Drop, starknet::Event)]
     pub enum Event {
-        LeverDeposit: LeverDeposit,
-        LeverWithdraw: LeverWithdraw,
-    }
-
-    // This mirrors `Deposit` event in Abbot
-    #[derive(Copy, Drop, starknet::Event, PartialEq)]
-    pub struct LeverDeposit {
-        #[key]
-        pub user: ContractAddress,
-        #[key]
-        pub trove_id: u64,
-        #[key]
-        pub yang: ContractAddress,
-        pub yang_amt: Wad,
-        pub asset_amt: u128,
-    }
-
-    // This mirrors `Withdraw` event in Abbot
-    #[derive(Copy, Drop, starknet::Event, PartialEq)]
-    pub struct LeverWithdraw {
-        #[key]
-        pub user: ContractAddress,
-        #[key]
-        pub trove_id: u64,
-        #[key]
-        pub yang: ContractAddress,
-        pub yang_amt: Wad,
-        pub asset_amt: u128,
     }
 
     //
