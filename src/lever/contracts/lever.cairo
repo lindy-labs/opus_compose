@@ -37,10 +37,6 @@ pub mod lever {
         abbot: IAbbotDispatcher,
         flash_mint: IFlashMintDispatcher,
         ekubo_router: IRouterLiteDispatcher,
-        // Used as transient storage to ensure the callback function was entered
-        // into via either `lever.up` or `lever.down`.
-        // It should be reset to zero after each transaction.
-        caller: ContractAddress,
     }
 
     //
@@ -121,7 +117,6 @@ pub mod lever {
                     .expect('Non-existent trove'),
                 "LEV: Not trove owner",
             );
-            self.caller.write(user);
 
             let mut call_data: Array<felt252> = array![];
             let modify_lever_params = ModifyLeverParams {
@@ -156,7 +151,6 @@ pub mod lever {
                     .expect('Non-existent trove'),
                 "LEV: Not trove owner",
             );
-            self.caller.write(user);
 
             let modify_lever_params = ModifyLeverParams {
                 user, action: ModifyLeverAction::LeverDown(lever_down_params),
@@ -188,17 +182,11 @@ pub mod lever {
             fee: u256,
             mut call_data: Span<felt252>,
         ) -> u256 {
+            assert!(
+                get_caller_address() == self.flash_mint.read().contract_address,
+                "LEV: Illegal callback",
+            );
             assert!(initiator == get_contract_address(), "LEV: Initiator must be lever");
-
-            // Note that in the expected flow, `get_caller_address()` here returns the original
-            // caller to `lever.up` or `lever.down` although it should have been the flash mint
-            // contract.
-            // Therefore, we move the check one layer up by storing the caller address in `lever.up`
-            // and `lever.down` in storage, and asserting that the return value of
-            // `get_caller_address()` matches the caller in storage to ensure that this callback
-            // function was entered via `lever.up` or `lever.down`.
-            let caller: ContractAddress = get_caller_address();
-            assert!(caller == self.caller.read(), "LEV: Illegal callback");
 
             let ModifyLeverParams {
                 user, action,
@@ -270,9 +258,6 @@ pub mod lever {
                     self.emit(LeverWithdraw { user, trove_id, yang, yang_amt, asset_amt });
                 },
             };
-
-            // Reset caller to zero at the end of transaction
-            self.caller.write(Zero::zero());
 
             ON_FLASH_MINT_SUCCESS
         }
