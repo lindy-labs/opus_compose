@@ -18,8 +18,8 @@ use opus_compose::lever::types::{
     LeverUpParams, LeverDownParams, ModifyLeverAction, ModifyLeverParams,
 };
 use snforge_std::{
-    declare, ContractClassTrait, DeclareResultTrait, EventSpyAssertionsTrait, spy_events,
-    start_cheat_caller_address, stop_cheat_caller_address,
+    declare, ContractClassTrait, DeclareResultTrait, EventSpyAssertionsTrait, spy_events, CheatSpan,
+    cheat_caller_address, start_cheat_caller_address, stop_cheat_caller_address,
 };
 use starknet::ContractAddress;
 use wadray::{Wad, WAD_ONE};
@@ -99,7 +99,7 @@ fn open_trove_and_lever_up(
         trove_id, yang: eth, max_forge_fee_pct, swaps: lever_up_swaps(),
     };
 
-    start_cheat_caller_address(lever.contract_address, user);
+    cheat_caller_address(lever.contract_address, user, CheatSpan::TargetCalls(1));
     lever.up(debt, lever_up_params);
     stop_cheat_caller_address(lever.contract_address);
 
@@ -472,7 +472,7 @@ fn test_lever() {
         trove_id, yang: eth, yang_amt: eth_yang_amt, swaps: lever_down_swaps(),
     };
 
-    start_cheat_caller_address(lever.contract_address, whale);
+    cheat_caller_address(lever.contract_address, whale, CheatSpan::TargetCalls(1));
     lever.down(trove_health.debt, lever_down_params);
     stop_cheat_caller_address(lever.contract_address);
 
@@ -549,7 +549,7 @@ fn test_lever_up_unhealthy_fail() {
         trove_id, yang: eth, max_forge_fee_pct, swaps: lever_up_swaps(),
     };
 
-    start_cheat_caller_address(lever.contract_address, whale);
+    cheat_caller_address(lever.contract_address, whale, CheatSpan::TargetCalls(1));
     lever.up(debt.into(), lever_up_params);
 }
 
@@ -559,7 +559,7 @@ fn test_lever_up_unhealthy_fail() {
 fn test_unauthorized_lever_up_fail() {
     let lever: ILeverDispatcher = deploy_lever();
 
-    start_cheat_caller_address(lever.contract_address, mainnet::whale());
+    cheat_caller_address(lever.contract_address, mainnet::whale(), CheatSpan::TargetCalls(1));
     let debt: Wad = 100_u128.into();
     let lever_up_params = LeverUpParams {
         trove_id: 1,
@@ -588,7 +588,7 @@ fn test_lever_up_invalid_yang_fail() {
         trove_id, yang: invalid_yang, max_forge_fee_pct, swaps: lever_up_swaps(),
     };
 
-    start_cheat_caller_address(lever.contract_address, whale);
+    cheat_caller_address(lever.contract_address, whale, CheatSpan::TargetCalls(1));
     lever.up(debt.into(), lever_up_params);
 }
 
@@ -604,7 +604,7 @@ fn test_unauthorized_lever_down_fail() {
         trove_id, yang: mainnet::eth(), yang_amt: 1000000000_u128.into(), swaps: lever_down_swaps(),
     };
 
-    start_cheat_caller_address(lever.contract_address, mainnet::whale());
+    cheat_caller_address(lever.contract_address, mainnet::whale(), CheatSpan::TargetCalls(1));
     lever.down(debt, lever_down_params);
 }
 
@@ -630,7 +630,7 @@ fn test_lever_down_unhealthy_fail() {
     let eth_yang_amt: u128 = shrine.get_deposit(eth, trove_id).into();
     let eth_yang_amt: Wad = (eth_yang_amt / 10).into();
 
-    start_cheat_caller_address(lever.contract_address, whale);
+    cheat_caller_address(lever.contract_address, whale, CheatSpan::TargetCalls(1));
     let lever_down_params = LeverDownParams {
         trove_id, yang: eth, yang_amt: eth_yang_amt, swaps: lever_down_swaps(),
     };
@@ -657,7 +657,7 @@ fn test_lever_down_insufficient_trove_yang_fail() {
     let eth_yang_amt: u128 = shrine.get_deposit(eth, trove_id).into();
     let eth_yang_amt: Wad = (eth_yang_amt + 1).into();
 
-    start_cheat_caller_address(lever.contract_address, whale);
+    cheat_caller_address(lever.contract_address, whale, CheatSpan::TargetCalls(1));
     let lever_down_params = LeverDownParams {
         trove_id, yang: eth, yang_amt: eth_yang_amt, swaps: lever_down_swaps(),
     };
@@ -683,7 +683,7 @@ fn test_lever_down_invalid_yang_fail() {
         trove_id, yang: invalid_yang, yang_amt: Zero::zero(), swaps: lever_down_swaps(),
     };
 
-    start_cheat_caller_address(lever.contract_address, whale);
+    cheat_caller_address(lever.contract_address, whale, CheatSpan::TargetCalls(1));
     lever.down(trove_health.debt, lever_down_params)
 }
 
@@ -714,7 +714,7 @@ fn test_unauthorized_callback_fail() {
     modify_lever_params.serialize(ref call_data);
 
     // Non-trove owner calls the callback function
-    start_cheat_caller_address(lever.contract_address, mainnet::multisig());
+    cheat_caller_address(lever.contract_address, mainnet::multisig(), CheatSpan::TargetCalls(1));
     IFlashBorrowerDispatcher { contract_address: lever.contract_address }
         .on_flash_loan(
             lever.contract_address,
@@ -751,8 +751,9 @@ fn test_invalid_initiator_in_callback_fail() {
     let mut call_data: Array<felt252> = Default::default();
     modify_lever_params.serialize(ref call_data);
 
-    // Trove owner calls the callback function directly with the wrong initiator
-    start_cheat_caller_address(lever.contract_address, mainnet::whale());
+    // Flash mint calls the callback function directly with the wrong initiator.
+    // This is technically impossible.
+    cheat_caller_address(lever.contract_address, mainnet::flash_mint(), CheatSpan::TargetCalls(1));
     IFlashBorrowerDispatcher { contract_address: lever.contract_address }
         .on_flash_loan(
             mainnet::multisig(),
@@ -791,7 +792,7 @@ fn test_trove_owner_callback_fail() {
 
     // Trove owner calls the callback function directly with the wrong initiator
     // but it has insufficient yin
-    start_cheat_caller_address(lever.contract_address, mainnet::whale());
+    cheat_caller_address(lever.contract_address, mainnet::whale(), CheatSpan::TargetCalls(1));
     IFlashBorrowerDispatcher { contract_address: lever.contract_address }
         .on_flash_loan(
             lever.contract_address,
