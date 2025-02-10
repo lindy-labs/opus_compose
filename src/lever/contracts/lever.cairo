@@ -151,7 +151,6 @@ pub mod lever {
                     .expect('Non-existent trove'),
                 "LEV: Not trove owner",
             );
-
             let modify_lever_params = ModifyLeverParams {
                 user, action: ModifyLeverAction::LeverDown(lever_down_params),
             };
