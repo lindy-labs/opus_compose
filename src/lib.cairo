@@ -14,6 +14,7 @@ pub mod lever {
 
     #[cfg(test)]
     pub mod tests {
+        pub mod malicious_lever;
         pub mod test_lever;
     }
 }

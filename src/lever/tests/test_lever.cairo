@@ -14,6 +14,9 @@ use opus_compose::addresses::mainnet;
 use opus_compose::lever::constants::{SENTINEL_ROLES_FOR_LEVER, SHRINE_ROLES_FOR_LEVER};
 use opus_compose::lever::contracts::lever::lever as lever_contract;
 use opus_compose::lever::interfaces::lever::{ILeverDispatcher, ILeverDispatcherTrait};
+use opus_compose::lever::tests::malicious_lever::{
+    IMaliciousLeverDispatcher, IMaliciousLeverDispatcherTrait,
+};
 use opus_compose::lever::types::{
     LeverUpParams, LeverDownParams, ModifyLeverAction, ModifyLeverParams,
 };
@@ -21,7 +24,7 @@ use snforge_std::{
     declare, ContractClassTrait, DeclareResultTrait, EventSpyAssertionsTrait, spy_events, CheatSpan,
     cheat_caller_address, start_cheat_caller_address, stop_cheat_caller_address,
 };
-use starknet::ContractAddress;
+use starknet::{ContractAddress, contract_address_const};
 use wadray::{Wad, WAD_ONE};
 
 //
@@ -52,6 +55,18 @@ fn deploy_lever() -> ILeverDispatcher {
     stop_cheat_caller_address(mainnet::sentinel());
 
     ILeverDispatcher { contract_address: lever_addr }
+}
+
+fn deploy_malicious_lever(lever: ContractAddress) -> IMaliciousLeverDispatcher {
+    let malicious_lever_class = declare("malicious_lever").unwrap().contract_class();
+
+    let calldata: Array<felt252> = array![
+        mainnet::shrine().into(), mainnet::flash_mint().into(), lever.into(),
+    ];
+
+    let (malicious_lever_addr, _) = malicious_lever_class.deploy(@calldata).unwrap();
+
+    IMaliciousLeverDispatcher { contract_address: malicious_lever_addr }
 }
 
 // Helper function to open a trove with 2 ETH.
@@ -762,6 +777,39 @@ fn test_invalid_initiator_in_callback_fail() {
             0_256,
             call_data.span(),
         );
+}
+
+// Malicious Lever contract that skips the trove owner check
+#[test]
+#[fork("MAINNET_LEVER")]
+#[should_panic(expected: "LEV: Initiator must be lever")]
+fn test_lever_down_malicious_lever_fail() {
+    let lever: ILeverDispatcher = deploy_lever();
+    let malicious_lever = deploy_malicious_lever(lever.contract_address);
+
+    let abbot = IAbbotDispatcher { contract_address: mainnet::abbot() };
+    let attacker: ContractAddress = contract_address_const::<'attacker'>();
+
+    let user = mainnet::whale();
+    let eth = mainnet::eth();
+
+    let eth_capital: u128 = 8 * WAD_ONE;
+    let user_trove_id = open_trove_helper(user, eth_capital);
+
+    // User creates some debt
+    let user_debt = 10000 * WAD_ONE;
+    start_cheat_caller_address(abbot.contract_address, user);
+    abbot.forge(user_trove_id, user_debt.into(), WAD_ONE.into());
+    stop_cheat_caller_address(abbot.contract_address);
+
+    let eth_to_steal: Wad = (2 * WAD_ONE).into();
+    let yin_to_repay: Wad = (6726 * WAD_ONE).into();
+
+    cheat_caller_address(malicious_lever.contract_address, attacker, CheatSpan::TargetCalls(1));
+    let lever_down_params = LeverDownParams {
+        trove_id: user_trove_id, yang: eth, yang_amt: eth_to_steal, swaps: lever_down_swaps(),
+    };
+    malicious_lever.down(yin_to_repay, lever_down_params);
 }
 
 // Trove owner calls fallback function directly with valid params
