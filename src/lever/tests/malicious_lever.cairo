@@ -32,15 +32,6 @@ pub mod malicious_lever {
     }
 
     //
-    // Events
-    //
-
-    #[event]
-    #[derive(Copy, Drop, starknet::Event)]
-    pub enum Event {
-    }
-
-    //
     // Constructor
     //
 
