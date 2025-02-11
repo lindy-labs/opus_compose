@@ -25,7 +25,7 @@ use snforge_std::{
     cheat_caller_address, start_cheat_caller_address, stop_cheat_caller_address,
 };
 use starknet::{ContractAddress, contract_address_const};
-use wadray::{Wad, WAD_ONE};
+use wadray::{Ray, RAY_ONE, Wad, WAD_ONE};
 
 //
 // Helpers
@@ -109,9 +109,10 @@ fn open_trove_and_lever_up(
     // ETH price is ~3,363 (Wad) in Shrine, so debt is ~6,726 (Wad)
     let debt: Wad = (eth_price * eth_asset_amt.into());
 
+    let max_ltv: Ray = RAY_ONE.into();
     let max_forge_fee_pct: Wad = WAD_ONE.into();
     let lever_up_params = LeverUpParams {
-        trove_id, yang: eth, max_forge_fee_pct, swaps: lever_up_swaps(),
+        trove_id, max_ltv, yang: eth, max_forge_fee_pct, swaps: lever_up_swaps(),
     };
 
     cheat_caller_address(lever.contract_address, user, CheatSpan::TargetCalls(1));
@@ -483,8 +484,9 @@ fn test_lever() {
             ),
         );
 
+    let max_ltv: Ray = RAY_ONE.into();
     let lever_down_params = LeverDownParams {
-        trove_id, yang: eth, yang_amt: eth_yang_amt, swaps: lever_down_swaps(),
+        trove_id, max_ltv, yang: eth, yang_amt: eth_yang_amt, swaps: lever_down_swaps(),
     };
 
     cheat_caller_address(lever.contract_address, whale, CheatSpan::TargetCalls(1));
@@ -559,9 +561,40 @@ fn test_lever_up_unhealthy_fail() {
     let (eth_price, _, _) = shrine.get_current_yang_price(eth);
     let debt: u128 = eth_price.into() * 2;
 
+    let max_ltv: Ray = RAY_ONE.into();
     let max_forge_fee_pct: Wad = WAD_ONE.into();
     let lever_up_params = LeverUpParams {
-        trove_id, yang: eth, max_forge_fee_pct, swaps: lever_up_swaps(),
+        trove_id, max_ltv, yang: eth, max_forge_fee_pct, swaps: lever_up_swaps(),
+    };
+
+    cheat_caller_address(lever.contract_address, whale, CheatSpan::TargetCalls(1));
+    lever.up(debt.into(), lever_up_params);
+}
+
+// Similar to the test for `up` in `test_lever` but with max LTV
+// set to 51.4%, whereas the default lever up params will result in
+// the trove's LTV at 51.45%
+#[test]
+#[fork("MAINNET_LEVER")]
+#[should_panic(expected: "LEV: Exceeds max LTV")]
+fn test_lever_up_exceeds_max_ltv_fail() {
+    let lever: ILeverDispatcher = deploy_lever();
+
+    let shrine = IShrineDispatcher { contract_address: mainnet::shrine() };
+
+    let whale = mainnet::whale();
+    let eth = mainnet::eth();
+
+    let eth_capital: u128 = WAD_ONE * 2;
+    let trove_id: u64 = open_trove_helper(whale, eth_capital);
+
+    let (eth_price, _, _) = shrine.get_current_yang_price(eth);
+    let debt: u128 = eth_price.into() * 2;
+
+    let max_ltv: Ray = 514000000000000000000000000_u128.into();
+    let max_forge_fee_pct: Wad = WAD_ONE.into();
+    let lever_up_params = LeverUpParams {
+        trove_id, max_ltv, yang: eth, max_forge_fee_pct, swaps: lever_up_swaps(),
     };
 
     cheat_caller_address(lever.contract_address, whale, CheatSpan::TargetCalls(1));
@@ -576,8 +609,10 @@ fn test_unauthorized_lever_up_fail() {
 
     cheat_caller_address(lever.contract_address, mainnet::whale(), CheatSpan::TargetCalls(1));
     let debt: Wad = 100_u128.into();
+    let max_ltv: Ray = RAY_ONE.into();
     let lever_up_params = LeverUpParams {
         trove_id: 1,
+        max_ltv,
         yang: mainnet::eth(),
         max_forge_fee_pct: WAD_ONE.into(),
         swaps: lever_up_swaps(),
@@ -597,10 +632,11 @@ fn test_lever_up_invalid_yang_fail() {
     let trove_id: u64 = open_trove_helper(whale, eth_capital);
 
     let debt: u128 = WAD_ONE.into();
+    let max_ltv: Ray = RAY_ONE.into();
     let invalid_yang = mainnet::ekubo();
     let max_forge_fee_pct: Wad = WAD_ONE.into();
     let lever_up_params = LeverUpParams {
-        trove_id, yang: invalid_yang, max_forge_fee_pct, swaps: lever_up_swaps(),
+        trove_id, max_ltv, yang: invalid_yang, max_forge_fee_pct, swaps: lever_up_swaps(),
     };
 
     cheat_caller_address(lever.contract_address, whale, CheatSpan::TargetCalls(1));
@@ -614,9 +650,14 @@ fn test_unauthorized_lever_down_fail() {
     let lever: ILeverDispatcher = deploy_lever();
 
     let debt: Wad = WAD_ONE.into();
+    let max_ltv: Ray = RAY_ONE.into();
     let trove_id = 1;
     let lever_down_params = LeverDownParams {
-        trove_id, yang: mainnet::eth(), yang_amt: 1000000000_u128.into(), swaps: lever_down_swaps(),
+        trove_id,
+        max_ltv,
+        yang: mainnet::eth(),
+        yang_amt: 1000000000_u128.into(),
+        swaps: lever_down_swaps(),
     };
 
     cheat_caller_address(lever.contract_address, mainnet::whale(), CheatSpan::TargetCalls(1));
@@ -644,12 +685,63 @@ fn test_lever_down_unhealthy_fail() {
 
     let eth_yang_amt: u128 = shrine.get_deposit(eth, trove_id).into();
     let eth_yang_amt: Wad = (eth_yang_amt / 10).into();
+    let max_ltv: Ray = RAY_ONE.into();
 
     cheat_caller_address(lever.contract_address, whale, CheatSpan::TargetCalls(1));
     let lever_down_params = LeverDownParams {
-        trove_id, yang: eth, yang_amt: eth_yang_amt, swaps: lever_down_swaps(),
+        trove_id, max_ltv, yang: eth, yang_amt: eth_yang_amt, swaps: lever_down_swaps(),
     };
     lever.down(trove_health.debt, lever_down_params)
+}
+
+// Similar to the test for `down` in `test_lever` but we withdraw more collateral than
+// the value of debt repaid so that LTV will increase, but we set the max LTV as unchanged
+#[test]
+#[fork("MAINNET_LEVER")]
+#[should_panic(expected: "LEV: Exceeds max LTV")]
+fn test_lever_down_exceeds_max_ltv_fail() {
+    let lever: ILeverDispatcher = deploy_lever();
+
+    let shrine = IShrineDispatcher { contract_address: mainnet::shrine() };
+    let abbot = IAbbotDispatcher { contract_address: mainnet::abbot() };
+
+    let whale = mainnet::whale();
+    let eth = mainnet::eth();
+
+    let eth_capital: u128 = 2 * WAD_ONE;
+
+    let trove_id: u64 = open_trove_helper(whale, eth_capital);
+
+    let (eth_price, _, _) = shrine.get_current_yang_price(eth);
+    // Forge 1 ETH worth of debt such that LTV will be around 50%
+    let debt = eth_price;
+    let max_forge_fee_pct: Wad = WAD_ONE.into();
+
+    start_cheat_caller_address(abbot.contract_address, whale);
+    abbot.forge(trove_id, debt, max_forge_fee_pct);
+    stop_cheat_caller_address(abbot.contract_address);
+
+    let trove_health = shrine.get_trove_health(trove_id);
+
+    // Remove the first swap, so total amount swapped is 790.75 CASH worth of ETH
+    let mut modified_swaps = lever_down_swaps();
+    modified_swaps.pop_front();
+
+    let debt_to_repay: u128 = 790750000000000000000;
+
+    // Remove thrice the amount of value of debt to repay so that LTV will increase
+    let eth_value_to_withdraw = debt_to_repay * 3;
+    let eth_yang_amt: Wad = (eth_value_to_withdraw.into() / eth_price);
+
+    cheat_caller_address(lever.contract_address, whale, CheatSpan::TargetCalls(1));
+    let lever_down_params = LeverDownParams {
+        trove_id,
+        max_ltv: trove_health.ltv,
+        yang: eth,
+        yang_amt: eth_yang_amt,
+        swaps: modified_swaps,
+    };
+    lever.down(debt_to_repay.into(), lever_down_params)
 }
 
 #[test]
@@ -671,10 +763,11 @@ fn test_lever_down_insufficient_trove_yang_fail() {
 
     let eth_yang_amt: u128 = shrine.get_deposit(eth, trove_id).into();
     let eth_yang_amt: Wad = (eth_yang_amt + 1).into();
+    let max_ltv: Ray = RAY_ONE.into();
 
     cheat_caller_address(lever.contract_address, whale, CheatSpan::TargetCalls(1));
     let lever_down_params = LeverDownParams {
-        trove_id, yang: eth, yang_amt: eth_yang_amt, swaps: lever_down_swaps(),
+        trove_id, max_ltv, yang: eth, yang_amt: eth_yang_amt, swaps: lever_down_swaps(),
     };
     lever.down(trove_health.debt, lever_down_params)
 }
@@ -693,9 +786,10 @@ fn test_lever_down_invalid_yang_fail() {
     let (trove_id, _debt) = open_trove_and_lever_up(lever, whale, eth_capital);
 
     let trove_health: Health = shrine.get_trove_health(trove_id);
+    let max_ltv: Ray = RAY_ONE.into();
     let invalid_yang = mainnet::ekubo();
     let lever_down_params = LeverDownParams {
-        trove_id, yang: invalid_yang, yang_amt: Zero::zero(), swaps: lever_down_swaps(),
+        trove_id, max_ltv, yang: invalid_yang, yang_amt: Zero::zero(), swaps: lever_down_swaps(),
     };
 
     cheat_caller_address(lever.contract_address, whale, CheatSpan::TargetCalls(1));
@@ -719,8 +813,9 @@ fn test_unauthorized_callback_fail() {
 
     let trove_health: Health = shrine.get_trove_health(trove_id);
     let eth_yang_amt: Wad = shrine.get_deposit(eth, trove_id);
+    let max_ltv: Ray = RAY_ONE.into();
     let lever_down_params = LeverDownParams {
-        trove_id, yang: eth, yang_amt: eth_yang_amt, swaps: lever_down_swaps(),
+        trove_id, max_ltv, yang: eth, yang_amt: eth_yang_amt, swaps: lever_down_swaps(),
     };
     let modify_lever_params = ModifyLeverParams {
         user: whale, action: ModifyLeverAction::LeverDown(lever_down_params),
@@ -757,8 +852,9 @@ fn test_invalid_initiator_in_callback_fail() {
 
     let trove_health: Health = shrine.get_trove_health(trove_id);
     let eth_yang_amt: Wad = shrine.get_deposit(eth, trove_id);
+    let max_ltv: Ray = RAY_ONE.into();
     let lever_down_params = LeverDownParams {
-        trove_id, yang: eth, yang_amt: eth_yang_amt, swaps: lever_down_swaps(),
+        trove_id, max_ltv, yang: eth, yang_amt: eth_yang_amt, swaps: lever_down_swaps(),
     };
     let modify_lever_params = ModifyLeverParams {
         user: whale, action: ModifyLeverAction::LeverDown(lever_down_params),
@@ -804,10 +900,15 @@ fn test_lever_down_malicious_lever_fail() {
 
     let eth_to_steal: Wad = (2 * WAD_ONE).into();
     let yin_to_repay: Wad = (6726 * WAD_ONE).into();
+    let max_ltv: Ray = RAY_ONE.into();
 
     cheat_caller_address(malicious_lever.contract_address, attacker, CheatSpan::TargetCalls(1));
     let lever_down_params = LeverDownParams {
-        trove_id: user_trove_id, yang: eth, yang_amt: eth_to_steal, swaps: lever_down_swaps(),
+        trove_id: user_trove_id,
+        max_ltv,
+        yang: eth,
+        yang_amt: eth_to_steal,
+        swaps: lever_down_swaps(),
     };
     malicious_lever.down(yin_to_repay, lever_down_params);
 }
@@ -829,8 +930,9 @@ fn test_trove_owner_callback_fail() {
 
     let trove_health: Health = shrine.get_trove_health(trove_id);
     let eth_yang_amt: Wad = shrine.get_deposit(eth, trove_id);
+    let max_ltv: Ray = RAY_ONE.into();
     let lever_down_params = LeverDownParams {
-        trove_id, yang: eth, yang_amt: eth_yang_amt, swaps: lever_down_swaps(),
+        trove_id, max_ltv, yang: eth, yang_amt: eth_yang_amt, swaps: lever_down_swaps(),
     };
     let modify_lever_params = ModifyLeverParams {
         user: whale, action: ModifyLeverAction::LeverDown(lever_down_params),
