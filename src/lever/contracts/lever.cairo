@@ -181,6 +181,12 @@ pub mod lever {
             fee: u256,
             mut call_data: Span<felt252>,
         ) -> u256 {
+            assert!(
+                get_caller_address() == self.flash_mint.read().contract_address,
+                "LEV: Illegal callback",
+            );
+            assert!(initiator == get_contract_address(), "LEV: Initiator must be lever");
+
             let ModifyLeverParams {
                 user, action,
             } = Serde::<ModifyLeverParams>::deserialize(ref call_data).unwrap();
