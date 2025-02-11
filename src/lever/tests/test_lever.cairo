@@ -904,7 +904,11 @@ fn test_lever_down_malicious_lever_fail() {
 
     cheat_caller_address(malicious_lever.contract_address, attacker, CheatSpan::TargetCalls(1));
     let lever_down_params = LeverDownParams {
-        trove_id: user_trove_id, max_ltv, yang: eth, yang_amt: eth_to_steal, swaps: lever_down_swaps(),
+        trove_id: user_trove_id,
+        max_ltv,
+        yang: eth,
+        yang_amt: eth_to_steal,
+        swaps: lever_down_swaps(),
     };
     malicious_lever.down(yin_to_repay, lever_down_params);
 }
