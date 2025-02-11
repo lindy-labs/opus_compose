@@ -16,7 +16,7 @@ pub mod lever {
     };
     use starknet::{ContractAddress, get_caller_address, get_contract_address};
     use starknet::storage::{StoragePointerReadAccess, StoragePointerWriteAccess};
-    use wadray::{Ray, Wad};
+    use wadray::Wad;
 
     //
     // Constants
