@@ -320,6 +320,10 @@ pub mod stabilizer {
             mut yield_state: YieldState,
             amount: u256,
         ) {
+            if amount.is_zero() {
+                return;
+            }
+
             yield_state.yin_balance_snapshot -= amount;
             self.yield_state.write(yield_state);
 
