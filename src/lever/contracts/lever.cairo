@@ -225,7 +225,8 @@ pub mod lever {
                     shrine
                         .forge(initiator, trove_id, amount.try_into().unwrap(), max_forge_fee_pct);
 
-                    self.assert_below_max_ltv(trove_id, max_ltv);
+                    let trove_health: Health = shrine.get_trove_health(trove_id);
+                    assert!(trove_health.ltv <= max_ltv, "LEV: Exceeds max LTV");
 
                     self.emit(LeverDeposit { user, trove_id, yang, yang_amt, asset_amt });
                 },
@@ -259,21 +260,14 @@ pub mod lever {
                     // Transfer any remainder collateral to the user
                     router_clear.clear_minimum_to_recipient(yang_erc20, 1, user);
 
-                    self.assert_below_max_ltv(trove_id, max_ltv);
+                    let trove_health: Health = shrine.get_trove_health(trove_id);
+                    assert!(trove_health.ltv <= max_ltv, "LEV: Exceeds max LTV");
 
                     self.emit(LeverWithdraw { user, trove_id, yang, yang_amt, asset_amt });
                 },
             };
 
             ON_FLASH_MINT_SUCCESS
-        }
-    }
-
-    #[generate_trait]
-    impl LeverHelpers of LeverHelpersTrait {
-        fn assert_below_max_ltv(self: @ContractState, trove_id: u64, max_ltv: Ray) {
-            let trove_health: Health = self.shrine.read().get_trove_health(trove_id);
-            assert!(trove_health.ltv <= max_ltv, "LEV: Exceeds max LTV");
         }
     }
 
