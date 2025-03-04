@@ -1,0 +1,401 @@
+[
+  {
+    "type": "impl",
+    "name": "IStabilizerImpl",
+    "interface_name": "opus_compose::stabilizer::interfaces::stabilizer::IStabilizer"
+  },
+  {
+    "type": "struct",
+    "name": "ekubo::types::keys::PoolKey",
+    "members": [
+      {
+        "name": "token0",
+        "type": "core::starknet::contract_address::ContractAddress"
+      },
+      {
+        "name": "token1",
+        "type": "core::starknet::contract_address::ContractAddress"
+      },
+      {
+        "name": "fee",
+        "type": "core::integer::u128"
+      },
+      {
+        "name": "tick_spacing",
+        "type": "core::integer::u128"
+      },
+      {
+        "name": "extension",
+        "type": "core::starknet::contract_address::ContractAddress"
+      }
+    ]
+  },
+  {
+    "type": "enum",
+    "name": "core::bool",
+    "variants": [
+      {
+        "name": "False",
+        "type": "()"
+      },
+      {
+        "name": "True",
+        "type": "()"
+      }
+    ]
+  },
+  {
+    "type": "struct",
+    "name": "ekubo::types::i129::i129",
+    "members": [
+      {
+        "name": "mag",
+        "type": "core::integer::u128"
+      },
+      {
+        "name": "sign",
+        "type": "core::bool"
+      }
+    ]
+  },
+  {
+    "type": "struct",
+    "name": "ekubo::types::bounds::Bounds",
+    "members": [
+      {
+        "name": "lower",
+        "type": "ekubo::types::i129::i129"
+      },
+      {
+        "name": "upper",
+        "type": "ekubo::types::i129::i129"
+      }
+    ]
+  },
+  {
+    "type": "enum",
+    "name": "core::option::Option::<core::integer::u64>",
+    "variants": [
+      {
+        "name": "Some",
+        "type": "core::integer::u64"
+      },
+      {
+        "name": "None",
+        "type": "()"
+      }
+    ]
+  },
+  {
+    "type": "struct",
+    "name": "core::integer::u256",
+    "members": [
+      {
+        "name": "low",
+        "type": "core::integer::u128"
+      },
+      {
+        "name": "high",
+        "type": "core::integer::u128"
+      }
+    ]
+  },
+  {
+    "type": "struct",
+    "name": "opus_compose::stabilizer::types::Stake",
+    "members": [
+      {
+        "name": "liquidity",
+        "type": "core::integer::u128"
+      },
+      {
+        "name": "yin_per_liquidity_snapshot",
+        "type": "core::integer::u256"
+      }
+    ]
+  },
+  {
+    "type": "struct",
+    "name": "opus_compose::stabilizer::types::YieldState",
+    "members": [
+      {
+        "name": "yin_balance_snapshot",
+        "type": "core::integer::u256"
+      },
+      {
+        "name": "yin_per_liquidity",
+        "type": "core::integer::u256"
+      }
+    ]
+  },
+  {
+    "type": "interface",
+    "name": "opus_compose::stabilizer::interfaces::stabilizer::IStabilizer",
+    "items": [
+      {
+        "type": "function",
+        "name": "get_pool_key",
+        "inputs": [],
+        "outputs": [
+          {
+            "type": "ekubo::types::keys::PoolKey"
+          }
+        ],
+        "state_mutability": "view"
+      },
+      {
+        "type": "function",
+        "name": "get_bounds",
+        "inputs": [],
+        "outputs": [
+          {
+            "type": "ekubo::types::bounds::Bounds"
+          }
+        ],
+        "state_mutability": "view"
+      },
+      {
+        "type": "function",
+        "name": "get_total_liquidity",
+        "inputs": [],
+        "outputs": [
+          {
+            "type": "core::integer::u128"
+          }
+        ],
+        "state_mutability": "view"
+      },
+      {
+        "type": "function",
+        "name": "get_token_id_for_user",
+        "inputs": [
+          {
+            "name": "user",
+            "type": "core::starknet::contract_address::ContractAddress"
+          }
+        ],
+        "outputs": [
+          {
+            "type": "core::option::Option::<core::integer::u64>"
+          }
+        ],
+        "state_mutability": "view"
+      },
+      {
+        "type": "function",
+        "name": "get_stake",
+        "inputs": [
+          {
+            "name": "user",
+            "type": "core::starknet::contract_address::ContractAddress"
+          }
+        ],
+        "outputs": [
+          {
+            "type": "opus_compose::stabilizer::types::Stake"
+          }
+        ],
+        "state_mutability": "view"
+      },
+      {
+        "type": "function",
+        "name": "get_yield_state",
+        "inputs": [],
+        "outputs": [
+          {
+            "type": "opus_compose::stabilizer::types::YieldState"
+          }
+        ],
+        "state_mutability": "view"
+      },
+      {
+        "type": "function",
+        "name": "stake",
+        "inputs": [
+          {
+            "name": "token_id",
+            "type": "core::integer::u64"
+          }
+        ],
+        "outputs": [],
+        "state_mutability": "external"
+      },
+      {
+        "type": "function",
+        "name": "unstake",
+        "inputs": [],
+        "outputs": [],
+        "state_mutability": "external"
+      },
+      {
+        "type": "function",
+        "name": "claim",
+        "inputs": [],
+        "outputs": [],
+        "state_mutability": "external"
+      }
+    ]
+  },
+  {
+    "type": "constructor",
+    "name": "constructor",
+    "inputs": [
+      {
+        "name": "yin",
+        "type": "core::starknet::contract_address::ContractAddress"
+      },
+      {
+        "name": "equalizer",
+        "type": "core::starknet::contract_address::ContractAddress"
+      },
+      {
+        "name": "ekubo_positions",
+        "type": "core::starknet::contract_address::ContractAddress"
+      },
+      {
+        "name": "ekubo_positions_nft",
+        "type": "core::starknet::contract_address::ContractAddress"
+      },
+      {
+        "name": "pool_key",
+        "type": "ekubo::types::keys::PoolKey"
+      },
+      {
+        "name": "bounds",
+        "type": "ekubo::types::bounds::Bounds"
+      }
+    ]
+  },
+  {
+    "type": "event",
+    "name": "opus_compose::stabilizer::contracts::stabilizer::stabilizer::Claimed",
+    "kind": "struct",
+    "members": [
+      {
+        "name": "user",
+        "type": "core::starknet::contract_address::ContractAddress",
+        "kind": "key"
+      },
+      {
+        "name": "amount",
+        "type": "core::integer::u256",
+        "kind": "data"
+      }
+    ]
+  },
+  {
+    "type": "event",
+    "name": "opus_compose::stabilizer::contracts::stabilizer::stabilizer::Harvested",
+    "kind": "struct",
+    "members": [
+      {
+        "name": "total_liquidity",
+        "type": "core::integer::u128",
+        "kind": "data"
+      },
+      {
+        "name": "amount",
+        "type": "core::integer::u256",
+        "kind": "data"
+      }
+    ]
+  },
+  {
+    "type": "event",
+    "name": "opus_compose::stabilizer::contracts::stabilizer::stabilizer::YieldStateUpdated",
+    "kind": "struct",
+    "members": [
+      {
+        "name": "yield_state",
+        "type": "opus_compose::stabilizer::types::YieldState",
+        "kind": "data"
+      }
+    ]
+  },
+  {
+    "type": "event",
+    "name": "opus_compose::stabilizer::contracts::stabilizer::stabilizer::Staked",
+    "kind": "struct",
+    "members": [
+      {
+        "name": "user",
+        "type": "core::starknet::contract_address::ContractAddress",
+        "kind": "key"
+      },
+      {
+        "name": "token_id",
+        "type": "core::integer::u64",
+        "kind": "key"
+      },
+      {
+        "name": "stake",
+        "type": "opus_compose::stabilizer::types::Stake",
+        "kind": "data"
+      },
+      {
+        "name": "total_liquidity",
+        "type": "core::integer::u128",
+        "kind": "data"
+      }
+    ]
+  },
+  {
+    "type": "event",
+    "name": "opus_compose::stabilizer::contracts::stabilizer::stabilizer::Unstaked",
+    "kind": "struct",
+    "members": [
+      {
+        "name": "user",
+        "type": "core::starknet::contract_address::ContractAddress",
+        "kind": "key"
+      },
+      {
+        "name": "token_id",
+        "type": "core::integer::u64",
+        "kind": "key"
+      },
+      {
+        "name": "stake",
+        "type": "opus_compose::stabilizer::types::Stake",
+        "kind": "data"
+      },
+      {
+        "name": "total_liquidity",
+        "type": "core::integer::u128",
+        "kind": "data"
+      }
+    ]
+  },
+  {
+    "type": "event",
+    "name": "opus_compose::stabilizer::contracts::stabilizer::stabilizer::Event",
+    "kind": "enum",
+    "variants": [
+      {
+        "name": "Claimed",
+        "type": "opus_compose::stabilizer::contracts::stabilizer::stabilizer::Claimed",
+        "kind": "nested"
+      },
+      {
+        "name": "Harvested",
+        "type": "opus_compose::stabilizer::contracts::stabilizer::stabilizer::Harvested",
+        "kind": "nested"
+      },
+      {
+        "name": "YieldStateUpdated",
+        "type": "opus_compose::stabilizer::contracts::stabilizer::stabilizer::YieldStateUpdated",
+        "kind": "nested"
+      },
+      {
+        "name": "Staked",
+        "type": "opus_compose::stabilizer::contracts::stabilizer::stabilizer::Staked",
+        "kind": "nested"
+      },
+      {
+        "name": "Unstaked",
+        "type": "opus_compose::stabilizer::contracts::stabilizer::stabilizer::Unstaked",
+        "kind": "nested"
+      }
+    ]
+  }
+]
