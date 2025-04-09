@@ -25,4 +25,4 @@ scarb test
 | Module | Address |
 | ------ | --------|
 | Stabilizer [CASH-USDC] | `0x03dbe818c99cf6658f23ef70656d64cce650fdb97105b96876d7e421fa25a528` |
-| Stabilizer Frontend Data Provider | `0x2e57ea04be4b8423ad91b9c6d49025167912ddec5f83c71a9656ef611f31aac` |
+| Stabilizer Frontend Data Provider | `0x015dc1ad6059c22c0c216f34ffa743174d22f9fe8941896379aaa82ef5497515` |
