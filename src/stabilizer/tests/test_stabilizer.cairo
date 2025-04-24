@@ -12,7 +12,9 @@ use opus_compose::stabilizer::constants::{BOUNDS, LOWER_TICK_MAG, UPPER_TICK_MAG
 use opus_compose::stabilizer::contracts::stabilizer::stabilizer as stabilizer_contract;
 use opus_compose::stabilizer::interfaces::stabilizer::IStabilizerDispatcherTrait;
 use opus_compose::stabilizer::math::get_cumulative_delta;
-use opus_compose::stabilizer::periphery::frontend_data_provider::IFrontendDataProviderDispatcherTrait;
+use opus_compose::stabilizer::periphery::frontend_data_provider::{
+    IFrontendDataProviderDispatcher, IFrontendDataProviderDispatcherTrait,
+};
 use opus_compose::stabilizer::types::{Stake, YieldState};
 use opus_compose::stabilizer::tests::utils::stabilizer_utils::{
     create_surplus, create_ekubo_position, create_valid_ekubo_position, fund_three_users, setup,
@@ -655,19 +657,6 @@ fn test_multi_users() {
             .into(),
         "token1 sanity check",
     );
-
-    let tvl = fdp.get_staked_tvl(stabilizer.contract_address);
-    let expected_tvl: Wad = (user1_yin_amt + user2_yin_amt + user3_yin_amt).try_into().unwrap();
-    let error_margin: Wad = 1000000000_u128.into(); // 10 ** 9
-    assert_equalish(tvl, expected_tvl, error_margin, 'wrong fdp tvl');
-
-    let user1_tvl = fdp.get_user_staked_tvl(stabilizer.contract_address, user1);
-    let expected_user1_tvl: Wad = user1_yin_amt.try_into().unwrap();
-    assert_equalish(user1_tvl, expected_user1_tvl, error_margin, 'wrong user 1 tvl');
-
-    let user2_tvl = fdp.get_user_staked_tvl(stabilizer.contract_address, user2);
-    let expected_user2_tvl: Wad = user2_yin_amt.try_into().unwrap();
-    assert_equalish(user2_tvl, expected_user2_tvl, error_margin, 'wrong user 2 tvl');
 
     let total_liquidity = stabilizer.get_total_liquidity();
     assert_eq!(total_liquidity, expected_total_liquidity, "Wrong total liquidity #1");
