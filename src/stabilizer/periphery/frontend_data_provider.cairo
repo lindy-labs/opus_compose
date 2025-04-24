@@ -30,6 +30,10 @@ pub trait IFrontendDataProvider<TContractState> {
     fn get_user_staked_tvl(
         self: @TContractState, stabilizer: ContractAddress, user: ContractAddress,
     ) -> Wad;
+    // Returns the claimable yin for a user
+    fn get_user_claimable_yin(
+        self: @TContractState, stabilizer: ContractAddress, user: ContractAddress,
+    ) -> Wad;
 }
 
 #[starknet::contract]
@@ -47,7 +51,8 @@ pub mod stabilizer_fdp {
     use opus_compose::stabilizer::interfaces::stabilizer::{
         IStabilizerDispatcher, IStabilizerDispatcherTrait,
     };
-    use opus_compose::stabilizer::types::PoolInfo;
+    use opus_compose::stabilizer::types::{PoolInfo, Stake, YieldState};
+    use opus_compose::stabilizer::math::get_accumulated_yin;
     use starknet::ContractAddress;
     use super::{IFrontendDataProvider, IOracleDispatcher, IOracleDispatcherTrait};
     use wadray::{rmul_wr, Wad, WAD_DECIMALS, Ray};
@@ -102,6 +107,19 @@ pub mod stabilizer_fdp {
             };
 
             get_proportionate_tvl(pool_tvl, staked_liquidity, pool_info.liquidity)
+        }
+
+        fn get_user_claimable_yin(
+            self: @ContractState, stabilizer: ContractAddress, user: ContractAddress,
+        ) -> Wad {
+            let stabilizer = IStabilizerDispatcher { contract_address: stabilizer };
+            let stake: Stake = stabilizer.get_stake(user);
+            let yield_state: YieldState = stabilizer.get_yield_state();
+
+            let claimable: u256 = get_accumulated_yin(
+                stake.liquidity, yield_state.yin_per_liquidity - stake.yin_per_liquidity_snapshot,
+            );
+            claimable.try_into().unwrap()
         }
     }
 
