@@ -38,7 +38,7 @@ pub trait IFrontendDataProvider<TContractState> {
 
 #[starknet::contract]
 pub mod stabilizer_fdp {
-    use core::num::traits::{WideMul, Zero};
+    use core::num::traits::{Pow, WideMul, Zero};
     use core::integer::{u512, u512_safe_div_rem_by_u256};
     use ekubo::interfaces::core::{ICoreDispatcher, ICoreDispatcherTrait};
     use ekubo::interfaces::mathlib::{IMathLibDispatcherTrait, dispatcher as mathlib};
@@ -170,14 +170,19 @@ pub mod stabilizer_fdp {
                 (pool_key.token0, pool_info.token0_amount, pool_info.token1_amount)
             };
 
+            let other_token_decimals: u8 = IERC20Dispatcher { contract_address: other_token }
+                .decimals();
             let other_token_price: Wad = convert_ekubo_oracle_price_to_wad(
                 IOracleDispatcher { contract_address: mainnet::ekubo_oracle() }
                     .get_price_x128_over_last(other_token, mainnet::shrine(), TWAP_PERIOD),
-                IERC20Dispatcher { contract_address: other_token }.decimals(),
+                other_token_decimals,
                 WAD_DECIMALS,
             );
 
-            other_token_amount.try_into().unwrap() * other_token_price
+            // Scale the other token to Wad precision
+            let scaled_other_token_amount: u256 = other_token_amount
+                * 10_u256.pow((WAD_DECIMALS - other_token_decimals).into());
+            scaled_other_token_amount.try_into().unwrap() * other_token_price
                 + yin_amount.try_into().unwrap()
         }
     }
