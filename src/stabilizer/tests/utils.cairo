@@ -7,20 +7,18 @@ pub mod stabilizer_utils {
     use ekubo::types::bounds::Bounds;
     use ekubo::types::keys::PoolKey;
     use opus::interfaces::{
-        IAllocatorDispatcher, IAllocatorDispatcherTrait, IShrineDispatcher, IShrineDispatcherTrait,
-        IEqualizerDispatcher, IEqualizerDispatcherTrait,
+        IAllocatorDispatcher, IAllocatorDispatcherTrait, IEqualizerDispatcher,
+        IEqualizerDispatcherTrait, IShrineDispatcher, IShrineDispatcherTrait,
     };
     use opus_compose::addresses::mainnet;
-    use opus_compose::stabilizer::constants::{POOL_KEY, BOUNDS};
+    use opus_compose::stabilizer::constants::{BOUNDS, POOL_KEY};
     use opus_compose::stabilizer::interfaces::stabilizer::{
         IStabilizerDispatcher, IStabilizerDispatcherTrait,
     };
-    use opus_compose::stabilizer::periphery::frontend_data_provider::{
-        IFrontendDataProviderDispatcher,
-    };
+    use opus_compose::stabilizer::periphery::frontend_data_provider::IFrontendDataProviderDispatcher;
     use snforge_std::{
-        declare, cheat_caller_address, CheatSpan, ContractClass, ContractClassTrait,
-        DeclareResultTrait, start_cheat_caller_address, stop_cheat_caller_address,
+        CheatSpan, ContractClass, ContractClassTrait, DeclareResultTrait, cheat_caller_address,
+        declare, start_cheat_caller_address, stop_cheat_caller_address,
     };
     use starknet::{ContractAddress, contract_address_const};
     use wadray::{RAY_ONE, Wad};
@@ -44,31 +42,31 @@ pub mod stabilizer_utils {
         };
 
         let mut calldata: Array<felt252> = array![
-            mainnet::shrine().into(),
-            mainnet::equalizer().into(),
-            mainnet::ekubo_positions().into(),
-            mainnet::ekubo_positions_nft().into(),
+            mainnet::SHRINE.into(),
+            mainnet::EQUALIZER.into(),
+            mainnet::EKUBO_POSITIONS.into(),
+            mainnet::EKUBO_POSITIONS_NFT.into(),
         ];
         POOL_KEY().serialize(ref calldata);
         BOUNDS().serialize(ref calldata);
         let (stabilizer_addr, _) = stabilizer_class.deploy(@calldata).unwrap();
 
         // Clear out surplus
-        let equalizer = IEqualizerDispatcher { contract_address: mainnet::equalizer() };
+        let equalizer = IEqualizerDispatcher { contract_address: mainnet::EQUALIZER };
         equalizer.equalize();
         equalizer.allocate();
 
         // Set stabilizer as the only recipient of surplus to make tests simpler
-        start_cheat_caller_address(mainnet::allocator(), mainnet::multisig());
-        IAllocatorDispatcher { contract_address: mainnet::allocator() }
+        start_cheat_caller_address(mainnet::ALLOCATOR, mainnet::MULTISIG);
+        IAllocatorDispatcher { contract_address: mainnet::ALLOCATOR }
             .set_allocation(array![stabilizer_addr].span(), array![RAY_ONE.into()].span());
-        stop_cheat_caller_address(mainnet::allocator());
+        stop_cheat_caller_address(mainnet::ALLOCATOR);
 
-        start_cheat_caller_address(mainnet::shrine(), mainnet::multisig());
+        start_cheat_caller_address(mainnet::SHRINE, mainnet::MULTISIG);
         let adjust_budget_role: u128 = 2;
-        IAccessControlDispatcher { contract_address: mainnet::shrine() }
-            .grant_role(adjust_budget_role, mainnet::multisig());
-        stop_cheat_caller_address(mainnet::shrine());
+        IAccessControlDispatcher { contract_address: mainnet::SHRINE }
+            .grant_role(adjust_budget_role, mainnet::MULTISIG);
+        stop_cheat_caller_address(mainnet::SHRINE);
 
         let fdp_class = declare("stabilizer_fdp").unwrap().contract_class();
         let (fdp_addr, _) = fdp_class.deploy(@array![]).unwrap();
@@ -83,7 +81,7 @@ pub mod stabilizer_utils {
         shrine: ContractAddress, funder: ContractAddress, mut users_yin_amts: Span<u256>,
     ) -> Span<ContractAddress> {
         let yin = IERC20Dispatcher { contract_address: shrine };
-        let usdc = IERC20Dispatcher { contract_address: mainnet::usdc() };
+        let usdc = IERC20Dispatcher { contract_address: mainnet::USDC };
 
         let user1 = contract_address_const::<'user 1'>();
         let user2 = contract_address_const::<'user 2'>();
@@ -108,17 +106,17 @@ pub mod stabilizer_utils {
                 },
                 Option::None => { break; },
             };
-        };
+        }
 
         users
     }
 
     pub fn create_surplus(shrine: ContractAddress, surplus: Wad) {
-        let admin = mainnet::multisig();
+        let admin = mainnet::MULTISIG;
         let yin = IERC20Dispatcher { contract_address: shrine };
 
         // Account for leftover yin in Equalizer from previous distribution
-        let equalizer_yin_balance: Wad = yin.balanceOf(mainnet::equalizer()).try_into().unwrap();
+        let equalizer_yin_balance: Wad = yin.balanceOf(mainnet::EQUALIZER).try_into().unwrap();
         assert(equalizer_yin_balance <= surplus, 'Surplus < equalizer balance');
         let adjusted_surplus = surplus - equalizer_yin_balance;
 
@@ -146,28 +144,28 @@ pub mod stabilizer_utils {
         bounds: Bounds,
         lp_amount: u256,
     ) -> (u64, u128) {
-        let yin = IERC20Dispatcher { contract_address: mainnet::shrine() };
-        let usdc = IERC20Dispatcher { contract_address: mainnet::usdc() };
-        let ekubo_positions = IPositionsDispatcher { contract_address: mainnet::ekubo_positions() };
+        let yin = IERC20Dispatcher { contract_address: mainnet::SHRINE };
+        let usdc = IERC20Dispatcher { contract_address: mainnet::USDC };
+        let ekubo_positions = IPositionsDispatcher { contract_address: mainnet::EKUBO_POSITIONS };
         let ekubo_positions_clear = IClearDispatcher {
-            contract_address: mainnet::ekubo_positions(),
+            contract_address: mainnet::EKUBO_POSITIONS,
         };
 
         start_cheat_caller_address(yin.contract_address, caller);
         yin.transfer(ekubo_positions.contract_address, lp_amount);
         stop_cheat_caller_address(yin.contract_address);
 
-        start_cheat_caller_address(mainnet::usdc(), caller);
+        start_cheat_caller_address(mainnet::USDC, caller);
         let scaled_lp_amount: u256 = lp_amount / USDC_DECIMALS_DIFF_SCALE;
         usdc.transfer(ekubo_positions.contract_address, scaled_lp_amount);
-        stop_cheat_caller_address(mainnet::usdc());
+        stop_cheat_caller_address(mainnet::USDC);
 
         cheat_caller_address(ekubo_positions.contract_address, caller, CheatSpan::TargetCalls(1));
         let min_liquidity = 1;
         let (positions_nft_id, liquidity) = ekubo_positions
             .mint_and_deposit(pool_key, bounds, min_liquidity);
 
-        let owner = IERC721Dispatcher { contract_address: mainnet::ekubo_positions_nft() }
+        let owner = IERC721Dispatcher { contract_address: mainnet::EKUBO_POSITIONS_NFT }
             .owner_of(positions_nft_id.into());
         assert_eq!(owner, caller, "Caller not owner");
 

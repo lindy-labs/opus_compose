@@ -1,4 +1,4 @@
-use opus_compose::lever::types::{LeverUpParams, LeverDownParams};
+use opus_compose::lever::types::{LeverDownParams, LeverUpParams};
 use wadray::Wad;
 
 #[starknet::interface]

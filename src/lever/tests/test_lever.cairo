@@ -18,14 +18,15 @@ use opus_compose::lever::tests::malicious_lever::{
     IMaliciousLeverDispatcher, IMaliciousLeverDispatcherTrait,
 };
 use opus_compose::lever::types::{
-    LeverUpParams, LeverDownParams, ModifyLeverAction, ModifyLeverParams,
+    LeverDownParams, LeverUpParams, ModifyLeverAction, ModifyLeverParams,
 };
 use snforge_std::{
-    declare, ContractClassTrait, DeclareResultTrait, EventSpyAssertionsTrait, spy_events, CheatSpan,
-    cheat_caller_address, start_cheat_caller_address, stop_cheat_caller_address,
+    CheatSpan, ContractClassTrait, DeclareResultTrait, EventSpyAssertionsTrait,
+    cheat_caller_address, declare, spy_events, start_cheat_caller_address,
+    stop_cheat_caller_address,
 };
 use starknet::{ContractAddress, contract_address_const};
-use wadray::{Ray, RAY_ONE, Wad, WAD_ONE};
+use wadray::{RAY_ONE, Ray, WAD_ONE, Wad};
 
 //
 // Helpers
@@ -35,24 +36,24 @@ fn deploy_lever() -> ILeverDispatcher {
     let lever_class = declare("lever").unwrap().contract_class();
 
     let calldata: Array<felt252> = array![
-        mainnet::shrine().into(),
-        mainnet::sentinel().into(),
-        mainnet::abbot().into(),
-        mainnet::flash_mint().into(),
-        mainnet::ekubo_router().into(),
+        mainnet::SHRINE.into(),
+        mainnet::SENTINEL.into(),
+        mainnet::ABBOT.into(),
+        mainnet::FLASH_MINT.into(),
+        mainnet::EKUBO_ROUTER.into(),
     ];
 
     let (lever_addr, _) = lever_class.deploy(@calldata).unwrap();
 
-    start_cheat_caller_address(mainnet::shrine(), mainnet::multisig());
-    IAccessControlDispatcher { contract_address: mainnet::shrine() }
+    start_cheat_caller_address(mainnet::SHRINE, mainnet::MULTISIG);
+    IAccessControlDispatcher { contract_address: mainnet::SHRINE }
         .grant_role(SHRINE_ROLES_FOR_LEVER, lever_addr);
-    stop_cheat_caller_address(mainnet::shrine());
+    stop_cheat_caller_address(mainnet::SHRINE);
 
-    start_cheat_caller_address(mainnet::sentinel(), mainnet::multisig());
-    IAccessControlDispatcher { contract_address: mainnet::sentinel() }
+    start_cheat_caller_address(mainnet::SENTINEL, mainnet::MULTISIG);
+    IAccessControlDispatcher { contract_address: mainnet::SENTINEL }
         .grant_role(SENTINEL_ROLES_FOR_LEVER, lever_addr);
-    stop_cheat_caller_address(mainnet::sentinel());
+    stop_cheat_caller_address(mainnet::SENTINEL);
 
     ILeverDispatcher { contract_address: lever_addr }
 }
@@ -61,7 +62,7 @@ fn deploy_malicious_lever(lever: ContractAddress) -> IMaliciousLeverDispatcher {
     let malicious_lever_class = declare("malicious_lever").unwrap().contract_class();
 
     let calldata: Array<felt252> = array![
-        mainnet::shrine().into(), mainnet::flash_mint().into(), lever.into(),
+        mainnet::SHRINE.into(), mainnet::FLASH_MINT.into(), lever.into(),
     ];
 
     let (malicious_lever_addr, _) = malicious_lever_class.deploy(@calldata).unwrap();
@@ -72,10 +73,10 @@ fn deploy_malicious_lever(lever: ContractAddress) -> IMaliciousLeverDispatcher {
 // Helper function to open a trove with 2 ETH.
 // Returns the trove ID.
 fn open_trove_helper(user: ContractAddress, eth_asset_amt: u128) -> u64 {
-    let abbot = IAbbotDispatcher { contract_address: mainnet::abbot() };
+    let abbot = IAbbotDispatcher { contract_address: mainnet::ABBOT };
 
-    let eth = mainnet::eth();
-    let gate = mainnet::eth_gate();
+    let eth = mainnet::ETH;
+    let gate = mainnet::ETH_GATE;
 
     start_cheat_caller_address(eth, user);
     IERC20Dispatcher { contract_address: eth }.approve(gate, eth_asset_amt.into());
@@ -99,9 +100,9 @@ fn open_trove_helper(user: ContractAddress, eth_asset_amt: u128) -> u64 {
 fn open_trove_and_lever_up(
     lever: ILeverDispatcher, user: ContractAddress, eth_asset_amt: u128,
 ) -> (u64, Wad) {
-    let shrine = IShrineDispatcher { contract_address: mainnet::shrine() };
+    let shrine = IShrineDispatcher { contract_address: mainnet::SHRINE };
 
-    let eth = mainnet::eth();
+    let eth = mainnet::ETH;
 
     let trove_id: u64 = open_trove_helper(user, eth_asset_amt);
 
@@ -131,8 +132,8 @@ fn lever_up_swaps() -> Array<Swap> {
             route: array![
                 RouteNode {
                     pool_key: PoolKey {
-                        token0: mainnet::shrine(),
-                        token1: mainnet::usdc(),
+                        token0: mainnet::SHRINE,
+                        token1: mainnet::USDC,
                         fee: 34028236692093847977029636859101184,
                         tick_spacing: 200,
                         extension: Zero::zero(),
@@ -142,8 +143,8 @@ fn lever_up_swaps() -> Array<Swap> {
                 },
                 RouteNode {
                     pool_key: PoolKey {
-                        token0: mainnet::eth(),
-                        token1: mainnet::usdc(),
+                        token0: mainnet::ETH,
+                        token1: mainnet::USDC,
                         fee: 170141183460469235273462165868118016,
                         tick_spacing: 1000,
                         extension: Zero::zero(),
@@ -153,7 +154,7 @@ fn lever_up_swaps() -> Array<Swap> {
                 },
             ],
             token_amount: TokenAmount {
-                token: mainnet::shrine(), amount: i129 { mag: 3363000000000000000000, sign: false },
+                token: mainnet::SHRINE, amount: i129 { mag: 3363000000000000000000, sign: false },
             },
         },
         // Swap 1681.5 CASH for ETH via CASH/USDC, USDC/STRK and STRK/ETH
@@ -161,8 +162,8 @@ fn lever_up_swaps() -> Array<Swap> {
             route: array![
                 RouteNode {
                     pool_key: PoolKey {
-                        token0: mainnet::shrine(),
-                        token1: mainnet::usdc(),
+                        token0: mainnet::SHRINE,
+                        token1: mainnet::USDC,
                         fee: 34028236692093847977029636859101184,
                         tick_spacing: 200,
                         extension: Zero::zero(),
@@ -172,8 +173,8 @@ fn lever_up_swaps() -> Array<Swap> {
                 },
                 RouteNode {
                     pool_key: PoolKey {
-                        token0: mainnet::strk(),
-                        token1: mainnet::usdc(),
+                        token0: mainnet::STRK,
+                        token1: mainnet::USDC,
                         fee: 170141183460469235273462165868118016,
                         tick_spacing: 1000,
                         extension: Zero::zero(),
@@ -183,8 +184,8 @@ fn lever_up_swaps() -> Array<Swap> {
                 },
                 RouteNode {
                     pool_key: PoolKey {
-                        token0: mainnet::strk(),
-                        token1: mainnet::eth(),
+                        token0: mainnet::STRK,
+                        token1: mainnet::ETH,
                         fee: 170141183460469235273462165868118016,
                         tick_spacing: 1000,
                         extension: Zero::zero(),
@@ -194,7 +195,7 @@ fn lever_up_swaps() -> Array<Swap> {
                 },
             ],
             token_amount: TokenAmount {
-                token: mainnet::shrine(), amount: i129 { mag: 1681500000000000000000, sign: false },
+                token: mainnet::SHRINE, amount: i129 { mag: 1681500000000000000000, sign: false },
             },
         },
         // Swap 840.75 CASH for CASH/USDC and USDC/ETH
@@ -202,8 +203,8 @@ fn lever_up_swaps() -> Array<Swap> {
             route: array![
                 RouteNode {
                     pool_key: PoolKey {
-                        token0: mainnet::shrine(),
-                        token1: mainnet::usdc(),
+                        token0: mainnet::SHRINE,
+                        token1: mainnet::USDC,
                         fee: 34028236692093847977029636859101184,
                         tick_spacing: 200,
                         extension: Zero::zero(),
@@ -213,8 +214,8 @@ fn lever_up_swaps() -> Array<Swap> {
                 },
                 RouteNode {
                     pool_key: PoolKey {
-                        token0: mainnet::eth(),
-                        token1: mainnet::usdc(),
+                        token0: mainnet::ETH,
+                        token1: mainnet::USDC,
                         fee: 170141183460469235273462165868118016,
                         tick_spacing: 1000,
                         extension: Zero::zero(),
@@ -224,7 +225,7 @@ fn lever_up_swaps() -> Array<Swap> {
                 },
             ],
             token_amount: TokenAmount {
-                token: mainnet::shrine(), amount: i129 { mag: 840750000000000000000, sign: false },
+                token: mainnet::SHRINE, amount: i129 { mag: 840750000000000000000, sign: false },
             },
         },
         // Swap 630.5625 CASH for ETH via CASH/USDC, USDC/STRK and STRK/ETH
@@ -232,8 +233,8 @@ fn lever_up_swaps() -> Array<Swap> {
             route: array![
                 RouteNode {
                     pool_key: PoolKey {
-                        token0: mainnet::shrine(),
-                        token1: mainnet::usdc(),
+                        token0: mainnet::SHRINE,
+                        token1: mainnet::USDC,
                         fee: 34028236692093847977029636859101184,
                         tick_spacing: 200,
                         extension: Zero::zero(),
@@ -243,8 +244,8 @@ fn lever_up_swaps() -> Array<Swap> {
                 },
                 RouteNode {
                     pool_key: PoolKey {
-                        token0: mainnet::strk(),
-                        token1: mainnet::usdc(),
+                        token0: mainnet::STRK,
+                        token1: mainnet::USDC,
                         fee: 170141183460469235273462165868118016,
                         tick_spacing: 1000,
                         extension: Zero::zero(),
@@ -254,8 +255,8 @@ fn lever_up_swaps() -> Array<Swap> {
                 },
                 RouteNode {
                     pool_key: PoolKey {
-                        token0: mainnet::strk(),
-                        token1: mainnet::eth(),
+                        token0: mainnet::STRK,
+                        token1: mainnet::ETH,
                         fee: 170141183460469235273462165868118016,
                         tick_spacing: 1000,
                         extension: Zero::zero(),
@@ -265,7 +266,7 @@ fn lever_up_swaps() -> Array<Swap> {
                 },
             ],
             token_amount: TokenAmount {
-                token: mainnet::shrine(), amount: i129 { mag: 630562500000000000000, sign: false },
+                token: mainnet::SHRINE, amount: i129 { mag: 630562500000000000000, sign: false },
             },
         },
         // Swap 210.1875 CASH for CASH/USDC and USDC/ETH
@@ -273,8 +274,8 @@ fn lever_up_swaps() -> Array<Swap> {
             route: array![
                 RouteNode {
                     pool_key: PoolKey {
-                        token0: mainnet::shrine(),
-                        token1: mainnet::usdc(),
+                        token0: mainnet::SHRINE,
+                        token1: mainnet::USDC,
                         fee: 34028236692093847977029636859101184,
                         tick_spacing: 200,
                         extension: Zero::zero(),
@@ -284,8 +285,8 @@ fn lever_up_swaps() -> Array<Swap> {
                 },
                 RouteNode {
                     pool_key: PoolKey {
-                        token0: mainnet::eth(),
-                        token1: mainnet::usdc(),
+                        token0: mainnet::ETH,
+                        token1: mainnet::USDC,
                         fee: 170141183460469235273462165868118016,
                         tick_spacing: 1000,
                         extension: Zero::zero(),
@@ -295,7 +296,7 @@ fn lever_up_swaps() -> Array<Swap> {
                 },
             ],
             token_amount: TokenAmount {
-                token: mainnet::shrine(), amount: i129 { mag: 210187500000000000000, sign: false },
+                token: mainnet::SHRINE, amount: i129 { mag: 210187500000000000000, sign: false },
             },
         },
     ]
@@ -310,8 +311,8 @@ fn lever_down_swaps() -> Array<Swap> {
             route: array![
                 RouteNode {
                     pool_key: PoolKey {
-                        token0: mainnet::shrine(),
-                        token1: mainnet::usdc(),
+                        token0: mainnet::SHRINE,
+                        token1: mainnet::USDC,
                         fee: 34028236692093847977029636859101184,
                         tick_spacing: 200,
                         extension: Zero::zero(),
@@ -321,8 +322,8 @@ fn lever_down_swaps() -> Array<Swap> {
                 },
                 RouteNode {
                     pool_key: PoolKey {
-                        token0: mainnet::eth(),
-                        token1: mainnet::usdc(),
+                        token0: mainnet::ETH,
+                        token1: mainnet::USDC,
                         fee: 170141183460469235273462165868118016,
                         tick_spacing: 1000,
                         extension: Zero::zero(),
@@ -332,7 +333,7 @@ fn lever_down_swaps() -> Array<Swap> {
                 },
             ],
             token_amount: TokenAmount {
-                token: mainnet::shrine(), amount: i129 { mag: 5935250000000000000000, sign: true },
+                token: mainnet::SHRINE, amount: i129 { mag: 5935250000000000000000, sign: true },
             },
         },
         // Swap ETH for 430.375 worth of CASH via CASH/USDC and USDC/ETH
@@ -340,8 +341,8 @@ fn lever_down_swaps() -> Array<Swap> {
             route: array![
                 RouteNode {
                     pool_key: PoolKey {
-                        token0: mainnet::shrine(),
-                        token1: mainnet::usdc(),
+                        token0: mainnet::SHRINE,
+                        token1: mainnet::USDC,
                         fee: 34028236692093847977029636859101184,
                         tick_spacing: 200,
                         extension: Zero::zero(),
@@ -351,8 +352,8 @@ fn lever_down_swaps() -> Array<Swap> {
                 },
                 RouteNode {
                     pool_key: PoolKey {
-                        token0: mainnet::eth(),
-                        token1: mainnet::usdc(),
+                        token0: mainnet::ETH,
+                        token1: mainnet::USDC,
                         fee: 1020847100762815411640772995208708096,
                         tick_spacing: 5982,
                         extension: Zero::zero(),
@@ -362,7 +363,7 @@ fn lever_down_swaps() -> Array<Swap> {
                 },
             ],
             token_amount: TokenAmount {
-                token: mainnet::shrine(), amount: i129 { mag: 430375000000000000000, sign: true },
+                token: mainnet::SHRINE, amount: i129 { mag: 430375000000000000000, sign: true },
             },
         },
         // Swap ETH for 325.28125 worth of CASH via CASH/USDC and USDC/ETH
@@ -370,8 +371,8 @@ fn lever_down_swaps() -> Array<Swap> {
             route: array![
                 RouteNode {
                     pool_key: PoolKey {
-                        token0: mainnet::shrine(),
-                        token1: mainnet::usdc(),
+                        token0: mainnet::SHRINE,
+                        token1: mainnet::USDC,
                         fee: 34028236692093847977029636859101184,
                         tick_spacing: 200,
                         extension: Zero::zero(),
@@ -381,8 +382,8 @@ fn lever_down_swaps() -> Array<Swap> {
                 },
                 RouteNode {
                     pool_key: PoolKey {
-                        token0: mainnet::strk(),
-                        token1: mainnet::usdc(),
+                        token0: mainnet::STRK,
+                        token1: mainnet::USDC,
                         fee: 170141183460469235273462165868118016,
                         tick_spacing: 1000,
                         extension: Zero::zero(),
@@ -392,8 +393,8 @@ fn lever_down_swaps() -> Array<Swap> {
                 },
                 RouteNode {
                     pool_key: PoolKey {
-                        token0: mainnet::strk(),
-                        token1: mainnet::eth(),
+                        token0: mainnet::STRK,
+                        token1: mainnet::ETH,
                         fee: 170141183460469235273462165868118016,
                         tick_spacing: 1000,
                         extension: Zero::zero(),
@@ -403,7 +404,7 @@ fn lever_down_swaps() -> Array<Swap> {
                 },
             ],
             token_amount: TokenAmount {
-                token: mainnet::shrine(), amount: i129 { mag: 325281250000000000000, sign: true },
+                token: mainnet::SHRINE, amount: i129 { mag: 325281250000000000000, sign: true },
             },
         },
         // Swap ETH for 115.09375 worth of CASH directly
@@ -411,8 +412,8 @@ fn lever_down_swaps() -> Array<Swap> {
             route: array![
                 RouteNode {
                     pool_key: PoolKey {
-                        token0: mainnet::shrine(),
-                        token1: mainnet::eth(),
+                        token0: mainnet::SHRINE,
+                        token1: mainnet::ETH,
                         fee: 170141183460469235273462165868118016,
                         tick_spacing: 1000,
                         extension: Zero::zero(),
@@ -422,7 +423,7 @@ fn lever_down_swaps() -> Array<Swap> {
                 },
             ],
             token_amount: TokenAmount {
-                token: mainnet::shrine(), amount: i129 { mag: 115093750000000000000, sign: true },
+                token: mainnet::SHRINE, amount: i129 { mag: 115093750000000000000, sign: true },
             },
         },
     ]
@@ -437,10 +438,10 @@ fn lever_down_swaps() -> Array<Swap> {
 fn test_lever() {
     let lever: ILeverDispatcher = deploy_lever();
 
-    let shrine = IShrineDispatcher { contract_address: mainnet::shrine() };
+    let shrine = IShrineDispatcher { contract_address: mainnet::SHRINE };
 
-    let whale = mainnet::whale();
-    let eth = mainnet::eth();
+    let whale = mainnet::WHALE;
+    let eth = mainnet::ETH;
     let eth_erc20 = IERC20Dispatcher { contract_address: eth };
 
     let mut spy = spy_events();
@@ -450,7 +451,7 @@ fn test_lever() {
     let before_eth_balance = eth_erc20.balanceOf(whale);
     let before_shrine_health = shrine.get_shrine_health();
 
-    let before_up_eth_gate_balance = eth_erc20.balanceOf(mainnet::eth_gate());
+    let before_up_eth_gate_balance = eth_erc20.balanceOf(mainnet::ETH_GATE);
 
     // Deposit 2 ETH and leverage to 4 ETH-ish
     let eth_capital: u128 = 2 * WAD_ONE;
@@ -521,7 +522,7 @@ fn test_lever() {
     assert_eq!(before_shrine_health.debt, after_shrine_health.debt, "Wrong total debt");
     assert_eq!(before_shrine_health.value, after_shrine_health.value, "Wrong total value");
 
-    let after_down_eth_gate_balance = eth_erc20.balanceOf(mainnet::eth_gate());
+    let after_down_eth_gate_balance = eth_erc20.balanceOf(mainnet::ETH_GATE);
     assert_eq!(before_up_eth_gate_balance, after_down_eth_gate_balance, "Wrong gate balance");
 
     expected_events
@@ -550,10 +551,10 @@ fn test_lever() {
 fn test_lever_up_unhealthy_fail() {
     let lever: ILeverDispatcher = deploy_lever();
 
-    let shrine = IShrineDispatcher { contract_address: mainnet::shrine() };
+    let shrine = IShrineDispatcher { contract_address: mainnet::SHRINE };
 
-    let whale = mainnet::whale();
-    let eth = mainnet::eth();
+    let whale = mainnet::WHALE;
+    let eth = mainnet::ETH;
 
     let eth_capital: u128 = (WAD_ONE / 4);
     let trove_id: u64 = open_trove_helper(whale, eth_capital);
@@ -580,10 +581,10 @@ fn test_lever_up_unhealthy_fail() {
 fn test_lever_up_exceeds_max_ltv_fail() {
     let lever: ILeverDispatcher = deploy_lever();
 
-    let shrine = IShrineDispatcher { contract_address: mainnet::shrine() };
+    let shrine = IShrineDispatcher { contract_address: mainnet::SHRINE };
 
-    let whale = mainnet::whale();
-    let eth = mainnet::eth();
+    let whale = mainnet::WHALE;
+    let eth = mainnet::ETH;
 
     let eth_capital: u128 = WAD_ONE * 2;
     let trove_id: u64 = open_trove_helper(whale, eth_capital);
@@ -607,13 +608,13 @@ fn test_lever_up_exceeds_max_ltv_fail() {
 fn test_unauthorized_lever_up_fail() {
     let lever: ILeverDispatcher = deploy_lever();
 
-    cheat_caller_address(lever.contract_address, mainnet::whale(), CheatSpan::TargetCalls(1));
+    cheat_caller_address(lever.contract_address, mainnet::WHALE, CheatSpan::TargetCalls(1));
     let debt: Wad = 100_u128.into();
     let max_ltv: Ray = RAY_ONE.into();
     let lever_up_params = LeverUpParams {
         trove_id: 1,
         max_ltv,
-        yang: mainnet::eth(),
+        yang: mainnet::ETH,
         max_forge_fee_pct: WAD_ONE.into(),
         swaps: lever_up_swaps(),
     };
@@ -626,14 +627,14 @@ fn test_unauthorized_lever_up_fail() {
 fn test_lever_up_invalid_yang_fail() {
     let lever: ILeverDispatcher = deploy_lever();
 
-    let whale = mainnet::whale();
+    let whale = mainnet::WHALE;
 
     let eth_capital: u128 = 2 * WAD_ONE;
     let trove_id: u64 = open_trove_helper(whale, eth_capital);
 
     let debt: u128 = WAD_ONE.into();
     let max_ltv: Ray = RAY_ONE.into();
-    let invalid_yang = mainnet::ekubo();
+    let invalid_yang = mainnet::EKUBO;
     let max_forge_fee_pct: Wad = WAD_ONE.into();
     let lever_up_params = LeverUpParams {
         trove_id, max_ltv, yang: invalid_yang, max_forge_fee_pct, swaps: lever_up_swaps(),
@@ -655,12 +656,12 @@ fn test_unauthorized_lever_down_fail() {
     let lever_down_params = LeverDownParams {
         trove_id,
         max_ltv,
-        yang: mainnet::eth(),
+        yang: mainnet::ETH,
         yang_amt: 1000000000_u128.into(),
         swaps: lever_down_swaps(),
     };
 
-    cheat_caller_address(lever.contract_address, mainnet::whale(), CheatSpan::TargetCalls(1));
+    cheat_caller_address(lever.contract_address, mainnet::WHALE, CheatSpan::TargetCalls(1));
     lever.down(debt, lever_down_params);
 }
 
@@ -672,10 +673,10 @@ fn test_unauthorized_lever_down_fail() {
 fn test_lever_down_unhealthy_fail() {
     let lever: ILeverDispatcher = deploy_lever();
 
-    let shrine = IShrineDispatcher { contract_address: mainnet::shrine() };
+    let shrine = IShrineDispatcher { contract_address: mainnet::SHRINE };
 
-    let whale = mainnet::whale();
-    let eth = mainnet::eth();
+    let whale = mainnet::WHALE;
+    let eth = mainnet::ETH;
 
     let eth_capital: u128 = 2 * WAD_ONE;
     let (trove_id, _debt) = open_trove_and_lever_up(lever, whale, eth_capital);
@@ -702,11 +703,11 @@ fn test_lever_down_unhealthy_fail() {
 fn test_lever_down_exceeds_max_ltv_fail() {
     let lever: ILeverDispatcher = deploy_lever();
 
-    let shrine = IShrineDispatcher { contract_address: mainnet::shrine() };
-    let abbot = IAbbotDispatcher { contract_address: mainnet::abbot() };
+    let shrine = IShrineDispatcher { contract_address: mainnet::SHRINE };
+    let abbot = IAbbotDispatcher { contract_address: mainnet::ABBOT };
 
-    let whale = mainnet::whale();
-    let eth = mainnet::eth();
+    let whale = mainnet::WHALE;
+    let eth = mainnet::ETH;
 
     let eth_capital: u128 = 2 * WAD_ONE;
 
@@ -750,10 +751,10 @@ fn test_lever_down_exceeds_max_ltv_fail() {
 fn test_lever_down_insufficient_trove_yang_fail() {
     let lever: ILeverDispatcher = deploy_lever();
 
-    let shrine = IShrineDispatcher { contract_address: mainnet::shrine() };
+    let shrine = IShrineDispatcher { contract_address: mainnet::SHRINE };
 
-    let whale = mainnet::whale();
-    let eth = mainnet::eth();
+    let whale = mainnet::WHALE;
+    let eth = mainnet::ETH;
 
     let eth_capital: u128 = 2 * WAD_ONE;
     let (trove_id, _debt) = open_trove_and_lever_up(lever, whale, eth_capital);
@@ -778,16 +779,16 @@ fn test_lever_down_insufficient_trove_yang_fail() {
 fn test_lever_down_invalid_yang_fail() {
     let lever: ILeverDispatcher = deploy_lever();
 
-    let shrine = IShrineDispatcher { contract_address: mainnet::shrine() };
+    let shrine = IShrineDispatcher { contract_address: mainnet::SHRINE };
 
-    let whale = mainnet::whale();
+    let whale = mainnet::WHALE;
 
     let eth_capital: u128 = 2 * WAD_ONE;
     let (trove_id, _debt) = open_trove_and_lever_up(lever, whale, eth_capital);
 
     let trove_health: Health = shrine.get_trove_health(trove_id);
     let max_ltv: Ray = RAY_ONE.into();
-    let invalid_yang = mainnet::ekubo();
+    let invalid_yang = mainnet::EKUBO;
     let lever_down_params = LeverDownParams {
         trove_id, max_ltv, yang: invalid_yang, yang_amt: Zero::zero(), swaps: lever_down_swaps(),
     };
@@ -803,10 +804,10 @@ fn test_lever_down_invalid_yang_fail() {
 fn test_unauthorized_callback_fail() {
     let lever: ILeverDispatcher = deploy_lever();
 
-    let shrine = IShrineDispatcher { contract_address: mainnet::shrine() };
+    let shrine = IShrineDispatcher { contract_address: mainnet::SHRINE };
 
-    let eth = mainnet::eth();
-    let whale = mainnet::whale();
+    let eth = mainnet::ETH;
+    let whale = mainnet::WHALE;
 
     let eth_capital: u128 = 2 * WAD_ONE;
     let (trove_id, _debt) = open_trove_and_lever_up(lever, whale, eth_capital);
@@ -824,11 +825,11 @@ fn test_unauthorized_callback_fail() {
     modify_lever_params.serialize(ref call_data);
 
     // Non-trove owner calls the callback function
-    cheat_caller_address(lever.contract_address, mainnet::multisig(), CheatSpan::TargetCalls(1));
+    cheat_caller_address(lever.contract_address, mainnet::MULTISIG, CheatSpan::TargetCalls(1));
     IFlashBorrowerDispatcher { contract_address: lever.contract_address }
         .on_flash_loan(
             lever.contract_address,
-            mainnet::shrine(),
+            mainnet::SHRINE,
             trove_health.debt.into(),
             0_256,
             call_data.span(),
@@ -842,10 +843,10 @@ fn test_unauthorized_callback_fail() {
 fn test_invalid_initiator_in_callback_fail() {
     let lever: ILeverDispatcher = deploy_lever();
 
-    let shrine = IShrineDispatcher { contract_address: mainnet::shrine() };
+    let shrine = IShrineDispatcher { contract_address: mainnet::SHRINE };
 
-    let eth = mainnet::eth();
-    let whale = mainnet::whale();
+    let eth = mainnet::ETH;
+    let whale = mainnet::WHALE;
 
     let eth_capital: u128 = 2 * WAD_ONE;
     let (trove_id, _debt) = open_trove_and_lever_up(lever, whale, eth_capital);
@@ -864,11 +865,11 @@ fn test_invalid_initiator_in_callback_fail() {
 
     // Flash mint calls the callback function directly with the wrong initiator.
     // This is technically impossible.
-    cheat_caller_address(lever.contract_address, mainnet::flash_mint(), CheatSpan::TargetCalls(1));
+    cheat_caller_address(lever.contract_address, mainnet::FLASH_MINT, CheatSpan::TargetCalls(1));
     IFlashBorrowerDispatcher { contract_address: lever.contract_address }
         .on_flash_loan(
-            mainnet::multisig(),
-            mainnet::shrine(),
+            mainnet::MULTISIG,
+            mainnet::SHRINE,
             trove_health.debt.into(),
             0_256,
             call_data.span(),
@@ -883,11 +884,11 @@ fn test_lever_down_malicious_lever_fail() {
     let lever: ILeverDispatcher = deploy_lever();
     let malicious_lever = deploy_malicious_lever(lever.contract_address);
 
-    let abbot = IAbbotDispatcher { contract_address: mainnet::abbot() };
+    let abbot = IAbbotDispatcher { contract_address: mainnet::ABBOT };
     let attacker: ContractAddress = contract_address_const::<'attacker'>();
 
-    let user = mainnet::whale();
-    let eth = mainnet::eth();
+    let user = mainnet::WHALE;
+    let eth = mainnet::ETH;
 
     let eth_capital: u128 = 8 * WAD_ONE;
     let user_trove_id = open_trove_helper(user, eth_capital);
@@ -920,10 +921,10 @@ fn test_lever_down_malicious_lever_fail() {
 fn test_trove_owner_callback_fail() {
     let lever: ILeverDispatcher = deploy_lever();
 
-    let shrine = IShrineDispatcher { contract_address: mainnet::shrine() };
+    let shrine = IShrineDispatcher { contract_address: mainnet::SHRINE };
 
-    let eth = mainnet::eth();
-    let whale = mainnet::whale();
+    let eth = mainnet::ETH;
+    let whale = mainnet::WHALE;
 
     let eth_capital: u128 = 2 * WAD_ONE;
     let (trove_id, _debt) = open_trove_and_lever_up(lever, whale, eth_capital);
@@ -942,11 +943,11 @@ fn test_trove_owner_callback_fail() {
 
     // Trove owner calls the callback function directly with the wrong initiator
     // but it has insufficient yin
-    cheat_caller_address(lever.contract_address, mainnet::whale(), CheatSpan::TargetCalls(1));
+    cheat_caller_address(lever.contract_address, mainnet::WHALE, CheatSpan::TargetCalls(1));
     IFlashBorrowerDispatcher { contract_address: lever.contract_address }
         .on_flash_loan(
             lever.contract_address,
-            mainnet::shrine(),
+            mainnet::SHRINE,
             trove_health.debt.into(),
             0_256,
             call_data.span(),

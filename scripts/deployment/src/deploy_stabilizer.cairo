@@ -1,7 +1,7 @@
 use opus_compose::addresses::mainnet;
-use opus_compose::stabilizer::constants::{POOL_KEY, BOUNDS};
+use opus_compose::stabilizer::constants::{BOUNDS, POOL_KEY};
 use sncast_std::{
-    declare, DeclareResultTrait, deploy, FeeSettings, EthFeeSettings, DisplayContractAddress,
+    DeclareResultTrait, DisplayContractAddress, EthFeeSettings, FeeSettings, declare, deploy,
 };
 
 fn main() {
@@ -11,10 +11,10 @@ fn main() {
         .expect('failed stabilizer declare');
 
     let mut stabilizer_calldata: Array<felt252> = array![
-        mainnet::shrine().into(),
-        mainnet::equalizer().into(),
-        mainnet::ekubo_positions().into(),
-        mainnet::ekubo_positions_nft().into(),
+        mainnet::SHRINE.into(),
+        mainnet::EQUALIZER.into(),
+        mainnet::EKUBO_POSITIONS.into(),
+        mainnet::EKUBO_POSITIONS_NFT.into(),
     ];
     POOL_KEY().serialize(ref stabilizer_calldata);
     BOUNDS().serialize(ref stabilizer_calldata);

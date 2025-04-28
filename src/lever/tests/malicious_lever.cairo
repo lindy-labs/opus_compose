@@ -1,4 +1,4 @@
-use opus_compose::lever::types::{LeverUpParams, LeverDownParams};
+use opus_compose::lever::types::{LeverDownParams, LeverUpParams};
 use wadray::Wad;
 
 #[starknet::interface]
@@ -15,10 +15,10 @@ pub mod malicious_lever {
     use opus_compose::lever::types::{
         LeverDownParams, LeverUpParams, ModifyLeverAction, ModifyLeverParams,
     };
-    use starknet::{ContractAddress, get_caller_address};
     use starknet::storage::{StoragePointerReadAccess, StoragePointerWriteAccess};
-    use super::IMaliciousLever;
+    use starknet::{ContractAddress, get_caller_address};
     use wadray::Wad;
+    use super::IMaliciousLever;
 
     //
     // Storage
