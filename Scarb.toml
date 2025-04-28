@@ -24,6 +24,9 @@ sierra = true
 [scripts]
 test = "snforge test"
 
+[tool.scarb]
+allow-prebuilt-plugins = ["snforge_std"]
+
 [[tool.snforge.fork]]
 name = "MAINNET_LEVER"
 url = "$NODE_URL"
