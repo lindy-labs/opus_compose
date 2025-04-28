@@ -33,3 +33,5 @@ jobs:
 
       - uses: foundry-rs/setup-snfoundry@v3
       - run: snforge test
+        env:
+          NODE_URL: ${{ secrets.NODE_URL }}
