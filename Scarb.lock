@@ -10,7 +10,7 @@ checksum = "sha256:6049cdb13bc3a2b45e714558da6f49745b61e70e29b81f932b2e532bf72a1
 [[package]]
 name = "ekubo"
 version = "0.1.0"
-source = "git+https://github.com/EkuboProtocol/abis#7a24eedf68318a46c726d257ad94692d0c7f4191"
+source = "git+https://github.com/EkuboProtocol/abis#edb6de8c9baf515f1053bbab3d86825d54a63bc3"
 
 [[package]]
 name = "opus"
