@@ -3,20 +3,20 @@ version = 1
 
 [[package]]
 name = "access_control"
-version = "0.4.0"
+version = "0.5.0"
 source = "registry+https://scarbs.xyz/"
-checksum = "sha256:6049cdb13bc3a2b45e714558da6f49745b61e70e29b81f932b2e532bf72a102d"
+checksum = "sha256:c0d72a9247e9833eee8ffaf32e85094c149ae479377e384a724a3505853a2b39"
 
 [[package]]
 name = "ekubo"
 version = "0.1.0"
-source = "git+https://github.com/EkuboProtocol/abis#edb6de8c9baf515f1053bbab3d86825d54a63bc3"
+source = "git+https://github.com/EkuboProtocol/abis#7a24eedf68318a46c726d257ad94692d0c7f4191"
 
 [[package]]
 name = "opus"
-version = "1.0.3"
+version = "1.3.0"
 source = "registry+https://scarbs.xyz/"
-checksum = "sha256:f8f67a67633e535a9b16ddfd983c64b44e2b61bf57fe51228521e0c686e06abc"
+checksum = "sha256:cab109011aa0d5e1ca127663474a22e4a2292b33993128a9330b077fc4119ab5"
 dependencies = [
  "wadray",
 ]
@@ -34,21 +34,21 @@ dependencies = [
 
 [[package]]
 name = "snforge_scarb_plugin"
-version = "0.35.0"
+version = "0.41.0"
 source = "registry+https://scarbs.xyz/"
-checksum = "sha256:20bd6a488fda7201ce2a5fd680d8e715b10e3545147b276747ad079c96c3d5d2"
+checksum = "sha256:7228a3ea74d8decfb2294cee9251b537bbd58b3e243e9327f55e72a99ab5fb53"
 
 [[package]]
 name = "snforge_std"
-version = "0.35.0"
+version = "0.41.0"
 source = "registry+https://scarbs.xyz/"
-checksum = "sha256:fe4e1b1526c815441183baed7f93e73bc76a6393d23e1f9c34fbe227bfaedfd6"
+checksum = "sha256:edf116cbf62cbe2487f188cf28ceb9f42b08cfa14e197524281c3ce932f4a5e6"
 dependencies = [
  "snforge_scarb_plugin",
 ]
 
 [[package]]
 name = "wadray"
-version = "0.5.0"
+version = "0.6.1"
 source = "registry+https://scarbs.xyz/"
-checksum = "sha256:efdcf25d14a3fdeed662a0f8de17b89a998166e3f884139197b4367337c2e8e2"
+checksum = "sha256:09bd9792f7f91b3fdfabca48e77cc141c53ccdbbcb957c28ce222eac864a92d1"
