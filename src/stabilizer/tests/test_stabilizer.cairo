@@ -252,15 +252,11 @@ fn test_claim() {
         let after_user_yin: u256 = yin.balance_of(user);
         let claimed_yin_amt = after_user_yin - before_user_yin;
         let error_margin: u256 = 1;
-        assert_equalish(
-            claimed_yin_amt, surplus.into(), error_margin, 'Wrong claimed yin balance',
-        );
+        assert_equalish(claimed_yin_amt, surplus.into(), error_margin, 'Wrong claimed yin balance');
 
         let yield_state = stabilizer.get_yield_state();
         let expected_cumulative = get_cumulative_delta(surplus.into(), position_liquidity);
-        assert_eq!(
-            yield_state.yin_per_liquidity, expected_cumulative, "Wrong yin/liquidity",
-        );
+        assert_eq!(yield_state.yin_per_liquidity, expected_cumulative, "Wrong yin/liquidity");
 
         let expected_yin_balance_snapshot = surplus.into() - claimed_yin_amt;
         assert_eq!(
@@ -277,8 +273,7 @@ fn test_claim() {
         );
 
         let expected_yield_state_at_harvest = YieldState {
-            yin_balance_snapshot: yin.balance_of(stabilizer.contract_address)
-                + claimed_yin_amt,
+            yin_balance_snapshot: yin.balance_of(stabilizer.contract_address) + claimed_yin_amt,
             yin_per_liquidity: yield_state.yin_per_liquidity,
         };
         let expected_events = array![
