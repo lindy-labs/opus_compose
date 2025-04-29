@@ -20,7 +20,7 @@ pub mod stabilizer_utils {
         CheatSpan, ContractClass, ContractClassTrait, DeclareResultTrait, cheat_caller_address,
         declare, start_cheat_caller_address, stop_cheat_caller_address,
     };
-    use starknet::{ContractAddress, contract_address_const};
+    use starknet::ContractAddress;
     use wadray::{RAY_ONE, Wad};
 
     pub const USDC_DECIMALS_DIFF_SCALE: u256 = 1000000000000; // 10 ** 12
@@ -83,29 +83,23 @@ pub mod stabilizer_utils {
         let yin = IERC20Dispatcher { contract_address: shrine };
         let usdc = IERC20Dispatcher { contract_address: mainnet::USDC };
 
-        let user1 = contract_address_const::<'user 1'>();
-        let user2 = contract_address_const::<'user 2'>();
-        let user3 = contract_address_const::<'user 3'>();
+        let user1 = 'user 1'.try_into().unwrap();
+        let user2 = 'user 2'.try_into().unwrap();
+        let user3 = 'user 3'.try_into().unwrap();
 
         let users = array![user1, user2, user3].span();
-        let mut users_copy = users;
 
-        loop {
-            match users_copy.pop_front() {
-                Option::Some(user) => {
-                    let user_yin_amt = *users_yin_amts.pop_front().unwrap();
+        for user in users {
+            let user_yin_amt = *users_yin_amts.pop_front().unwrap();
 
-                    start_cheat_caller_address(yin.contract_address, funder);
-                    yin.transfer(*user, user_yin_amt);
-                    stop_cheat_caller_address(yin.contract_address);
+            start_cheat_caller_address(yin.contract_address, funder);
+            yin.transfer(*user, user_yin_amt);
+            stop_cheat_caller_address(yin.contract_address);
 
-                    start_cheat_caller_address(usdc.contract_address, funder);
-                    let scaled_usdc_amount: u256 = user_yin_amt / USDC_DECIMALS_DIFF_SCALE;
-                    usdc.transfer(*user, scaled_usdc_amount);
-                    stop_cheat_caller_address(usdc.contract_address);
-                },
-                Option::None => { break; },
-            };
+            start_cheat_caller_address(usdc.contract_address, funder);
+            let scaled_usdc_amount: u256 = user_yin_amt / USDC_DECIMALS_DIFF_SCALE;
+            usdc.transfer(*user, scaled_usdc_amount);
+            stop_cheat_caller_address(usdc.contract_address);
         }
 
         users
@@ -147,9 +141,7 @@ pub mod stabilizer_utils {
         let yin = IERC20Dispatcher { contract_address: mainnet::SHRINE };
         let usdc = IERC20Dispatcher { contract_address: mainnet::USDC };
         let ekubo_positions = IPositionsDispatcher { contract_address: mainnet::EKUBO_POSITIONS };
-        let ekubo_positions_clear = IClearDispatcher {
-            contract_address: mainnet::EKUBO_POSITIONS,
-        };
+        let ekubo_positions_clear = IClearDispatcher { contract_address: mainnet::EKUBO_POSITIONS };
 
         start_cheat_caller_address(yin.contract_address, caller);
         yin.transfer(ekubo_positions.contract_address, lp_amount);

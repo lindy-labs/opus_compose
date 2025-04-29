@@ -25,7 +25,7 @@ use snforge_std::{
     cheat_caller_address, declare, spy_events, start_cheat_caller_address,
     stop_cheat_caller_address,
 };
-use starknet::{ContractAddress, contract_address_const};
+use starknet::ContractAddress;
 use wadray::{RAY_ONE, Ray, WAD_ONE, Wad};
 
 //
@@ -868,11 +868,7 @@ fn test_invalid_initiator_in_callback_fail() {
     cheat_caller_address(lever.contract_address, mainnet::FLASH_MINT, CheatSpan::TargetCalls(1));
     IFlashBorrowerDispatcher { contract_address: lever.contract_address }
         .on_flash_loan(
-            mainnet::MULTISIG,
-            mainnet::SHRINE,
-            trove_health.debt.into(),
-            0_256,
-            call_data.span(),
+            mainnet::MULTISIG, mainnet::SHRINE, trove_health.debt.into(), 0_256, call_data.span(),
         );
 }
 
@@ -885,7 +881,7 @@ fn test_lever_down_malicious_lever_fail() {
     let malicious_lever = deploy_malicious_lever(lever.contract_address);
 
     let abbot = IAbbotDispatcher { contract_address: mainnet::ABBOT };
-    let attacker: ContractAddress = contract_address_const::<'attacker'>();
+    let attacker: ContractAddress = 'attacker'.try_into().unwrap();
 
     let user = mainnet::WHALE;
     let eth = mainnet::ETH;

@@ -12,9 +12,7 @@ use opus_compose::stabilizer::constants::{BOUNDS, LOWER_TICK_MAG, POOL_KEY, UPPE
 use opus_compose::stabilizer::contracts::stabilizer::stabilizer as stabilizer_contract;
 use opus_compose::stabilizer::interfaces::stabilizer::IStabilizerDispatcherTrait;
 use opus_compose::stabilizer::math::get_cumulative_delta;
-use opus_compose::stabilizer::periphery::frontend_data_provider::{
-    IFrontendDataProviderDispatcher, IFrontendDataProviderDispatcherTrait,
-};
+use opus_compose::stabilizer::periphery::frontend_data_provider::IFrontendDataProviderDispatcherTrait};
 use opus_compose::stabilizer::tests::utils::stabilizer_utils::{
     StabilizerTestConfig, USDC_DECIMALS_DIFF_SCALE, create_ekubo_position, create_surplus,
     create_valid_ekubo_position, fund_three_users, setup, stake_ekubo_position,
@@ -24,7 +22,6 @@ use snforge_std::{
     DeclareResultTrait, EventSpyAssertionsTrait, declare, spy_events, start_cheat_caller_address,
     stop_cheat_caller_address,
 };
-use starknet::contract_address_const;
 use wadray::{WAD_ONE, Wad};
 
 
@@ -164,7 +161,7 @@ fn test_non_owner_stake_fail() {
     positions_nft.approve(stabilizer.contract_address, position_id.into());
     stop_cheat_caller_address(positions_nft.contract_address);
 
-    let non_owner = contract_address_const::<'non owner'>();
+    let non_owner = 'non owner'.try_into().unwrap();
     start_cheat_caller_address(stabilizer.contract_address, non_owner);
     stabilizer.stake(position_id);
 }
@@ -424,7 +421,7 @@ fn test_non_user_claim_fail() {
     );
     stake_ekubo_position(positions_nft, stabilizer, user, position_id);
 
-    let non_user = contract_address_const::<'non user'>();
+    let non_user = 'non user'.try_into().unwrap();
     start_cheat_caller_address(stabilizer.contract_address, non_user);
     stabilizer.claim();
 }
@@ -586,7 +583,7 @@ fn test_non_user_unstake_fail() {
     );
     stake_ekubo_position(positions_nft, stabilizer, user, position_id);
 
-    let non_user = contract_address_const::<'non user'>();
+    let non_user = 'non user'.try_into().unwrap();
     start_cheat_caller_address(stabilizer.contract_address, non_user);
     stabilizer.unstake();
 }
