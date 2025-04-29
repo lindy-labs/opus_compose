@@ -12,7 +12,7 @@ use opus_compose::stabilizer::constants::{BOUNDS, LOWER_TICK_MAG, POOL_KEY, UPPE
 use opus_compose::stabilizer::contracts::stabilizer::stabilizer as stabilizer_contract;
 use opus_compose::stabilizer::interfaces::stabilizer::IStabilizerDispatcherTrait;
 use opus_compose::stabilizer::math::get_cumulative_delta;
-use opus_compose::stabilizer::periphery::frontend_data_provider::IFrontendDataProviderDispatcherTrait};
+use opus_compose::stabilizer::periphery::frontend_data_provider::IFrontendDataProviderDispatcherTrait;
 use opus_compose::stabilizer::tests::utils::stabilizer_utils::{
     StabilizerTestConfig, USDC_DECIMALS_DIFF_SCALE, create_ekubo_position, create_surplus,
     create_valid_ekubo_position, fund_three_users, setup, stake_ekubo_position,
