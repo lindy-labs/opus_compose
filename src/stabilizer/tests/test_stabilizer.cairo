@@ -217,115 +217,110 @@ fn test_claim() {
     let positions_nft = IERC721Dispatcher { contract_address: mainnet::EKUBO_POSITIONS_NFT };
     let yin = IERC20Dispatcher { contract_address: mainnet::SHRINE };
 
-    let mut surplus_before_stake_cases = array![true, false].span();
+    let surplus_before_stake_cases = array![true, false].span();
 
-    loop {
-        match surplus_before_stake_cases.pop_front() {
-            Option::Some(surplus_before_stake) => {
-                let StabilizerTestConfig { stabilizer, .. } = setup(Option::Some(stabilizer_class));
-                let mut spy = spy_events();
+    for surplus_before_stake in surplus_before_stake_cases {
+        let StabilizerTestConfig { stabilizer, .. } = setup(Option::Some(stabilizer_class));
+        let mut spy = spy_events();
 
-                let surplus: Wad = (1000 * WAD_ONE).into();
-                if *surplus_before_stake {
-                    create_surplus(mainnet::SHRINE, surplus);
-                    let equalizer = IEqualizerDispatcher { contract_address: mainnet::EQUALIZER };
-                    equalizer.equalize();
-                    equalizer.allocate();
-                }
+        let surplus: Wad = (1000 * WAD_ONE).into();
+        if *surplus_before_stake {
+            create_surplus(mainnet::SHRINE, surplus);
+            let equalizer = IEqualizerDispatcher { contract_address: mainnet::EQUALIZER };
+            equalizer.equalize();
+            equalizer.allocate();
+        }
 
-                let user = mainnet::MULTISIG;
-                let lp_amount: u256 = (1000 * WAD_ONE).into();
-                let (position_id, position_liquidity) = create_valid_ekubo_position(
-                    mainnet::SHRINE, mainnet::EKUBO_POSITIONS, user, lp_amount,
-                );
-                stake_ekubo_position(positions_nft, stabilizer, user, position_id);
+        let user = mainnet::MULTISIG;
+        let lp_amount: u256 = (1000 * WAD_ONE).into();
+        let (position_id, position_liquidity) = create_valid_ekubo_position(
+            mainnet::SHRINE, mainnet::EKUBO_POSITIONS, user, lp_amount,
+        );
+        stake_ekubo_position(positions_nft, stabilizer, user, position_id);
 
-                if !(*surplus_before_stake) {
-                    create_surplus(mainnet::SHRINE, surplus);
-                }
+        if !(*surplus_before_stake) {
+            create_surplus(mainnet::SHRINE, surplus);
+        }
 
-                let before_user_yin: u256 = yin.balance_of(user);
-                let before_total_liquidity: u128 = stabilizer.get_total_liquidity();
+        let before_user_yin: u256 = yin.balance_of(user);
+        let before_total_liquidity: u128 = stabilizer.get_total_liquidity();
 
-                start_cheat_caller_address(stabilizer.contract_address, user);
-                stabilizer.claim();
-                stop_cheat_caller_address(stabilizer.contract_address);
+        start_cheat_caller_address(stabilizer.contract_address, user);
+        stabilizer.claim();
+        stop_cheat_caller_address(stabilizer.contract_address);
 
-                let after_user_yin: u256 = yin.balance_of(user);
-                let claimed_yin_amt = after_user_yin - before_user_yin;
-                let error_margin: u256 = 1;
-                assert_equalish(
-                    claimed_yin_amt, surplus.into(), error_margin, 'Wrong claimed yin balance',
-                );
+        let after_user_yin: u256 = yin.balance_of(user);
+        let claimed_yin_amt = after_user_yin - before_user_yin;
+        let error_margin: u256 = 1;
+        assert_equalish(
+            claimed_yin_amt, surplus.into(), error_margin, 'Wrong claimed yin balance',
+        );
 
-                let yield_state = stabilizer.get_yield_state();
-                let expected_cumulative = get_cumulative_delta(surplus.into(), position_liquidity);
-                assert_eq!(
-                    yield_state.yin_per_liquidity, expected_cumulative, "Wrong yin/liquidity",
-                );
+        let yield_state = stabilizer.get_yield_state();
+        let expected_cumulative = get_cumulative_delta(surplus.into(), position_liquidity);
+        assert_eq!(
+            yield_state.yin_per_liquidity, expected_cumulative, "Wrong yin/liquidity",
+        );
 
-                let expected_yin_balance_snapshot = surplus.into() - claimed_yin_amt;
-                assert_eq!(
-                    yield_state.yin_balance_snapshot,
-                    expected_yin_balance_snapshot,
-                    "Wrong yin balance snapshot",
-                );
+        let expected_yin_balance_snapshot = surplus.into() - claimed_yin_amt;
+        assert_eq!(
+            yield_state.yin_balance_snapshot,
+            expected_yin_balance_snapshot,
+            "Wrong yin balance snapshot",
+        );
 
-                let stake = stabilizer.get_stake(user);
-                assert_eq!(
-                    stake.yin_per_liquidity_snapshot,
-                    yield_state.yin_per_liquidity,
-                    "Wrong Stake last cumulative",
-                );
+        let stake = stabilizer.get_stake(user);
+        assert_eq!(
+            stake.yin_per_liquidity_snapshot,
+            yield_state.yin_per_liquidity,
+            "Wrong Stake last cumulative",
+        );
 
-                let expected_yield_state_at_harvest = YieldState {
-                    yin_balance_snapshot: yin.balance_of(stabilizer.contract_address)
-                        + claimed_yin_amt,
-                    yin_per_liquidity: yield_state.yin_per_liquidity,
-                };
-                let expected_events = array![
-                    (
-                        stabilizer.contract_address,
-                        stabilizer_contract::Event::Claimed(
-                            stabilizer_contract::Claimed { user, amount: claimed_yin_amt },
-                        ),
-                    ),
-                    (
-                        stabilizer.contract_address,
-                        stabilizer_contract::Event::YieldStateUpdated(
-                            stabilizer_contract::YieldStateUpdated {
-                                yield_state: expected_yield_state_at_harvest,
-                            },
-                        ),
-                    ),
-                    (
-                        stabilizer.contract_address,
-                        stabilizer_contract::Event::Harvested(
-                            stabilizer_contract::Harvested {
-                                total_liquidity: before_total_liquidity, amount: surplus.into(),
-                            },
-                        ),
-                    ),
-                    (
-                        stabilizer.contract_address,
-                        stabilizer_contract::Event::YieldStateUpdated(
-                            stabilizer_contract::YieldStateUpdated { yield_state },
-                        ),
-                    ),
-                ];
-                spy.assert_emitted(@expected_events);
-
-                // Nothing happens if user claims again
-                start_cheat_caller_address(stabilizer.contract_address, user);
-                stabilizer.claim();
-                stop_cheat_caller_address(stabilizer.contract_address);
-
-                assert_eq!(yin.balance_of(user), after_user_yin, "Yin balance changed");
-                assert_eq!(stabilizer.get_stake(user), stake, "Stake changed");
-            },
-            Option::None => { break; },
+        let expected_yield_state_at_harvest = YieldState {
+            yin_balance_snapshot: yin.balance_of(stabilizer.contract_address)
+                + claimed_yin_amt,
+            yin_per_liquidity: yield_state.yin_per_liquidity,
         };
-    };
+        let expected_events = array![
+            (
+                stabilizer.contract_address,
+                stabilizer_contract::Event::Claimed(
+                    stabilizer_contract::Claimed { user, amount: claimed_yin_amt },
+                ),
+            ),
+            (
+                stabilizer.contract_address,
+                stabilizer_contract::Event::YieldStateUpdated(
+                    stabilizer_contract::YieldStateUpdated {
+                        yield_state: expected_yield_state_at_harvest,
+                    },
+                ),
+            ),
+            (
+                stabilizer.contract_address,
+                stabilizer_contract::Event::Harvested(
+                    stabilizer_contract::Harvested {
+                        total_liquidity: before_total_liquidity, amount: surplus.into(),
+                    },
+                ),
+            ),
+            (
+                stabilizer.contract_address,
+                stabilizer_contract::Event::YieldStateUpdated(
+                    stabilizer_contract::YieldStateUpdated { yield_state },
+                ),
+            ),
+        ];
+        spy.assert_emitted(@expected_events);
+
+        // Nothing happens if user claims again
+        start_cheat_caller_address(stabilizer.contract_address, user);
+        stabilizer.claim();
+        stop_cheat_caller_address(stabilizer.contract_address);
+
+        assert_eq!(yin.balance_of(user), after_user_yin, "Yin balance changed");
+        assert_eq!(stabilizer.get_stake(user), stake, "Stake changed");
+    }
 }
 
 #[test]
@@ -615,7 +610,6 @@ fn test_multi_users() {
     let user2 = *users.at(1);
     let user3 = *users.at(2);
 
-    let mut users_copy = users;
     let mut users_yin_amts_copy = users_yin_amts;
 
     let mut users_position_ids: Array<u64> = array![];
@@ -623,26 +617,21 @@ fn test_multi_users() {
     let mut expected_total_liquidity = 0_u128;
 
     // Step 1: Three users stakes
-    loop {
-        match users_copy.pop_front() {
-            Option::Some(user) => {
-                let user_yin_amt = *users_yin_amts_copy.pop_front().unwrap();
+    for user in users {
+        let user_yin_amt = *users_yin_amts_copy.pop_front().unwrap();
 
-                let (user_position_id, user_liquidity) = create_valid_ekubo_position(
-                    yin.contract_address, mainnet::EKUBO_POSITIONS, *user, user_yin_amt,
-                );
-                stake_ekubo_position(positions_nft, stabilizer, *user, user_position_id);
+        let (user_position_id, user_liquidity) = create_valid_ekubo_position(
+            yin.contract_address, mainnet::EKUBO_POSITIONS, *user, user_yin_amt,
+        );
+        stake_ekubo_position(positions_nft, stabilizer, *user, user_position_id);
 
-                let stake = stabilizer.get_stake(*user);
-                assert_eq!(stake.liquidity, user_liquidity, "Wrong user liquidity");
-                assert(stake.yin_per_liquidity_snapshot.is_zero(), 'Wrong user yin/liquidity');
+        let stake = stabilizer.get_stake(*user);
+        assert_eq!(stake.liquidity, user_liquidity, "Wrong user liquidity");
+        assert(stake.yin_per_liquidity_snapshot.is_zero(), 'Wrong user yin/liquidity');
 
-                users_position_ids.append(user_position_id);
-                users_liquidity.append(user_liquidity);
-                expected_total_liquidity += user_liquidity;
-            },
-            Option::None => { break; },
-        };
+        users_position_ids.append(user_position_id);
+        users_liquidity.append(user_liquidity);
+        expected_total_liquidity += user_liquidity;
     }
 
     let pool_info = fdp.get_pool_info(stabilizer.contract_address);
