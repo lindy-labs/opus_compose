@@ -1,6 +1,6 @@
 use opus_compose::addresses::mainnet;
 use sncast_std::{
-    declare, DeclareResultTrait, deploy, FeeSettings, EthFeeSettings, DisplayContractAddress,
+    DeclareResultTrait, DisplayContractAddress, EthFeeSettings, FeeSettings, declare, deploy,
 };
 
 fn main() {
@@ -10,11 +10,11 @@ fn main() {
         .expect('failed lever declare');
 
     let lever_calldata: Array<felt252> = array![
-        mainnet::shrine().into(),
-        mainnet::sentinel().into(),
-        mainnet::abbot().into(),
-        mainnet::flash_mint().into(),
-        mainnet::ekubo_router().into(),
+        mainnet::SHRINE.into(),
+        mainnet::SENTINEL.into(),
+        mainnet::ABBOT.into(),
+        mainnet::FLASH_MINT.into(),
+        mainnet::EKUBO_ROUTER.into(),
     ];
     let deploy_lever = deploy(
         *declare_lever.class_hash(),

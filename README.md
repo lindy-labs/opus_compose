@@ -14,7 +14,7 @@ This repository contains contracts that extend the core functionality of [Opus](
 The test suite relies on fork testing using mainnet. You will need to set the `NODE_URL` environment variable before running the tests.
 
 ```
-export NODE_URL=https://starknet-mainnet.public.blastapi.io/rpc/v0_7
+export NODE_URL=https://starknet-mainnet.public.blastapi.io/rpc/v0_8
 scarb test
 ```
 
@@ -22,7 +22,7 @@ scarb test
 
 ### Mainnet
 
-| Module | Address |
-| ------ | --------|
-| Stabilizer [CASH-USDC] | `0x03dbe818c99cf6658f23ef70656d64cce650fdb97105b96876d7e421fa25a528` |
-| Stabilizer Frontend Data Provider | `0x062e44bdb480ec9e62ad1bdb2638c011c1c02840d9db349f7f048fc9286372a1` |
+| Module | Address | Version |
+| ------ | --------|---------|
+| Stabilizer [CASH-USDC] | `0x03dbe818c99cf6658f23ef70656d64cce650fdb97105b96876d7e421fa25a528` | `v1.0.0` |
+| Stabilizer Frontend Data Provider | `0x062e44bdb480ec9e62ad1bdb2638c011c1c02840d9db349f7f048fc9286372a1` | `v1.0.0` |

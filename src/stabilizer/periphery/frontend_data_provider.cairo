@@ -38,24 +38,24 @@ pub trait IFrontendDataProvider<TContractState> {
 
 #[starknet::contract]
 pub mod stabilizer_fdp {
-    use core::num::traits::{Pow, WideMul, Zero};
     use core::integer::{u512, u512_safe_div_rem_by_u256};
+    use core::num::traits::{Pow, WideMul, Zero};
     use ekubo::interfaces::core::{ICoreDispatcher, ICoreDispatcherTrait};
     use ekubo::interfaces::mathlib::{IMathLibDispatcherTrait, dispatcher as mathlib};
     use ekubo::types::bounds::Bounds;
     use ekubo::types::keys::PoolKey;
-    use ekubo::types::pool_price::{PoolPrice};
+    use ekubo::types::pool_price::PoolPrice;
     use opus::utils::math::convert_ekubo_oracle_price_to_wad;
     use opus_compose::addresses::mainnet;
     use opus_compose::interfaces::erc20::{IERC20Dispatcher, IERC20DispatcherTrait};
     use opus_compose::stabilizer::interfaces::stabilizer::{
         IStabilizerDispatcher, IStabilizerDispatcherTrait,
     };
-    use opus_compose::stabilizer::types::{PoolInfo, Stake, YieldState};
     use opus_compose::stabilizer::math::get_accumulated_yin;
+    use opus_compose::stabilizer::types::{PoolInfo, Stake, YieldState};
     use starknet::ContractAddress;
+    use wadray::{Ray, WAD_DECIMALS, Wad, rmul_wr};
     use super::{IFrontendDataProvider, IOracleDispatcher, IOracleDispatcherTrait};
-    use wadray::{rmul_wr, Wad, WAD_DECIMALS, Ray};
 
     const TWO_POW_128: u256 = 0x100000000000000000000000000000000;
     const TWAP_PERIOD: u64 = 5 * 60; // 5 minutes x 60s
@@ -134,7 +134,7 @@ pub mod stabilizer_fdp {
         ) -> PoolInfo {
             let math = mathlib();
 
-            let ekubo_core = ICoreDispatcher { contract_address: mainnet::ekubo_core() };
+            let ekubo_core = ICoreDispatcher { contract_address: mainnet::EKUBO_CORE };
             let pool_liquidity: u128 = ekubo_core.get_pool_liquidity(pool_key);
             let pool_price: PoolPrice = ekubo_core.get_pool_price(pool_key);
 
@@ -164,7 +164,7 @@ pub mod stabilizer_fdp {
             self: @ContractState, pool_key: PoolKey, pool_info: PoolInfo,
         ) -> Wad {
             let (other_token, other_token_amount, yin_amount) = if pool_key
-                .token0 == mainnet::shrine() {
+                .token0 == mainnet::SHRINE {
                 (pool_key.token1, pool_info.token1_amount, pool_info.token0_amount)
             } else {
                 (pool_key.token0, pool_info.token0_amount, pool_info.token1_amount)
@@ -173,8 +173,8 @@ pub mod stabilizer_fdp {
             let other_token_decimals: u8 = IERC20Dispatcher { contract_address: other_token }
                 .decimals();
             let other_token_price: Wad = convert_ekubo_oracle_price_to_wad(
-                IOracleDispatcher { contract_address: mainnet::ekubo_oracle() }
-                    .get_price_x128_over_last(other_token, mainnet::shrine(), TWAP_PERIOD),
+                IOracleDispatcher { contract_address: mainnet::EKUBO_ORACLE }
+                    .get_price_x128_over_last(other_token, mainnet::SHRINE, TWAP_PERIOD),
                 other_token_decimals,
                 WAD_DECIMALS,
             );

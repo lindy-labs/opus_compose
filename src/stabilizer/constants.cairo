@@ -12,8 +12,8 @@ pub const UPPER_TICK_MAG: u128 = 27626000; // 1.00505
 
 pub fn POOL_KEY() -> PoolKey {
     PoolKey {
-        token0: mainnet::shrine(),
-        token1: mainnet::usdc(),
+        token0: mainnet::SHRINE,
+        token1: mainnet::USDC,
         fee: POOL_FEE,
         tick_spacing: POOL_TICK_SPACING,
         extension: Zero::zero(),

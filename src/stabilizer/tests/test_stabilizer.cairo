@@ -3,29 +3,26 @@ use ekubo::interfaces::erc721::{IERC721Dispatcher, IERC721DispatcherTrait};
 use ekubo::types::bounds::Bounds;
 use ekubo::types::i129::i129;
 use opus::interfaces::{
-    IShrineDispatcher, IShrineDispatcherTrait, IEqualizerDispatcher, IEqualizerDispatcherTrait,
+    IEqualizerDispatcher, IEqualizerDispatcherTrait, IShrineDispatcher, IShrineDispatcherTrait,
 };
 use opus::utils::assert_equalish;
 use opus_compose::addresses::mainnet;
 use opus_compose::interfaces::erc20::{IERC20Dispatcher, IERC20DispatcherTrait};
-use opus_compose::stabilizer::constants::{BOUNDS, LOWER_TICK_MAG, UPPER_TICK_MAG, POOL_KEY};
+use opus_compose::stabilizer::constants::{BOUNDS, LOWER_TICK_MAG, POOL_KEY, UPPER_TICK_MAG};
 use opus_compose::stabilizer::contracts::stabilizer::stabilizer as stabilizer_contract;
 use opus_compose::stabilizer::interfaces::stabilizer::IStabilizerDispatcherTrait;
 use opus_compose::stabilizer::math::get_cumulative_delta;
-use opus_compose::stabilizer::periphery::frontend_data_provider::{
-    IFrontendDataProviderDispatcher, IFrontendDataProviderDispatcherTrait,
+use opus_compose::stabilizer::periphery::frontend_data_provider::IFrontendDataProviderDispatcherTrait;
+use opus_compose::stabilizer::tests::utils::stabilizer_utils::{
+    StabilizerTestConfig, USDC_DECIMALS_DIFF_SCALE, create_ekubo_position, create_surplus,
+    create_valid_ekubo_position, fund_three_users, setup, stake_ekubo_position,
 };
 use opus_compose::stabilizer::types::{Stake, YieldState};
-use opus_compose::stabilizer::tests::utils::stabilizer_utils::{
-    create_surplus, create_ekubo_position, create_valid_ekubo_position, fund_three_users, setup,
-    stake_ekubo_position, StabilizerTestConfig, USDC_DECIMALS_DIFF_SCALE,
-};
 use snforge_std::{
-    declare, DeclareResultTrait, start_cheat_caller_address, stop_cheat_caller_address, spy_events,
-    EventSpyAssertionsTrait,
+    DeclareResultTrait, EventSpyAssertionsTrait, declare, spy_events, start_cheat_caller_address,
+    stop_cheat_caller_address,
 };
-use starknet::contract_address_const;
-use wadray::{Wad, WAD_ONE};
+use wadray::{WAD_ONE, Wad};
 
 
 #[test]
@@ -47,20 +44,20 @@ fn test_setup() {
 #[fork("MAINNET_STABILIZER")]
 fn test_stake() {
     let StabilizerTestConfig { stabilizer, .. } = setup(Option::None);
-    let positions_nft = IERC721Dispatcher { contract_address: mainnet::ekubo_positions_nft() };
-    let shrine = IShrineDispatcher { contract_address: mainnet::shrine() };
+    let positions_nft = IERC721Dispatcher { contract_address: mainnet::EKUBO_POSITIONS_NFT };
+    let shrine = IShrineDispatcher { contract_address: mainnet::SHRINE };
 
     let mut spy = spy_events();
 
     let surplus: Wad = (1000 * WAD_ONE).into();
-    create_surplus(mainnet::shrine(), surplus);
+    create_surplus(mainnet::SHRINE, surplus);
 
     let before_surplus = shrine.get_budget();
 
-    let user = mainnet::multisig();
+    let user = mainnet::MULTISIG;
     let lp_amount: u256 = (1000 * WAD_ONE).into();
     let (position_id, position_liquidity) = create_valid_ekubo_position(
-        mainnet::shrine(), mainnet::ekubo_positions(), user, lp_amount,
+        mainnet::SHRINE, mainnet::EKUBO_POSITIONS, user, lp_amount,
     );
 
     let before_total_liquidity = stabilizer.get_total_liquidity();
@@ -107,7 +104,7 @@ fn test_stake() {
 #[fork("MAINNET_STABILIZER")]
 #[should_panic(expected: "STB: No liquidity found")]
 fn test_stake_wrong_lower_tick_fail() {
-    let user = mainnet::multisig();
+    let user = mainnet::MULTISIG;
     let lp_amount: u256 = (1000 * WAD_ONE).into();
 
     let lower_tick_mag = LOWER_TICK_MAG + 200; // 0.989886
@@ -116,7 +113,7 @@ fn test_stake_wrong_lower_tick_fail() {
         upper: i129 { mag: UPPER_TICK_MAG, sign: true },
     };
     let (position_id, _) = create_ekubo_position(
-        mainnet::shrine(), mainnet::ekubo_positions(), user, POOL_KEY(), bounds, lp_amount,
+        mainnet::SHRINE, mainnet::EKUBO_POSITIONS, user, POOL_KEY(), bounds, lp_amount,
     );
 
     let StabilizerTestConfig { stabilizer, .. } = setup(Option::None);
@@ -129,7 +126,7 @@ fn test_stake_wrong_lower_tick_fail() {
 #[fork("MAINNET_STABILIZER")]
 #[should_panic(expected: "STB: No liquidity found")]
 fn test_stake_wrong_upper_tick_fail() {
-    let user = mainnet::multisig();
+    let user = mainnet::MULTISIG;
     let lp_amount: u256 = (1000 * WAD_ONE).into();
 
     let upper_tick_mag = UPPER_TICK_MAG + 200;
@@ -138,7 +135,7 @@ fn test_stake_wrong_upper_tick_fail() {
         upper: i129 { mag: upper_tick_mag, sign: true },
     };
     let (position_id, _) = create_ekubo_position(
-        mainnet::shrine(), mainnet::ekubo_positions(), user, POOL_KEY(), bounds, lp_amount,
+        mainnet::SHRINE, mainnet::EKUBO_POSITIONS, user, POOL_KEY(), bounds, lp_amount,
     );
 
     let StabilizerTestConfig { stabilizer, .. } = setup(Option::None);
@@ -152,19 +149,19 @@ fn test_stake_wrong_upper_tick_fail() {
 #[should_panic(expected: "STB: Not owner")]
 fn test_non_owner_stake_fail() {
     let StabilizerTestConfig { stabilizer, .. } = setup(Option::None);
-    let positions_nft = IERC721Dispatcher { contract_address: mainnet::ekubo_positions_nft() };
+    let positions_nft = IERC721Dispatcher { contract_address: mainnet::EKUBO_POSITIONS_NFT };
 
-    let user = mainnet::multisig();
+    let user = mainnet::MULTISIG;
     let lp_amount: u256 = (1000 * WAD_ONE).into();
     let (position_id, _) = create_valid_ekubo_position(
-        mainnet::shrine(), mainnet::ekubo_positions(), user, lp_amount,
+        mainnet::SHRINE, mainnet::EKUBO_POSITIONS, user, lp_amount,
     );
 
     start_cheat_caller_address(positions_nft.contract_address, user);
     positions_nft.approve(stabilizer.contract_address, position_id.into());
     stop_cheat_caller_address(positions_nft.contract_address);
 
-    let non_owner = contract_address_const::<'non owner'>();
+    let non_owner = 'non owner'.try_into().unwrap();
     start_cheat_caller_address(stabilizer.contract_address, non_owner);
     stabilizer.stake(position_id);
 }
@@ -174,18 +171,18 @@ fn test_non_owner_stake_fail() {
 #[should_panic(expected: "STB: Already staked")]
 fn test_double_stake_fail() {
     let StabilizerTestConfig { stabilizer, .. } = setup(Option::None);
-    let positions_nft = IERC721Dispatcher { contract_address: mainnet::ekubo_positions_nft() };
+    let positions_nft = IERC721Dispatcher { contract_address: mainnet::EKUBO_POSITIONS_NFT };
 
-    let user = mainnet::multisig();
+    let user = mainnet::MULTISIG;
     let lp_amount: u256 = (1000 * WAD_ONE).into();
 
     let (position_id, _) = create_valid_ekubo_position(
-        mainnet::shrine(), mainnet::ekubo_positions(), user, lp_amount,
+        mainnet::SHRINE, mainnet::EKUBO_POSITIONS, user, lp_amount,
     );
     stake_ekubo_position(positions_nft, stabilizer, user, position_id);
 
     let (position_id, _) = create_valid_ekubo_position(
-        mainnet::shrine(), mainnet::ekubo_positions(), user, lp_amount,
+        mainnet::SHRINE, mainnet::EKUBO_POSITIONS, user, lp_amount,
     );
     stake_ekubo_position(positions_nft, stabilizer, user, position_id);
 }
@@ -196,11 +193,11 @@ fn test_double_stake_fail() {
 fn test_stake_unapproved_fail() {
     let StabilizerTestConfig { stabilizer, .. } = setup(Option::None);
 
-    let user = mainnet::multisig();
+    let user = mainnet::MULTISIG;
     let lp_amount: u256 = (1000 * WAD_ONE).into();
 
     let (position_id, _) = create_valid_ekubo_position(
-        mainnet::shrine(), mainnet::ekubo_positions(), user, lp_amount,
+        mainnet::SHRINE, mainnet::EKUBO_POSITIONS, user, lp_amount,
     );
 
     start_cheat_caller_address(stabilizer.contract_address, user);
@@ -217,138 +214,128 @@ fn test_stake_unapproved_fail() {
 fn test_claim() {
     let stabilizer_class = *(declare("stabilizer").unwrap().contract_class());
 
-    let positions_nft = IERC721Dispatcher { contract_address: mainnet::ekubo_positions_nft() };
-    let yin = IERC20Dispatcher { contract_address: mainnet::shrine() };
+    let positions_nft = IERC721Dispatcher { contract_address: mainnet::EKUBO_POSITIONS_NFT };
+    let yin = IERC20Dispatcher { contract_address: mainnet::SHRINE };
 
-    let mut surplus_before_stake_cases = array![true, false].span();
+    let surplus_before_stake_cases = array![true, false].span();
 
-    loop {
-        match surplus_before_stake_cases.pop_front() {
-            Option::Some(surplus_before_stake) => {
-                let StabilizerTestConfig { stabilizer, .. } = setup(Option::Some(stabilizer_class));
-                let mut spy = spy_events();
+    for surplus_before_stake in surplus_before_stake_cases {
+        let StabilizerTestConfig { stabilizer, .. } = setup(Option::Some(stabilizer_class));
+        let mut spy = spy_events();
 
-                let surplus: Wad = (1000 * WAD_ONE).into();
-                if *surplus_before_stake {
-                    create_surplus(mainnet::shrine(), surplus);
-                    let equalizer = IEqualizerDispatcher { contract_address: mainnet::equalizer() };
-                    equalizer.equalize();
-                    equalizer.allocate();
-                }
+        let surplus: Wad = (1000 * WAD_ONE).into();
+        if *surplus_before_stake {
+            create_surplus(mainnet::SHRINE, surplus);
+            let equalizer = IEqualizerDispatcher { contract_address: mainnet::EQUALIZER };
+            equalizer.equalize();
+            equalizer.allocate();
+        }
 
-                let user = mainnet::multisig();
-                let lp_amount: u256 = (1000 * WAD_ONE).into();
-                let (position_id, position_liquidity) = create_valid_ekubo_position(
-                    mainnet::shrine(), mainnet::ekubo_positions(), user, lp_amount,
-                );
-                stake_ekubo_position(positions_nft, stabilizer, user, position_id);
+        let user = mainnet::MULTISIG;
+        let lp_amount: u256 = (1000 * WAD_ONE).into();
+        let (position_id, position_liquidity) = create_valid_ekubo_position(
+            mainnet::SHRINE, mainnet::EKUBO_POSITIONS, user, lp_amount,
+        );
+        stake_ekubo_position(positions_nft, stabilizer, user, position_id);
 
-                if !(*surplus_before_stake) {
-                    create_surplus(mainnet::shrine(), surplus);
-                }
+        if !(*surplus_before_stake) {
+            create_surplus(mainnet::SHRINE, surplus);
+        }
 
-                let before_user_yin: u256 = yin.balance_of(user);
-                let before_total_liquidity: u128 = stabilizer.get_total_liquidity();
+        let before_user_yin: u256 = yin.balance_of(user);
+        let before_total_liquidity: u128 = stabilizer.get_total_liquidity();
 
-                start_cheat_caller_address(stabilizer.contract_address, user);
-                stabilizer.claim();
-                stop_cheat_caller_address(stabilizer.contract_address);
+        start_cheat_caller_address(stabilizer.contract_address, user);
+        stabilizer.claim();
+        stop_cheat_caller_address(stabilizer.contract_address);
 
-                let after_user_yin: u256 = yin.balance_of(user);
-                let claimed_yin_amt = after_user_yin - before_user_yin;
-                let error_margin: u256 = 1;
-                assert_equalish(
-                    claimed_yin_amt, surplus.into(), error_margin, 'Wrong claimed yin balance',
-                );
+        let after_user_yin: u256 = yin.balance_of(user);
+        let claimed_yin_amt = after_user_yin - before_user_yin;
+        let error_margin: u256 = 1;
+        assert_equalish(claimed_yin_amt, surplus.into(), error_margin, 'Wrong claimed yin balance');
 
-                let yield_state = stabilizer.get_yield_state();
-                let expected_cumulative = get_cumulative_delta(surplus.into(), position_liquidity);
-                assert_eq!(
-                    yield_state.yin_per_liquidity, expected_cumulative, "Wrong yin/liquidity",
-                );
+        let yield_state = stabilizer.get_yield_state();
+        let expected_cumulative = get_cumulative_delta(surplus.into(), position_liquidity);
+        assert_eq!(yield_state.yin_per_liquidity, expected_cumulative, "Wrong yin/liquidity");
 
-                let expected_yin_balance_snapshot = surplus.into() - claimed_yin_amt;
-                assert_eq!(
-                    yield_state.yin_balance_snapshot,
-                    expected_yin_balance_snapshot,
-                    "Wrong yin balance snapshot",
-                );
+        let expected_yin_balance_snapshot = surplus.into() - claimed_yin_amt;
+        assert_eq!(
+            yield_state.yin_balance_snapshot,
+            expected_yin_balance_snapshot,
+            "Wrong yin balance snapshot",
+        );
 
-                let stake = stabilizer.get_stake(user);
-                assert_eq!(
-                    stake.yin_per_liquidity_snapshot,
-                    yield_state.yin_per_liquidity,
-                    "Wrong Stake last cumulative",
-                );
+        let stake = stabilizer.get_stake(user);
+        assert_eq!(
+            stake.yin_per_liquidity_snapshot,
+            yield_state.yin_per_liquidity,
+            "Wrong Stake last cumulative",
+        );
 
-                let expected_yield_state_at_harvest = YieldState {
-                    yin_balance_snapshot: yin.balance_of(stabilizer.contract_address)
-                        + claimed_yin_amt,
-                    yin_per_liquidity: yield_state.yin_per_liquidity,
-                };
-                let expected_events = array![
-                    (
-                        stabilizer.contract_address,
-                        stabilizer_contract::Event::Claimed(
-                            stabilizer_contract::Claimed { user, amount: claimed_yin_amt },
-                        ),
-                    ),
-                    (
-                        stabilizer.contract_address,
-                        stabilizer_contract::Event::YieldStateUpdated(
-                            stabilizer_contract::YieldStateUpdated {
-                                yield_state: expected_yield_state_at_harvest,
-                            },
-                        ),
-                    ),
-                    (
-                        stabilizer.contract_address,
-                        stabilizer_contract::Event::Harvested(
-                            stabilizer_contract::Harvested {
-                                total_liquidity: before_total_liquidity, amount: surplus.into(),
-                            },
-                        ),
-                    ),
-                    (
-                        stabilizer.contract_address,
-                        stabilizer_contract::Event::YieldStateUpdated(
-                            stabilizer_contract::YieldStateUpdated { yield_state },
-                        ),
-                    ),
-                ];
-                spy.assert_emitted(@expected_events);
-
-                // Nothing happens if user claims again
-                start_cheat_caller_address(stabilizer.contract_address, user);
-                stabilizer.claim();
-                stop_cheat_caller_address(stabilizer.contract_address);
-
-                assert_eq!(yin.balance_of(user), after_user_yin, "Yin balance changed");
-                assert_eq!(stabilizer.get_stake(user), stake, "Stake changed");
-            },
-            Option::None => { break; },
+        let expected_yield_state_at_harvest = YieldState {
+            yin_balance_snapshot: yin.balance_of(stabilizer.contract_address) + claimed_yin_amt,
+            yin_per_liquidity: yield_state.yin_per_liquidity,
         };
-    };
+        let expected_events = array![
+            (
+                stabilizer.contract_address,
+                stabilizer_contract::Event::Claimed(
+                    stabilizer_contract::Claimed { user, amount: claimed_yin_amt },
+                ),
+            ),
+            (
+                stabilizer.contract_address,
+                stabilizer_contract::Event::YieldStateUpdated(
+                    stabilizer_contract::YieldStateUpdated {
+                        yield_state: expected_yield_state_at_harvest,
+                    },
+                ),
+            ),
+            (
+                stabilizer.contract_address,
+                stabilizer_contract::Event::Harvested(
+                    stabilizer_contract::Harvested {
+                        total_liquidity: before_total_liquidity, amount: surplus.into(),
+                    },
+                ),
+            ),
+            (
+                stabilizer.contract_address,
+                stabilizer_contract::Event::YieldStateUpdated(
+                    stabilizer_contract::YieldStateUpdated { yield_state },
+                ),
+            ),
+        ];
+        spy.assert_emitted(@expected_events);
+
+        // Nothing happens if user claims again
+        start_cheat_caller_address(stabilizer.contract_address, user);
+        stabilizer.claim();
+        stop_cheat_caller_address(stabilizer.contract_address);
+
+        assert_eq!(yin.balance_of(user), after_user_yin, "Yin balance changed");
+        assert_eq!(stabilizer.get_stake(user), stake, "Stake changed");
+    }
 }
 
 #[test]
 #[fork("MAINNET_STABILIZER")]
 fn test_claim_small_surplus_precision_loss() {
     let StabilizerTestConfig { stabilizer, .. } = setup(Option::None);
-    let positions_nft = IERC721Dispatcher { contract_address: mainnet::ekubo_positions_nft() };
-    let yin = IERC20Dispatcher { contract_address: mainnet::shrine() };
+    let positions_nft = IERC721Dispatcher { contract_address: mainnet::EKUBO_POSITIONS_NFT };
+    let yin = IERC20Dispatcher { contract_address: mainnet::SHRINE };
 
-    let user = mainnet::multisig();
+    let user = mainnet::MULTISIG;
     let lp_amount: u256 = 1000000000000_u128.into(); // 10 ** 12 wei
     let (position_id, _) = create_valid_ekubo_position(
-        mainnet::shrine(), mainnet::ekubo_positions(), user, lp_amount,
+        mainnet::SHRINE, mainnet::EKUBO_POSITIONS, user, lp_amount,
     );
     stake_ekubo_position(positions_nft, stabilizer, user, position_id);
 
     // Equalizer has a 1 wei of CASH at the given block, so we can allocate it directly
     let surplus: Wad = 1_u128.into(); // 1 wei (Wad)
-    assert_eq!(yin.balance_of(mainnet::equalizer()), surplus.into(), "Wrong equalizer balance");
-    IEqualizerDispatcher { contract_address: mainnet::equalizer() }.allocate();
+    assert_eq!(yin.balance_of(mainnet::EQUALIZER), surplus.into(), "Wrong equalizer balance");
+    IEqualizerDispatcher { contract_address: mainnet::EQUALIZER }.allocate();
     assert_eq!(yin.balance_of(stabilizer.contract_address), surplus.into(), "Wrong stabilizer yin");
 
     let before_user_yin: u256 = yin.balance_of(user);
@@ -362,7 +349,7 @@ fn test_claim_small_surplus_precision_loss() {
     assert_eq!(after_user_yin, before_user_yin, "No precision loss");
 
     let surplus: Wad = 2_u128.into(); // 2 wei (Wad)
-    create_surplus(mainnet::shrine(), surplus);
+    create_surplus(mainnet::SHRINE, surplus);
 
     let before_user_yin = after_user_yin;
 
@@ -382,16 +369,16 @@ fn test_claim_small_surplus_precision_loss() {
 #[fork("MAINNET_STABILIZER")]
 fn test_claim_large_surplus_with_low_liquidity_no_overflow() {
     let StabilizerTestConfig { stabilizer, .. } = setup(Option::None);
-    let positions_nft = IERC721Dispatcher { contract_address: mainnet::ekubo_positions_nft() };
-    let yin = IERC20Dispatcher { contract_address: mainnet::shrine() };
+    let positions_nft = IERC721Dispatcher { contract_address: mainnet::EKUBO_POSITIONS_NFT };
+    let yin = IERC20Dispatcher { contract_address: mainnet::SHRINE };
 
     let surplus: Wad = (1000000000000 * WAD_ONE).into(); // 1_000_000_000_000 (Wad)
-    create_surplus(mainnet::shrine(), surplus);
+    create_surplus(mainnet::SHRINE, surplus);
 
-    let user = mainnet::multisig();
+    let user = mainnet::MULTISIG;
     let lp_amount: u256 = 1000000000000_u128.into(); // 10 ** 12 wei
     let (position_id, _) = create_valid_ekubo_position(
-        mainnet::shrine(), mainnet::ekubo_positions(), user, lp_amount,
+        mainnet::SHRINE, mainnet::EKUBO_POSITIONS, user, lp_amount,
     );
     stake_ekubo_position(positions_nft, stabilizer, user, position_id);
 
@@ -412,19 +399,19 @@ fn test_claim_large_surplus_with_low_liquidity_no_overflow() {
 #[should_panic(expected: "STB: No stake found")]
 fn test_non_user_claim_fail() {
     let StabilizerTestConfig { stabilizer, .. } = setup(Option::None);
-    let positions_nft = IERC721Dispatcher { contract_address: mainnet::ekubo_positions_nft() };
+    let positions_nft = IERC721Dispatcher { contract_address: mainnet::EKUBO_POSITIONS_NFT };
 
     let surplus: Wad = (1000 * WAD_ONE).into();
-    create_surplus(mainnet::shrine(), surplus);
+    create_surplus(mainnet::SHRINE, surplus);
 
-    let user = mainnet::multisig();
+    let user = mainnet::MULTISIG;
     let lp_amount: u256 = (1000 * WAD_ONE).into();
     let (position_id, _) = create_valid_ekubo_position(
-        mainnet::shrine(), mainnet::ekubo_positions(), user, lp_amount,
+        mainnet::SHRINE, mainnet::EKUBO_POSITIONS, user, lp_amount,
     );
     stake_ekubo_position(positions_nft, stabilizer, user, position_id);
 
-    let non_user = contract_address_const::<'non user'>();
+    let non_user = 'non user'.try_into().unwrap();
     start_cheat_caller_address(stabilizer.contract_address, non_user);
     stabilizer.claim();
 }
@@ -433,18 +420,18 @@ fn test_non_user_claim_fail() {
 #[fork("MAINNET_STABILIZER")]
 fn test_unstake() {
     let StabilizerTestConfig { stabilizer, .. } = setup(Option::None);
-    let positions_nft = IERC721Dispatcher { contract_address: mainnet::ekubo_positions_nft() };
-    let yin = IERC20Dispatcher { contract_address: mainnet::shrine() };
+    let positions_nft = IERC721Dispatcher { contract_address: mainnet::EKUBO_POSITIONS_NFT };
+    let yin = IERC20Dispatcher { contract_address: mainnet::SHRINE };
 
     let mut spy = spy_events();
 
     let surplus: Wad = (1000 * WAD_ONE).into();
-    create_surplus(mainnet::shrine(), surplus);
+    create_surplus(mainnet::SHRINE, surplus);
 
-    let user = mainnet::multisig();
+    let user = mainnet::MULTISIG;
     let lp_amount: u256 = (1000 * WAD_ONE).into();
     let (position_id, position_liquidity) = create_valid_ekubo_position(
-        mainnet::shrine(), mainnet::ekubo_positions(), user, lp_amount,
+        mainnet::SHRINE, mainnet::EKUBO_POSITIONS, user, lp_amount,
     );
 
     stake_ekubo_position(positions_nft, stabilizer, user, position_id);
@@ -528,15 +515,15 @@ fn test_unstake() {
 #[should_panic(expected: "STB: No stake found")]
 fn test_claim_after_unstake_fail() {
     let StabilizerTestConfig { stabilizer, .. } = setup(Option::None);
-    let positions_nft = IERC721Dispatcher { contract_address: mainnet::ekubo_positions_nft() };
+    let positions_nft = IERC721Dispatcher { contract_address: mainnet::EKUBO_POSITIONS_NFT };
 
     let surplus: Wad = (1000 * WAD_ONE).into();
-    create_surplus(mainnet::shrine(), surplus);
+    create_surplus(mainnet::SHRINE, surplus);
 
-    let user = mainnet::multisig();
+    let user = mainnet::MULTISIG;
     let lp_amount: u256 = (1000 * WAD_ONE).into();
     let (position_id, _) = create_valid_ekubo_position(
-        mainnet::shrine(), mainnet::ekubo_positions(), user, lp_amount,
+        mainnet::SHRINE, mainnet::EKUBO_POSITIONS, user, lp_amount,
     );
 
     stake_ekubo_position(positions_nft, stabilizer, user, position_id);
@@ -551,15 +538,15 @@ fn test_claim_after_unstake_fail() {
 #[should_panic(expected: "STB: No stake found")]
 fn test_double_unstake_fail() {
     let StabilizerTestConfig { stabilizer, .. } = setup(Option::None);
-    let positions_nft = IERC721Dispatcher { contract_address: mainnet::ekubo_positions_nft() };
+    let positions_nft = IERC721Dispatcher { contract_address: mainnet::EKUBO_POSITIONS_NFT };
 
     let surplus: Wad = (1000 * WAD_ONE).into();
-    create_surplus(mainnet::shrine(), surplus);
+    create_surplus(mainnet::SHRINE, surplus);
 
-    let user = mainnet::multisig();
+    let user = mainnet::MULTISIG;
     let lp_amount: u256 = (1000 * WAD_ONE).into();
     let (position_id, _) = create_valid_ekubo_position(
-        mainnet::shrine(), mainnet::ekubo_positions(), user, lp_amount,
+        mainnet::SHRINE, mainnet::EKUBO_POSITIONS, user, lp_amount,
     );
 
     stake_ekubo_position(positions_nft, stabilizer, user, position_id);
@@ -574,19 +561,19 @@ fn test_double_unstake_fail() {
 #[should_panic(expected: "STB: No stake found")]
 fn test_non_user_unstake_fail() {
     let StabilizerTestConfig { stabilizer, .. } = setup(Option::None);
-    let positions_nft = IERC721Dispatcher { contract_address: mainnet::ekubo_positions_nft() };
+    let positions_nft = IERC721Dispatcher { contract_address: mainnet::EKUBO_POSITIONS_NFT };
 
     let surplus: Wad = (1000 * WAD_ONE).into();
-    create_surplus(mainnet::shrine(), surplus);
+    create_surplus(mainnet::SHRINE, surplus);
 
-    let user = mainnet::multisig();
+    let user = mainnet::MULTISIG;
     let lp_amount: u256 = (1000 * WAD_ONE).into();
     let (position_id, _) = create_valid_ekubo_position(
-        mainnet::shrine(), mainnet::ekubo_positions(), user, lp_amount,
+        mainnet::SHRINE, mainnet::EKUBO_POSITIONS, user, lp_amount,
     );
     stake_ekubo_position(positions_nft, stabilizer, user, position_id);
 
-    let non_user = contract_address_const::<'non user'>();
+    let non_user = 'non user'.try_into().unwrap();
     start_cheat_caller_address(stabilizer.contract_address, non_user);
     stabilizer.unstake();
 }
@@ -604,21 +591,20 @@ fn test_non_user_unstake_fail() {
 #[fork("MAINNET_STABILIZER")]
 fn test_multi_users() {
     let StabilizerTestConfig { stabilizer, fdp } = setup(Option::None);
-    let positions_nft = IERC721Dispatcher { contract_address: mainnet::ekubo_positions_nft() };
-    let yin = IERC20Dispatcher { contract_address: mainnet::shrine() };
+    let positions_nft = IERC721Dispatcher { contract_address: mainnet::EKUBO_POSITIONS_NFT };
+    let yin = IERC20Dispatcher { contract_address: mainnet::SHRINE };
 
     let user1_yin_amt: u256 = (300 * WAD_ONE).into();
     let user2_yin_amt: u256 = (200 * WAD_ONE).into();
     let user3_yin_amt: u256 = (500 * WAD_ONE).into();
 
     let users_yin_amts = array![user1_yin_amt, user2_yin_amt, user3_yin_amt].span();
-    let users = fund_three_users(mainnet::shrine(), mainnet::multisig(), users_yin_amts);
+    let users = fund_three_users(mainnet::SHRINE, mainnet::MULTISIG, users_yin_amts);
 
     let user1 = *users.at(0);
     let user2 = *users.at(1);
     let user3 = *users.at(2);
 
-    let mut users_copy = users;
     let mut users_yin_amts_copy = users_yin_amts;
 
     let mut users_position_ids: Array<u64> = array![];
@@ -626,27 +612,22 @@ fn test_multi_users() {
     let mut expected_total_liquidity = 0_u128;
 
     // Step 1: Three users stakes
-    loop {
-        match users_copy.pop_front() {
-            Option::Some(user) => {
-                let user_yin_amt = *users_yin_amts_copy.pop_front().unwrap();
+    for user in users {
+        let user_yin_amt = *users_yin_amts_copy.pop_front().unwrap();
 
-                let (user_position_id, user_liquidity) = create_valid_ekubo_position(
-                    yin.contract_address, mainnet::ekubo_positions(), *user, user_yin_amt,
-                );
-                stake_ekubo_position(positions_nft, stabilizer, *user, user_position_id);
+        let (user_position_id, user_liquidity) = create_valid_ekubo_position(
+            yin.contract_address, mainnet::EKUBO_POSITIONS, *user, user_yin_amt,
+        );
+        stake_ekubo_position(positions_nft, stabilizer, *user, user_position_id);
 
-                let stake = stabilizer.get_stake(*user);
-                assert_eq!(stake.liquidity, user_liquidity, "Wrong user liquidity");
-                assert(stake.yin_per_liquidity_snapshot.is_zero(), 'Wrong user yin/liquidity');
+        let stake = stabilizer.get_stake(*user);
+        assert_eq!(stake.liquidity, user_liquidity, "Wrong user liquidity");
+        assert(stake.yin_per_liquidity_snapshot.is_zero(), 'Wrong user yin/liquidity');
 
-                users_position_ids.append(user_position_id);
-                users_liquidity.append(user_liquidity);
-                expected_total_liquidity += user_liquidity;
-            },
-            Option::None => { break; },
-        };
-    };
+        users_position_ids.append(user_position_id);
+        users_liquidity.append(user_liquidity);
+        expected_total_liquidity += user_liquidity;
+    }
 
     let pool_info = fdp.get_pool_info(stabilizer.contract_address);
     // Sanity check that the pool does not consist entirely of one token
@@ -663,7 +644,7 @@ fn test_multi_users() {
 
     // Step 2: Surplus is distributed
     let surplus: Wad = (1000 * WAD_ONE).into();
-    create_surplus(mainnet::shrine(), surplus);
+    create_surplus(mainnet::SHRINE, surplus);
 
     // Step 3: Second user unstakes
     let user2_stake = stabilizer.get_stake(user2);
@@ -738,7 +719,7 @@ fn test_multi_users() {
 
     // Step 5: Surplus is distributed
     let surplus: Wad = (800 * WAD_ONE).into();
-    create_surplus(mainnet::shrine(), surplus);
+    create_surplus(mainnet::SHRINE, surplus);
 
     // Step 6: Third user unstakes
     let before_user3_yin_balance = yin.balance_of(user3);
@@ -779,7 +760,7 @@ fn test_multi_users() {
 
     // Step 7: Surplus is distributed
     let surplus: Wad = (300 * WAD_ONE).into();
-    create_surplus(mainnet::shrine(), surplus);
+    create_surplus(mainnet::SHRINE, surplus);
 
     // Step 8: First user claims
     let before_user1_yin_balance = yin.balance_of(user1);

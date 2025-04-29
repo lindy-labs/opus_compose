@@ -10,13 +10,13 @@ pub mod stabilizer {
     use opus::interfaces::{IEqualizerDispatcher, IEqualizerDispatcherTrait};
     use opus_compose::interfaces::erc20::{IERC20Dispatcher, IERC20DispatcherTrait};
     use opus_compose::stabilizer::interfaces::stabilizer::IStabilizer;
-    use opus_compose::stabilizer::math::{get_cumulative_delta, get_accumulated_yin};
+    use opus_compose::stabilizer::math::{get_accumulated_yin, get_cumulative_delta};
     use opus_compose::stabilizer::types::{Stake, StorageBounds, StoragePoolKey, YieldState};
-    use starknet::{ContractAddress, get_caller_address, get_contract_address};
     use starknet::storage::{
         Map, StorageMapReadAccess, StorageMapWriteAccess, StoragePointerReadAccess,
         StoragePointerWriteAccess,
     };
+    use starknet::{ContractAddress, get_caller_address, get_contract_address};
 
     //
     // Storage
@@ -241,7 +241,7 @@ pub mod stabilizer {
             match self.get_token_id_for_user(user) {
                 Option::Some(_) => {},
                 Option::None => panic!("STB: No stake found"),
-            };
+            }
 
             let yield_state = self.harvest();
             let (stake, yield) = self.compute_stake_and_yield(user, yield_state);

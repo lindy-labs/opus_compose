@@ -14,8 +14,8 @@ pub mod lever {
     use opus_compose::lever::types::{
         LeverDownParams, LeverUpParams, ModifyLeverAction, ModifyLeverParams,
     };
-    use starknet::{ContractAddress, get_caller_address, get_contract_address};
     use starknet::storage::{StoragePointerReadAccess, StoragePointerWriteAccess};
+    use starknet::{ContractAddress, get_caller_address, get_contract_address};
     use wadray::Wad;
 
     //
@@ -265,7 +265,7 @@ pub mod lever {
 
                     self.emit(LeverWithdraw { user, trove_id, yang, yang_amt, asset_amt });
                 },
-            };
+            }
 
             ON_FLASH_MINT_SUCCESS
         }

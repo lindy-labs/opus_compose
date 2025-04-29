@@ -1,5 +1,5 @@
-use core::num::traits::WideMul;
 use core::integer::{u512, u512_safe_div_rem_by_u256};
+use core::num::traits::WideMul;
 
 const X128_PRECISION_MUL: u256 = 0x100000000000000000000000000000000; // 2^128
 
