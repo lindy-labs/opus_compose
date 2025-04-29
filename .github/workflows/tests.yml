@@ -10,6 +10,10 @@ on:
     types: [opened, synchronize, reopened, ready_for_review]
     paths-ignore:
       - "**.md"
+  pull_request_target:
+    types: [opened, synchronize, reopened, ready_for_review]
+    paths-ignore:
+      - "**.md"
 
 jobs:
   test:
@@ -33,5 +37,3 @@ jobs:
 
       - uses: foundry-rs/setup-snfoundry@v3
       - run: snforge test
-        env:
-          NODE_URL: ${{ secrets.NODE_URL }}
