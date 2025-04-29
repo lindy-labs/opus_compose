@@ -6,10 +6,6 @@ on:
       - main
     paths-ignore:
       - "**.md"
-  pull_request:
-    types: [opened, synchronize, reopened, ready_for_review]
-    paths-ignore:
-      - "**.md"
   pull_request_target:
     types: [opened, synchronize, reopened, ready_for_review]
     paths-ignore:
@@ -22,6 +18,10 @@ jobs:
       NODE_URL: ${{ secrets.NODE_URL }}
     steps:
       - uses: actions/checkout@v3
+        with:
+          # Important: when using pull_request_target, you need to specify the PR ref
+          # This checks out the head of the PR instead of the merge commit
+          ref: ${{ github.event.pull_request.head.sha }}
 
       - name: Debug NODE_URL
         run: |
