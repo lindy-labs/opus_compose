@@ -24,6 +24,9 @@ sierra = true
 [scripts]
 test = "snforge test"
 
+[tool.fmt]
+breaking-behavior = { tuple = "LineByLine", fixed_array = "LineByLine", macro_call = "LineByLine" }
+
 [tool.scarb]
 allow-prebuilt-plugins = ["snforge_std"]
 
