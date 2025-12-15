@@ -2,6 +2,7 @@ use ekubo::types::bounds::Bounds;
 use ekubo::types::i129::i129;
 use ekubo::types::keys::PoolKey;
 use starknet::ContractAddress;
+use wadray::Wad;
 
 // A wrapper of Ekubo's PoolKey struct to enable storage
 #[derive(Copy, Drop, Serde, PartialEq, Hash, starknet::Store)]
@@ -90,4 +91,5 @@ pub struct PoolInfo {
     pub sqrt_ratio: u256,
     pub token0_amount: u256,
     pub token1_amount: u256,
+    pub value: Wad,
 }
