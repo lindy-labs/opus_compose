@@ -22,6 +22,10 @@ pub mod mainnet {
     // https://github.com/starknet-io/starknet-addresses/blob/master/bridged_tokens/mainnet.json
 
     pub const USDC: ContractAddress =
+        0x033068F6539f8e6e6b131e6B2B814e6c34A5224bC66947c47DaB9dFeE93b35fb
+        .try_into()
+        .unwrap();
+    pub const USDC_E: ContractAddress =
         0x053c91253bc9682c04929ca02ed00b3e423f6710d2ee7e0d5ebb06f3ecf368a8
         .try_into()
         .unwrap();

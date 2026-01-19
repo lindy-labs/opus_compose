@@ -1,7 +1,7 @@
 use access_control::{IAccessControlDispatcher, IAccessControlDispatcherTrait};
 use core::num::traits::Zero;
 use ekubo::interfaces::erc20::{IERC20Dispatcher, IERC20DispatcherTrait};
-use ekubo::router_lite::{RouteNode, Swap, TokenAmount};
+use ekubo::interfaces::router::{RouteNode, Swap, TokenAmount};
 use ekubo::types::i129::i129;
 use ekubo::types::keys::PoolKey;
 use opus::interfaces::{
@@ -133,7 +133,7 @@ fn lever_up_swaps() -> Array<Swap> {
                 RouteNode {
                     pool_key: PoolKey {
                         token0: mainnet::SHRINE,
-                        token1: mainnet::USDC,
+                        token1: mainnet::USDC_E,
                         fee: 34028236692093847977029636859101184,
                         tick_spacing: 200,
                         extension: Zero::zero(),
@@ -144,7 +144,7 @@ fn lever_up_swaps() -> Array<Swap> {
                 RouteNode {
                     pool_key: PoolKey {
                         token0: mainnet::ETH,
-                        token1: mainnet::USDC,
+                        token1: mainnet::USDC_E,
                         fee: 170141183460469235273462165868118016,
                         tick_spacing: 1000,
                         extension: Zero::zero(),
@@ -163,7 +163,7 @@ fn lever_up_swaps() -> Array<Swap> {
                 RouteNode {
                     pool_key: PoolKey {
                         token0: mainnet::SHRINE,
-                        token1: mainnet::USDC,
+                        token1: mainnet::USDC_E,
                         fee: 34028236692093847977029636859101184,
                         tick_spacing: 200,
                         extension: Zero::zero(),
@@ -174,7 +174,7 @@ fn lever_up_swaps() -> Array<Swap> {
                 RouteNode {
                     pool_key: PoolKey {
                         token0: mainnet::STRK,
-                        token1: mainnet::USDC,
+                        token1: mainnet::USDC_E,
                         fee: 170141183460469235273462165868118016,
                         tick_spacing: 1000,
                         extension: Zero::zero(),
@@ -204,7 +204,7 @@ fn lever_up_swaps() -> Array<Swap> {
                 RouteNode {
                     pool_key: PoolKey {
                         token0: mainnet::SHRINE,
-                        token1: mainnet::USDC,
+                        token1: mainnet::USDC_E,
                         fee: 34028236692093847977029636859101184,
                         tick_spacing: 200,
                         extension: Zero::zero(),
@@ -215,7 +215,7 @@ fn lever_up_swaps() -> Array<Swap> {
                 RouteNode {
                     pool_key: PoolKey {
                         token0: mainnet::ETH,
-                        token1: mainnet::USDC,
+                        token1: mainnet::USDC_E,
                         fee: 170141183460469235273462165868118016,
                         tick_spacing: 1000,
                         extension: Zero::zero(),
@@ -234,7 +234,7 @@ fn lever_up_swaps() -> Array<Swap> {
                 RouteNode {
                     pool_key: PoolKey {
                         token0: mainnet::SHRINE,
-                        token1: mainnet::USDC,
+                        token1: mainnet::USDC_E,
                         fee: 34028236692093847977029636859101184,
                         tick_spacing: 200,
                         extension: Zero::zero(),
@@ -245,7 +245,7 @@ fn lever_up_swaps() -> Array<Swap> {
                 RouteNode {
                     pool_key: PoolKey {
                         token0: mainnet::STRK,
-                        token1: mainnet::USDC,
+                        token1: mainnet::USDC_E,
                         fee: 170141183460469235273462165868118016,
                         tick_spacing: 1000,
                         extension: Zero::zero(),
@@ -275,7 +275,7 @@ fn lever_up_swaps() -> Array<Swap> {
                 RouteNode {
                     pool_key: PoolKey {
                         token0: mainnet::SHRINE,
-                        token1: mainnet::USDC,
+                        token1: mainnet::USDC_E,
                         fee: 34028236692093847977029636859101184,
                         tick_spacing: 200,
                         extension: Zero::zero(),
@@ -286,7 +286,7 @@ fn lever_up_swaps() -> Array<Swap> {
                 RouteNode {
                     pool_key: PoolKey {
                         token0: mainnet::ETH,
-                        token1: mainnet::USDC,
+                        token1: mainnet::USDC_E,
                         fee: 170141183460469235273462165868118016,
                         tick_spacing: 1000,
                         extension: Zero::zero(),
@@ -312,7 +312,7 @@ fn lever_down_swaps() -> Array<Swap> {
                 RouteNode {
                     pool_key: PoolKey {
                         token0: mainnet::SHRINE,
-                        token1: mainnet::USDC,
+                        token1: mainnet::USDC_E,
                         fee: 34028236692093847977029636859101184,
                         tick_spacing: 200,
                         extension: Zero::zero(),
@@ -323,7 +323,7 @@ fn lever_down_swaps() -> Array<Swap> {
                 RouteNode {
                     pool_key: PoolKey {
                         token0: mainnet::ETH,
-                        token1: mainnet::USDC,
+                        token1: mainnet::USDC_E,
                         fee: 170141183460469235273462165868118016,
                         tick_spacing: 1000,
                         extension: Zero::zero(),
@@ -342,7 +342,7 @@ fn lever_down_swaps() -> Array<Swap> {
                 RouteNode {
                     pool_key: PoolKey {
                         token0: mainnet::SHRINE,
-                        token1: mainnet::USDC,
+                        token1: mainnet::USDC_E,
                         fee: 34028236692093847977029636859101184,
                         tick_spacing: 200,
                         extension: Zero::zero(),
@@ -353,7 +353,7 @@ fn lever_down_swaps() -> Array<Swap> {
                 RouteNode {
                     pool_key: PoolKey {
                         token0: mainnet::ETH,
-                        token1: mainnet::USDC,
+                        token1: mainnet::USDC_E,
                         fee: 1020847100762815411640772995208708096,
                         tick_spacing: 5982,
                         extension: Zero::zero(),
@@ -372,7 +372,7 @@ fn lever_down_swaps() -> Array<Swap> {
                 RouteNode {
                     pool_key: PoolKey {
                         token0: mainnet::SHRINE,
-                        token1: mainnet::USDC,
+                        token1: mainnet::USDC_E,
                         fee: 34028236692093847977029636859101184,
                         tick_spacing: 200,
                         extension: Zero::zero(),
@@ -383,7 +383,7 @@ fn lever_down_swaps() -> Array<Swap> {
                 RouteNode {
                     pool_key: PoolKey {
                         token0: mainnet::STRK,
-                        token1: mainnet::USDC,
+                        token1: mainnet::USDC_E,
                         fee: 170141183460469235273462165868118016,
                         tick_spacing: 1000,
                         extension: Zero::zero(),

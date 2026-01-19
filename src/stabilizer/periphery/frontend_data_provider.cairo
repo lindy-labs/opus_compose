@@ -41,7 +41,7 @@ pub mod stabilizer_fdp {
     use core::integer::{u512, u512_safe_div_rem_by_u256};
     use core::num::traits::{Pow, WideMul, Zero};
     use ekubo::interfaces::core::{ICoreDispatcher, ICoreDispatcherTrait};
-    use ekubo::interfaces::mathlib::{IMathLibDispatcherTrait, dispatcher as mathlib};
+    use ekubo::math::ticks::tick_to_sqrt_ratio;
     use ekubo::types::bounds::Bounds;
     use ekubo::types::keys::PoolKey;
     use ekubo::types::pool_price::PoolPrice;
@@ -132,15 +132,13 @@ pub mod stabilizer_fdp {
         fn get_pool_info_helper(
             self: @ContractState, pool_key: PoolKey, bounds: Bounds,
         ) -> PoolInfo {
-            let math = mathlib();
-
             let ekubo_core = ICoreDispatcher { contract_address: mainnet::EKUBO_CORE };
             let pool_liquidity: u128 = ekubo_core.get_pool_liquidity(pool_key);
             let pool_price: PoolPrice = ekubo_core.get_pool_price(pool_key);
 
-            let upper_tick_sqrt_ratio: u256 = math.tick_to_sqrt_ratio(bounds.upper);
-            let lower_tick_sqrt_ratio: u256 = math.tick_to_sqrt_ratio(bounds.lower);
-            let sqrt_ratio: u256 = pool_price.sqrt_ratio.into();
+            let upper_tick_sqrt_ratio: u256 = tick_to_sqrt_ratio(bounds.upper);
+            let lower_tick_sqrt_ratio: u256 = tick_to_sqrt_ratio(bounds.lower);
+            let sqrt_ratio: u256 = pool_price.sqrt_ratio;
 
             let token0_intermediate: u512 = WideMul::wide_mul(
                 pool_liquidity.into() * (upper_tick_sqrt_ratio - sqrt_ratio), TWO_POW_128,
