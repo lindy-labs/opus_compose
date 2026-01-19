@@ -28,13 +28,16 @@ pub mod stabilizer {
     }
     pub mod math;
     pub mod periphery {
+        pub mod estimator;
         pub mod frontend_data_provider;
     }
     pub mod types;
 
     #[cfg(test)]
     pub mod tests {
+        mod test_estimator;
         mod test_stabilizer;
         pub mod utils;
     }
 }
+

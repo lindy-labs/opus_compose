@@ -16,6 +16,11 @@ pub mod mainnet {
         .try_into()
         .unwrap();
 
+    pub const USDC_WHALE: ContractAddress =
+        0x01cbf691d7600fb731530b6710f8b0d11532089b7d68036570c1e0aa08d97bda
+        .try_into()
+        .unwrap();
+
     // Tokens
     //
     // Unless otherwise stated, token's address is available at:
