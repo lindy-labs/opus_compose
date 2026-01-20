@@ -20,7 +20,7 @@ pub trait IEstimator<TContractState> {
 // Adapted from https://www.libevm.com/2022/04/06/uniswapv3-optimal-single-lp/
 #[starknet::contract]
 pub mod estimator {
-    use core::cmp::min;
+    use core::cmp::max;
     use ekubo::interfaces::core::{ICoreDispatcher, ICoreDispatcherTrait};
     use ekubo::interfaces::router::TokenAmount;
     use ekubo::math::max_liquidity::max_liquidity;
@@ -60,8 +60,6 @@ pub mod estimator {
             let fee = pool_key.fee;
             let pool_price = ekubo_core.get_pool_price(pool_key);
             let pool_liquidity = ekubo_core.get_pool_liquidity(pool_key);
-            println!("Initial pool price: {}", pool_price.sqrt_ratio);
-            println!("Initial pool liquidity: {}", pool_liquidity);
 
             let (is_token1, sqrt_ratio_limit) = if input.token == pool_key.token0 {
                 (false, pool_price.sqrt_ratio / 2)
@@ -74,83 +72,118 @@ pub mod estimator {
 
             let input_u128: u128 = input.amount.try_into().unwrap();
 
-            // Binary search bounds
+            // Golden-section search
+            // Golden ratio φ ≈ 1.618, inverse 1/φ ≈ 0.618
+            // Using fixed-point: 1/φ = 618034/1000000 (high precision)
             let mut lower: u128 = 0;
             let mut upper: u128 = input_u128;
-            let mut optimal_swap_amount = input_u128 / 2;
-            let mut optimal_liquidity = 0;
 
-            // Bidirectional binary search
-            for i in 0..iterations {
-                println!("Iteration {}", i);
-                println!("Swap amount: {}", optimal_swap_amount);
-                println!("Optimal liquidity: {}", optimal_liquidity);
-                // Calculate step size and test in both directions
-                let step = (upper - lower) / 4; // Quarter of current range
-                let test_upper = min(optimal_swap_amount + step, input_u128);
-                let test_lower = if optimal_swap_amount > step {
-                    optimal_swap_amount - step
-                } else {
-                    0
-                };
+            // Pre-compute division: 618034 / 1000000
+            let golden_ratio_inverse_numerator: u128 = 618034;
+            let golden_ratio_inverse_denominator: u128 = 1000000;
 
-                // Test upper direction
-                let swap_result_upper: SwapResult = swap_result(
-                    pool_price.sqrt_ratio,
-                    pool_liquidity,
-                    sqrt_ratio_limit,
-                    test_upper.into(),
-                    is_token1,
-                    fee,
+            // Initial two test points
+            let range = upper - lower;
+            let golden_ratio_step = range
+                * golden_ratio_inverse_numerator
+                / golden_ratio_inverse_denominator;
+
+            let mut c: u128 = upper - golden_ratio_step;
+            let mut d: u128 = lower + golden_ratio_step;
+
+            // Evaluate at both initial points
+            let swap_result_c: SwapResult = swap_result(
+                pool_price.sqrt_ratio, pool_liquidity, sqrt_ratio_limit, c.into(), is_token1, fee,
+            );
+            let mut liquidity_c: u128 = self
+                .get_liquidity_from_swap_result(
+                    swap_result_c, input.amount, sqrt_ratio_lower, sqrt_ratio_upper, is_token1,
                 );
 
-                let max_liquidity_upper: u128 = self
-                    .get_liquidity_from_swap_result(
-                        swap_result_upper,
-                        input.amount,
-                        sqrt_ratio_lower,
-                        sqrt_ratio_upper,
-                        is_token1,
-                    );
-
-                // Test lower direction
-                let swap_result_lower: SwapResult = swap_result(
-                    pool_price.sqrt_ratio,
-                    pool_liquidity,
-                    sqrt_ratio_limit,
-                    test_lower.into(),
-                    is_token1,
-                    fee,
+            let swap_result_d: SwapResult = swap_result(
+                pool_price.sqrt_ratio, pool_liquidity, sqrt_ratio_limit, d.into(), is_token1, fee,
+            );
+            let mut liquidity_d: u128 = self
+                .get_liquidity_from_swap_result(
+                    swap_result_d, input.amount, sqrt_ratio_lower, sqrt_ratio_upper, is_token1,
                 );
-                let max_liquidity_lower: u128 = self
-                    .get_liquidity_from_swap_result(
-                        swap_result_lower,
-                        input.amount,
-                        sqrt_ratio_lower,
-                        sqrt_ratio_upper,
-                        is_token1,
-                    );
 
-                // Move towards direction that improves over current optimal
-                if max_liquidity_upper > optimal_liquidity
-                    && max_liquidity_upper >= max_liquidity_lower {
-                    lower = optimal_swap_amount;
-                    optimal_swap_amount = test_upper;
-                    optimal_liquidity = max_liquidity_upper;
-                } else if max_liquidity_lower > optimal_liquidity {
-                    upper = optimal_swap_amount;
-                    optimal_swap_amount = test_lower;
-                    optimal_liquidity = max_liquidity_lower;
-                } else {
-                    // Neither direction improves over current optimal - converge towards current
-                    // optimum
-                    lower = (lower + optimal_swap_amount) / 2;
-                    upper = (upper + optimal_swap_amount) / 2;
-                }
+            let (mut optimal_liquidity, mut optimal_swap_amount) = if liquidity_c > liquidity_d {
+                (liquidity_c, c)
+            } else {
+                (liquidity_d, d)
+            };
 
+            // Golden-section iterations
+            for _ in 0..iterations {
                 if upper - lower <= MIN_LIQUIDITY_RANGE {
                     break;
                 }
+
+                if liquidity_c > liquidity_d {
+                    // Discard [d, upper]
+                    upper = d;
+                    d = c;
+                    liquidity_d = liquidity_c;
+                    // New c
+                    c = upper
+                        - ((upper - lower)
+                            * golden_ratio_inverse_numerator
+                            / golden_ratio_inverse_denominator);
+                    let swap_result_new: SwapResult = swap_result(
+                        pool_price.sqrt_ratio,
+                        pool_liquidity,
+                        sqrt_ratio_limit,
+                        c.into(),
+                        is_token1,
+                        fee,
+                    );
+                    liquidity_c = self
+                        .get_liquidity_from_swap_result(
+                            swap_result_new,
+                            input.amount,
+                            sqrt_ratio_lower,
+                            sqrt_ratio_upper,
+                            is_token1,
+                        );
+                } else if liquidity_d > liquidity_c {
+                    // Discard [lower, c]
+                    lower = c;
+                    c = d;
+                    liquidity_c = liquidity_d;
+                    // New d
+                    d = lower
+                        + ((upper - lower)
+                            * golden_ratio_inverse_numerator
+                            / golden_ratio_inverse_denominator);
+                    let swap_result_new: SwapResult = swap_result(
+                        pool_price.sqrt_ratio,
+                        pool_liquidity,
+                        sqrt_ratio_limit,
+                        d.into(),
+                        is_token1,
+                        fee,
+                    );
+                    liquidity_d = self
+                        .get_liquidity_from_swap_result(
+                            swap_result_new,
+                            input.amount,
+                            sqrt_ratio_lower,
+                            sqrt_ratio_upper,
+                            is_token1,
+                        );
+                } else {
+                    // Equal liquidity values - already converged
+                    break;
+                }
+
+                // Update optimal
+                optimal_liquidity = max(liquidity_c, liquidity_d);
+                optimal_swap_amount = if liquidity_c > liquidity_d {
+                    c
+                } else {
+                    d
+                };
             }
 
             (optimal_swap_amount, optimal_liquidity)
