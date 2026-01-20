@@ -14,8 +14,13 @@ pub trait IEstimator<TContractState> {
     ) -> (u128, u128);
 }
 
+// Single-sided liquidity provision by swapping an amount of the given asset for the other
+// against a pool in order to provide the maximum liquidity to the same pool at the resulting
+// price after the swap.
+// Adapted from https://www.libevm.com/2022/04/06/uniswapv3-optimal-single-lp/
 #[starknet::contract]
 pub mod estimator {
+    use core::cmp::min;
     use ekubo::interfaces::core::{ICoreDispatcher, ICoreDispatcherTrait};
     use ekubo::interfaces::router::TokenAmount;
     use ekubo::math::max_liquidity::max_liquidity;
@@ -82,11 +87,7 @@ pub mod estimator {
                 println!("Optimal liquidity: {}", optimal_liquidity);
                 // Calculate step size and test in both directions
                 let step = (upper - lower) / 4; // Quarter of current range
-                let test_upper = if optimal_swap_amount + step > input_u128 {
-                    input_u128
-                } else {
-                    optimal_swap_amount + step
-                };
+                let test_upper = min(optimal_swap_amount + step, input_u128);
                 let test_lower = if optimal_swap_amount > step {
                     optimal_swap_amount - step
                 } else {
