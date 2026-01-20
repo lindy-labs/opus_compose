@@ -83,10 +83,8 @@ pub mod stabilizer_fdp {
 
             let pool_info = self.get_pool_info_helper(pool_key, bounds);
 
-            let pool_tvl = self.get_pool_tvl_helper(pool_key, pool_info);
-
             let staked_liquidity: u128 = stabilizer.get_total_liquidity();
-            get_proportionate_tvl(pool_tvl, staked_liquidity, pool_info.liquidity)
+            get_proportionate_tvl(pool_info.value, staked_liquidity, pool_info.liquidity)
         }
 
         fn get_user_staked_tvl(
@@ -98,15 +96,13 @@ pub mod stabilizer_fdp {
 
             let pool_info = self.get_pool_info_helper(pool_key, bounds);
 
-            let pool_tvl = self.get_pool_tvl_helper(pool_key, pool_info);
-
             let staked_liquidity: u128 = if stabilizer.get_token_id_for_user(user).is_some() {
                 stabilizer.get_stake(user).liquidity
             } else {
                 Zero::zero()
             };
 
-            get_proportionate_tvl(pool_tvl, staked_liquidity, pool_info.liquidity)
+            get_proportionate_tvl(pool_info.value, staked_liquidity, pool_info.liquidity)
         }
 
         fn get_user_claimable_yin(
@@ -138,36 +134,51 @@ pub mod stabilizer_fdp {
 
             let upper_tick_sqrt_ratio: u256 = tick_to_sqrt_ratio(bounds.upper);
             let lower_tick_sqrt_ratio: u256 = tick_to_sqrt_ratio(bounds.lower);
-            let sqrt_ratio: u256 = pool_price.sqrt_ratio;
 
             let token0_intermediate: u512 = WideMul::wide_mul(
-                pool_liquidity.into() * (upper_tick_sqrt_ratio - sqrt_ratio), TWO_POW_128,
+                pool_liquidity.into() * (upper_tick_sqrt_ratio - pool_price.sqrt_ratio),
+                TWO_POW_128,
+            );
+            // Use sequential division to avoid overflow
+            //   token0_intermediate / (upper_tick_sqrt_ratio * sqrt_ratio)
+            // = token0_intermediate / upper_tick_sqrt_ratio / sqrt_ratio
+            let (token0_intermediate, _) = u512_safe_div_rem_by_u256(
+                token0_intermediate, upper_tick_sqrt_ratio.try_into().unwrap(),
             );
             let (token0_amount, _) = u512_safe_div_rem_by_u256(
-                token0_intermediate, (sqrt_ratio * upper_tick_sqrt_ratio).try_into().unwrap(),
+                token0_intermediate, pool_price.sqrt_ratio.try_into().unwrap(),
             );
+
             let token1_amount: u256 = pool_liquidity.into()
-                * (sqrt_ratio - lower_tick_sqrt_ratio)
+                * (pool_price.sqrt_ratio - lower_tick_sqrt_ratio)
                 / TWO_POW_128;
+            let token0_amount: u256 = token0_amount.try_into().unwrap();
+
+            let (other_token, other_token_amount, yin_amount) = if pool_key
+                .token0 == mainnet::SHRINE {
+                (pool_key.token1, token1_amount, token0_amount)
+            } else {
+                (pool_key.token0, token0_amount, token1_amount)
+            };
+
+            let pool_value: Wad = self
+                .get_pool_value_helper(yin_amount, other_token, other_token_amount);
 
             PoolInfo {
                 liquidity: pool_liquidity,
                 sqrt_ratio: pool_price.sqrt_ratio,
-                token0_amount: token0_amount.try_into().unwrap(),
+                token0_amount,
                 token1_amount,
+                value: pool_value,
             }
         }
 
-        fn get_pool_tvl_helper(
-            self: @ContractState, pool_key: PoolKey, pool_info: PoolInfo,
+        fn get_pool_value_helper(
+            self: @ContractState,
+            yin_amount: u256,
+            other_token: ContractAddress,
+            other_token_amount: u256,
         ) -> Wad {
-            let (other_token, other_token_amount, yin_amount) = if pool_key
-                .token0 == mainnet::SHRINE {
-                (pool_key.token1, pool_info.token1_amount, pool_info.token0_amount)
-            } else {
-                (pool_key.token0, pool_info.token0_amount, pool_info.token1_amount)
-            };
-
             let other_token_decimals: u8 = IERC20Dispatcher { contract_address: other_token }
                 .decimals();
             let other_token_price: Wad = convert_ekubo_oracle_price_to_wad(
