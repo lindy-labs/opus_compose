@@ -1,4 +1,4 @@
-use ekubo::router_lite::Swap;
+use ekubo::interfaces::router::Swap;
 use starknet::ContractAddress;
 use wadray::{Ray, Wad};
 

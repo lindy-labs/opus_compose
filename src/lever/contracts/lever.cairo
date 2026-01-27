@@ -3,7 +3,7 @@ pub mod lever {
     use core::num::traits::Zero;
     use ekubo::components::clear::{IClearDispatcher, IClearDispatcherTrait};
     use ekubo::interfaces::erc20::{IERC20Dispatcher, IERC20DispatcherTrait};
-    use ekubo::router_lite::{IRouterLiteDispatcher, IRouterLiteDispatcherTrait};
+    use ekubo::interfaces::router::{IRouterDispatcher, IRouterDispatcherTrait};
     use opus::interfaces::{
         IAbbotDispatcher, IAbbotDispatcherTrait, IFlashBorrower, IFlashMintDispatcher,
         IFlashMintDispatcherTrait, ISentinelDispatcher, ISentinelDispatcherTrait, IShrineDispatcher,
@@ -37,7 +37,7 @@ pub mod lever {
         sentinel: ISentinelDispatcher,
         abbot: IAbbotDispatcher,
         flash_mint: IFlashMintDispatcher,
-        ekubo_router: IRouterLiteDispatcher,
+        ekubo_router: IRouterDispatcher,
     }
 
     //
@@ -94,7 +94,7 @@ pub mod lever {
         self.sentinel.write(ISentinelDispatcher { contract_address: sentinel });
         self.abbot.write(IAbbotDispatcher { contract_address: abbot });
         self.flash_mint.write(IFlashMintDispatcher { contract_address: flash_mint });
-        self.ekubo_router.write(IRouterLiteDispatcher { contract_address: ekubo_router });
+        self.ekubo_router.write(IRouterDispatcher { contract_address: ekubo_router });
     }
 
     //

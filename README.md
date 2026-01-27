@@ -27,3 +27,4 @@ scarb test
 | Stabilizer [CASH-USDC.e] | `0x03dbe818c99cf6658f23ef70656d64cce650fdb97105b96876d7e421fa25a528` | `v1.0.0` |
 | Stabilizer [CASH-USDC] | `0x0688065247d31828d0daf6336284489624930ab21a59c3d2f07fbe58651b1f34` | `v1.0.0` |
 | Stabilizer Frontend Data Provider | `0x02618ba4d6821521fe2501ad1795b24ef896e108a5d54fdaa9e5f24dc78b81b2` | `main` |
+| Stabilizer Estimator | `0x077492b0ee941ec8aa24688051ff5443e81ffa11243365554c09344db0f8b071` | `main` |

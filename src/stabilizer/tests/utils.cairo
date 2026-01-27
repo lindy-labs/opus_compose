@@ -81,7 +81,7 @@ pub mod stabilizer_utils {
         shrine: ContractAddress, funder: ContractAddress, mut users_yin_amts: Span<u256>,
     ) -> Span<ContractAddress> {
         let yin = IERC20Dispatcher { contract_address: shrine };
-        let usdc = IERC20Dispatcher { contract_address: mainnet::USDC };
+        let usdc = IERC20Dispatcher { contract_address: mainnet::USDC_E };
 
         let user1 = 'user 1'.try_into().unwrap();
         let user2 = 'user 2'.try_into().unwrap();
@@ -139,7 +139,7 @@ pub mod stabilizer_utils {
         lp_amount: u256,
     ) -> (u64, u128) {
         let yin = IERC20Dispatcher { contract_address: mainnet::SHRINE };
-        let usdc = IERC20Dispatcher { contract_address: mainnet::USDC };
+        let usdc = IERC20Dispatcher { contract_address: mainnet::USDC_E };
         let ekubo_positions = IPositionsDispatcher { contract_address: mainnet::EKUBO_POSITIONS };
         let ekubo_positions_clear = IClearDispatcher { contract_address: mainnet::EKUBO_POSITIONS };
 
@@ -147,10 +147,10 @@ pub mod stabilizer_utils {
         yin.transfer(ekubo_positions.contract_address, lp_amount);
         stop_cheat_caller_address(yin.contract_address);
 
-        start_cheat_caller_address(mainnet::USDC, caller);
+        start_cheat_caller_address(mainnet::USDC_E, caller);
         let scaled_lp_amount: u256 = lp_amount / USDC_DECIMALS_DIFF_SCALE;
         usdc.transfer(ekubo_positions.contract_address, scaled_lp_amount);
-        stop_cheat_caller_address(mainnet::USDC);
+        stop_cheat_caller_address(mainnet::USDC_E);
 
         cheat_caller_address(ekubo_positions.contract_address, caller, CheatSpan::TargetCalls(1));
         let min_liquidity = 1;
