@@ -41,3 +41,18 @@ pub mod stabilizer {
     }
 }
 
+pub mod atu_abbot {
+    pub mod contracts {
+        pub mod atu_abbot;
+    }
+    pub mod interfaces {
+        pub mod atu_abbot;
+    }
+    pub mod types;
+
+    #[cfg(test)]
+    pub mod tests {
+        pub mod test_atu_abbot;
+        pub mod utils;
+    }
+}
