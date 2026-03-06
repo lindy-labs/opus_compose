@@ -27,7 +27,7 @@ pub mod atu_abbot {
         StoragePointerWriteAccess,
     };
     use starknet::{ContractAddress, get_caller_address, get_contract_address};
-    use wadray::{Ray, Wad};
+    use wadray::{RAY_ONE, Ray, Wad};
 
     #[derive(Copy, Drop)]
     pub struct TopupPreview {
@@ -83,7 +83,7 @@ pub mod atu_abbot {
         pub min_tracked_asset_balance: u128,
         pub topup_amount: u128,
         pub destination: ContractAddress,
-        pub relative_threshold: Option<Ray>,
+        pub relative_threshold: Ray,
     }
     #[derive(Copy, Drop, starknet::Event, PartialEq)]
     pub struct TopupExecuted {
@@ -182,22 +182,6 @@ pub mod atu_abbot {
 
             // Close trove in Abbot
             self.abbot.read().close_trove(trove_id);
-
-            // Clear config
-            self
-                .atu_trove_configs
-                .write(
-                    trove_id,
-                    AtuTroveConfig {
-                        tracked_asset: Zero::zero(),
-                        min_tracked_asset_balance: 0,
-                        topup_amount: Zero::zero(),
-                        destination: Zero::zero(),
-                        relative_threshold: Option::None,
-                        max_forge_fee_pct: Zero::zero(),
-                    },
-                );
-            self.atu_trove_owners.write(trove_id, Zero::zero());
         }
 
         fn deposit(ref self: ContractState, trove_id: u64, yang_asset: AssetBalance) {
@@ -282,6 +266,18 @@ pub mod atu_abbot {
             assert!(self.atu_trove_owners.read(trove_id) == user, "ATU: Not owner");
 
             assert!(self.pool_keys.read(tracked_asset).token0.is_non_zero(), "ATU: No swap path");
+            assert!(
+                topup_amount.is_zero() // Topup is disabled
+                    || 
+                    topup_amount >= min_tracked_asset_balance // Prevent multiple topups
+                    ,
+                "ATU: Invalid topup amount",
+            );
+            assert!(destination.is_non_zero(), "ATU: Invalid destination");
+
+            let relative_threshold: Ray = relative_threshold.unwrap_or(RAY_ONE.into());
+            assert!(relative_threshold <= RAY_ONE.into(), "ATU: Invalid relative threshold");
+
             let mut config = self.atu_trove_configs.read(trove_id);
             config.tracked_asset = tracked_asset;
             config.min_tracked_asset_balance = min_tracked_asset_balance;
@@ -319,12 +315,10 @@ pub mod atu_abbot {
             }
 
             // Check LTV condition if relative_threshold is set
-            if let Some(relative_threshold) = config.relative_threshold {
-                let trove_health: Health = self.shrine.read().get_trove_health(trove_id);
-                let stop_ltv = trove_health.threshold * relative_threshold;
-                if trove_health.ltv > stop_ltv {
-                    return false;
-                }
+            let trove_health: Health = self.shrine.read().get_trove_health(trove_id);
+            let stop_ltv = trove_health.threshold * config.relative_threshold;
+            if trove_health.ltv > stop_ltv {
+                return false;
             }
 
             let tracked_balance = IERC20Dispatcher { contract_address: config.tracked_asset }

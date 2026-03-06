@@ -9,6 +9,6 @@ pub struct AtuTroveConfig {
     // Set to zero to disable auto-topup
     pub topup_amount: u128,
     pub destination: ContractAddress,
-    pub relative_threshold: Option<Ray>,
+    pub relative_threshold: Ray,
     pub max_forge_fee_pct: Wad,
 }
