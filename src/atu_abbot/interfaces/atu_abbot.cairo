@@ -1,4 +1,5 @@
 use ekubo::types::keys::PoolKey;
+use opus::types::AssetBalance;
 use opus_compose::atu_abbot::types::AtuTroveConfig;
 use starknet::ContractAddress;
 use wadray::Ray;
@@ -19,4 +20,6 @@ pub trait IAtuAbbot<TContractState> {
     );
     fn should_topup(self: @TContractState, trove_id: u64) -> bool;
     fn execute_topup(ref self: TContractState, trove_id: u64);
+    // Mirror Caretaker's release
+    fn release(ref self: TContractState, trove_id: u64) -> Span<AssetBalance>;
 }

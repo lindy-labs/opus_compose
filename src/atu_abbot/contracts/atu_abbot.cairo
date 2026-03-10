@@ -14,7 +14,7 @@ pub mod atu_abbot {
     use ekubo::types::pool_price::PoolPrice;
     use opus::interfaces::abbot::IAbbot;
     use opus::interfaces::{
-        IAbbotDispatcher, IAbbotDispatcherTrait, ISentinelDispatcher, ISentinelDispatcherTrait,
+        IAbbotDispatcher, IAbbotDispatcherTrait, ICaretakerDispatcher, ICaretakerDispatcherTrait, ISentinelDispatcher, ISentinelDispatcherTrait,
         IShrineDispatcher, IShrineDispatcherTrait,
     };
     use opus::types::{AssetBalance, Health};
@@ -40,6 +40,7 @@ pub mod atu_abbot {
         shrine: IShrineDispatcher,
         sentinel: ISentinelDispatcher,
         abbot: IAbbotDispatcher,
+        caretaker: ICaretakerDispatcher,
         ekubo_core: ICoreDispatcher,
         ekubo_router: IRouterDispatcher,
         // Total ATU troves count (monotonically increasing)
@@ -102,12 +103,14 @@ pub mod atu_abbot {
         shrine: ContractAddress,
         sentinel: ContractAddress,
         abbot: ContractAddress,
+        caretaker: ContractAddress,
         ekubo_router: ContractAddress,
         ekubo_core: ContractAddress,
     ) {
         self.shrine.write(IShrineDispatcher { contract_address: shrine });
         self.sentinel.write(ISentinelDispatcher { contract_address: sentinel });
         self.abbot.write(IAbbotDispatcher { contract_address: abbot });
+        self.caretaker.write(ICaretakerDispatcher { contract_address: caretaker });
 
         self.ekubo_core.write(ICoreDispatcher { contract_address: ekubo_core });
         self.ekubo_router.write(IRouterDispatcher { contract_address: ekubo_router });
@@ -365,6 +368,21 @@ pub mod atu_abbot {
                         destination: config.destination,
                     },
                 );
+        }
+
+        // Mirror Caretaker's release function due to ownership check on primary Abbot
+        fn release(ref self: ContractState, trove_id: u64) -> Span<AssetBalance> {
+            let caller: ContractAddress = get_caller_address();
+            self.assert_atu_trove_owner(caller, trove_id);
+
+            let released_assets: Span<AssetBalance> = self.caretaker.read().release(trove_id);            
+            for asset in released_assets {
+                IERC20Dispatcher { contract_address: *asset.address }.transfer(
+                    caller, (*asset.amount).into(),
+                );
+            }
+
+            released_assets
         }
     }
 
