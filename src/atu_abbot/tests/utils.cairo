@@ -46,6 +46,7 @@ pub mod atu_abbot_utils {
             mainnet::SHRINE.into(),
             mainnet::SENTINEL.into(),
             mainnet::ABBOT.into(),
+            mainnet::CARETAKER.into(),
             mainnet::EKUBO_ROUTER.into(),
             mainnet::EKUBO_CORE.into(),
         ];

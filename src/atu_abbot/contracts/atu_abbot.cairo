@@ -175,6 +175,10 @@ pub mod atu_abbot {
             self.user_atu_troves.write((user, new_user_atu_troves_count), trove_id);
             self.atu_trove_owners.write(trove_id, user);
 
+            IERC20Dispatcher { contract_address: self.shrine.read().contract_address }.transfer(
+                user, forge_amount.into()
+            );
+
             self.emit(AtuTroveCreated { user, trove_id });
             trove_id
         }
@@ -221,11 +225,11 @@ pub mod atu_abbot {
                 .transfer(user, amount.into());
         }
 
+        // User needs to approve this Abbot for transfer 
         fn melt(ref self: ContractState, trove_id: u64, amount: Wad) {
             let caller = get_caller_address();
             IERC20Dispatcher { contract_address: self.shrine.read().contract_address }
                 .transfer_from(caller, get_contract_address(), amount.into());
-
             self.abbot.read().melt(trove_id, amount);
         }
     }

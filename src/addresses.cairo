@@ -56,6 +56,10 @@ pub mod mainnet {
         0x06a3593f7115f8f5e0728995d8924229cb1c4109ea477655bad281b36a760f41
         .try_into()
         .unwrap();
+    pub const CARETAKER: ContractAddress =
+        0x012A5EfCb820803bA700503329567FCDDDd7731E0d05E06217ED1152f956DBB0
+        .try_into()
+        .unwrap();
     pub const EQUALIZER: ContractAddress =
         0x066e3e2ea2095b2a0424b9a2272e4058f30332df5ff226518d19c20d3ab8e842
         .try_into()

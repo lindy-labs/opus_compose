@@ -1,7 +1,8 @@
+use core::num::traits::Zero;
 use opus::interfaces::{
-    IAbbotDispatcher, IAbbotDispatcherTrait, IGateDispatcher, IGateDispatcherTrait,
+    IAbbotDispatcher, IAbbotDispatcherTrait, IGateDispatcher, IGateDispatcherTrait, IShrineDispatcherTrait,
 };
-use opus::types::AssetBalance;
+use opus::types::{AssetBalance, Health};
 use opus_compose::addresses::mainnet;
 use opus_compose::atu_abbot::interfaces::atu_abbot::IAtuAbbotDispatcherTrait;
 use opus_compose::atu_abbot::tests::utils::atu_abbot_utils;
@@ -10,14 +11,7 @@ use snforge_std::{CheatSpan, cheat_caller_address};
 use starknet::ContractAddress;
 use wadray::{RAY_ONE, Ray, Wad};
 
-// Helper function to get default relative threshold (80%)
-// Returns 0.8 in Ray format
-fn get_default_relative_threshold() -> Ray {
-    // 80% = 8/10, so multiply RAY_ONE by 8 then divide by 10
-    // This is computed at compile time
-    let eighty_pct: u128 = 800000000000000000000000000; // 0.8 * 10^27
-    eighty_pct.into()
-}
+const USER: ContractAddress = 'test user'.try_into().unwrap();
 
 //
 // Test: Deployment
@@ -42,27 +36,21 @@ fn test_atu_abbot_deployment() {
 #[fork("MAINNET_ATU")]
 fn test_open_trove_success() {
     let test_config = atu_abbot_utils::atu_abbot_deploy(None);
-    let user: ContractAddress = 'test user'.try_into().unwrap();
+    let user = USER;
     let yang = mainnet::ETH;
     let yang_amount: u128 = 100000000000000000; // 0.1 ETH
     let forge_amount: Wad = 50000000_u128.into(); // 50 CASH
     let max_forge_fee_pct: Wad = 1_u128.into(); // 1%
 
-    // Create IAbbotDispatcher pointing to atu_abbot contract
-    let abbot = IAbbotDispatcher { contract_address: test_config.atu_abbot.contract_address };
+    let atu_abbot = IAbbotDispatcher { contract_address: test_config.atu_abbot.contract_address };
 
-    // Fund user with ETH
     atu_abbot_utils::fund_user_eth(user, yang_amount.into());
-
-    // Approve gate for ETH
     atu_abbot_utils::approve_gate_for_user(test_config.eth_gate, yang, user);
-
-    // Approve atu_abbot for ETH
     atu_abbot_utils::approve_for_user(test_config.atu_abbot.contract_address, yang, user);
 
     // Open trove
     cheat_caller_address(test_config.atu_abbot.contract_address, user, CheatSpan::TargetCalls(1));
-    let trove_id = abbot
+    let trove_id = atu_abbot
         .open_trove(
             array![AssetBalance { address: yang, amount: yang_amount }].span(),
             forge_amount,
@@ -70,15 +58,31 @@ fn test_open_trove_success() {
         );
 
     // Verify trove owner
-    let owner = abbot.get_trove_owner(trove_id);
-    assert(owner.is_some(), 'owner should exist');
-    assert(owner.unwrap() == user, 'owner mismatch');
+    let primary_owner = test_config.abbot.get_trove_owner(trove_id);
+    assert!(primary_owner.is_some(), "Primary owner should exist");
+    assert!(primary_owner.unwrap() == test_config.atu_abbot.contract_address, "Primary owner mismatch");
+
+    let atu_owner = atu_abbot.get_trove_owner(trove_id);
+    assert!(atu_owner.is_some(), "ATU owner should exist");
+    assert!(atu_owner.unwrap() == user, "ATU owner mismatch");
 
     // Verify user's trove IDs
-    let trove_ids = abbot.get_user_trove_ids(user);
+    let trove_ids = atu_abbot.get_user_trove_ids(user);
     println!("trove ids len: {}", trove_ids.len());
     assert(trove_ids.len() == 1, 'should have 1 trove');
     assert(*trove_ids.at(0) == trove_id, 'trove_id mismatch');
+
+    // Verify trove deposit via shrine
+    let deposit = test_config.shrine.get_deposit(yang, trove_id);
+    assert(!deposit.is_zero(), 'deposit should not be zero');
+
+    // Verify trove debt
+    let trove_health: Health = test_config.shrine.get_trove_health(trove_id);
+    assert(!trove_health.debt.is_zero(), 'debt should not be zero');
+
+    // Verify user's yin balance (forged CASH)
+    let yin_balance = test_config.shrine.get_yin(user);
+    assert(!yin_balance.is_zero(), 'yin should not be zero');
 }
 
 #[test]
@@ -150,9 +154,19 @@ fn test_close_trove_success() {
     cheat_caller_address(test_config.atu_abbot.contract_address, user, CheatSpan::TargetCalls(1));
     abbot.close_trove(trove_id);
 
-    // Verify owner cleared
+    // Note: ATU Abbot no longer clears owner on close
+    // The underlying Abbot trove is closed, but ATU tracking remains
+    // Verify the close succeeded by checking owner still exists in ATU tracking
     let owner = abbot.get_trove_owner(trove_id);
-    assert(owner.is_none(), 'owner should be cleared');
+    assert(owner.is_some(), 'owner should still exist');
+
+    // Verify trove deposit is zero after close
+    let deposit = test_config.shrine.get_deposit(yang, trove_id);
+    assert(deposit.is_zero(), 'deposit should be zero');
+
+    // Verify trove debt is zero after close
+    let trove_health: Health = test_config.shrine.get_trove_health(trove_id);
+    assert(trove_health.debt.is_zero(), 'debt should be zero');
 }
 
 #[test]
