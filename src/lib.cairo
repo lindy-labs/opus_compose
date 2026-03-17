@@ -56,6 +56,9 @@ pub mod vicariate {
         pub mod rite;
     }
     pub mod types;
+    pub mod utils {
+        pub mod sqrt_ratio_limit;
+    }
 
     #[cfg(test)]
     pub mod tests {

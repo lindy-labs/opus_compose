@@ -1,4 +1,5 @@
 use starknet::ContractAddress;
+use wadray::Ray;
 
 #[derive(Copy, Drop, PartialEq, Serde, starknet::Store)]
 pub struct AutoTopupConfig {
@@ -8,10 +9,6 @@ pub struct AutoTopupConfig {
     // Set to zero to disable auto-topup
     pub topup_amount: u128,
     pub destination: ContractAddress,
+    pub slippage: Ray,
 }
 
-#[derive(Copy, Drop, Serde)]
-pub struct SwapParams {
-    borrow_amount: Wad,
-    swap_data: Option<(RouteNode, TokenAmount)>,
-}

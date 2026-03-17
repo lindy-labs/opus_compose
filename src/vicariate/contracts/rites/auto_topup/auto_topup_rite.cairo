@@ -7,14 +7,7 @@ use wadray::Wad;
 pub trait IAutoTopupRite<TContractState> {
     fn get_auto_topup_config(self: @TContractState, trove_id: u64) -> AutoTopupConfig;
     fn set_pool_key(ref self: TContractState, asset: ContractAddress, pool_key: PoolKey);
-    fn set_trove_config(
-        ref self: TContractState,
-        trove_id: u64,
-        tracked_asset: ContractAddress,
-        min_tracked_asset_balance: u128,
-        topup_amount: u128,
-        destination: ContractAddress,
-    );
+    fn set_trove_config(ref self: TContractState, trove_id: u64, config: AutoTopupConfig);
     fn get_forge_amount(self: @TContractState, trove_id: u64) -> Wad;
 }
 
@@ -39,12 +32,15 @@ pub mod auto_topup_rite {
     use opus_compose::vicariate::interfaces::prior::{IPriorDispatcher, IPriorDispatcherTrait};
     use opus_compose::vicariate::interfaces::rite::IRite;
     use opus_compose::vicariate::types::Action;
+    use opus_compose::vicariate::utils::sqrt_ratio_limit::calculate_sqrt_ratio_limit;
     use starknet::storage::{
         Map, StorageMapReadAccess, StorageMapWriteAccess, StoragePointerReadAccess,
         StoragePointerWriteAccess,
     };
     use starknet::{ContractAddress, get_caller_address};
-    use wadray::Wad;
+    use wadray::{RAY_PERCENT, Ray, Wad};
+
+    pub const MAX_SLIPPAGE: u128 = RAY_PERCENT * 20;
 
     #[derive(Copy, Drop)]
     pub struct SwapParams {
@@ -77,10 +73,7 @@ pub mod auto_topup_rite {
         pub user: ContractAddress,
         #[key]
         pub trove_id: u64,
-        pub tracked_asset: ContractAddress,
-        pub min_tracked_asset_balance: u128,
-        pub topup_amount: u128,
-        pub destination: ContractAddress,
+        pub config: AutoTopupConfig,
     }
 
     #[derive(Copy, Drop, starknet::Event, PartialEq)]
@@ -118,7 +111,7 @@ pub mod auto_topup_rite {
         fn get_forge_amount(self: @ContractState, trove_id: u64) -> Wad {
             let config = self.auto_topup_configs.read(trove_id);
             let swap_params: SwapParams = self
-                .preview_topup(trove_id, config.tracked_asset, config.topup_amount);
+                .preview_topup(trove_id, config.tracked_asset, config.topup_amount, config.slippage);
             swap_params.forge_amount
         }
 
@@ -132,14 +125,7 @@ pub mod auto_topup_rite {
             self.pool_keys.write(asset, pool_key.into());
         }
 
-        fn set_trove_config(
-            ref self: ContractState,
-            trove_id: u64,
-            tracked_asset: ContractAddress,
-            min_tracked_asset_balance: u128,
-            topup_amount: u128,
-            destination: ContractAddress,
-        ) {
+        fn set_trove_config(ref self: ContractState, trove_id: u64, config: AutoTopupConfig) {
             let user = get_caller_address();
             let prior_abbot = IAbbotDispatcher {
                 contract_address: self.prior.read().contract_address,
@@ -149,33 +135,26 @@ pub mod auto_topup_rite {
                 "ATU: Not owner",
             );
 
-            assert!(self.pool_keys.read(tracked_asset).token0.is_non_zero(), "ATU: No swap path");
             assert!(
-                topup_amount.is_zero() // Topup is disabled
-                    || topup_amount >= min_tracked_asset_balance // Prevent multiple topups
-                    ,
+                self.pool_keys.read(config.tracked_asset).token0.is_non_zero(), "ATU: No swap path",
+            );
+            assert!(
+                config.topup_amount.is_zero() // Topup is disabled
+                    || config
+                        .topup_amount >= config
+                        .min_tracked_asset_balance // Prevent multiple topups
+                        ,
                 "ATU: Invalid topup amount",
             );
-            assert!(destination.is_non_zero(), "ATU: Invalid destination");
+            assert!(config.destination.is_non_zero(), "ATU: Invalid destination");
+            assert!(
+                config.slippage <= MAX_SLIPPAGE.into(),
+                "ATU: Slippage too high",
+            );
 
-            let mut config = self.auto_topup_configs.read(trove_id);
-            config.tracked_asset = tracked_asset;
-            config.min_tracked_asset_balance = min_tracked_asset_balance;
-            config.topup_amount = topup_amount;
-            config.destination = destination;
             self.auto_topup_configs.write(trove_id, config);
 
-            self
-                .emit(
-                    AutoTopupConfigUpdated {
-                        user,
-                        trove_id,
-                        tracked_asset,
-                        min_tracked_asset_balance,
-                        topup_amount,
-                        destination,
-                    },
-                );
+            self.emit(AutoTopupConfigUpdated { user, trove_id, config });
         }
     }
 
@@ -201,7 +180,7 @@ pub mod auto_topup_rite {
 
             let config = self.auto_topup_configs.read(trove_id);
             let swap_params: SwapParams = self
-                .preview_topup(trove_id, config.tracked_asset, config.topup_amount);
+                .preview_topup(trove_id, config.tracked_asset, config.topup_amount, config.slippage);
 
             prior.on_execute_rite(trove_id, Action::Forge(swap_params.forge_amount));
 
@@ -238,7 +217,11 @@ pub mod auto_topup_rite {
     #[generate_trait]
     impl AutoTopupRiteHelpers of AutoTopupRiteHelpersTrait {
         fn preview_topup(
-            self: @ContractState, trove_id: u64, tracked_asset: ContractAddress, topup_amount: u128,
+            self: @ContractState, 
+            trove_id: u64, 
+            tracked_asset: ContractAddress, 
+            topup_amount: u128,
+            slippage: Ray,
         ) -> SwapParams {
             let cash = self.yin.read().contract_address;
             let pool_key: PoolKey = self.pool_keys.read(tracked_asset).into();
@@ -251,11 +234,10 @@ pub mod auto_topup_rite {
                 let ekubo_router = self.ekubo_router.read();
 
                 let pool_price: PoolPrice = ekubo_core.get_pool_price(pool_key);
-                let (cash_is_token0, sqrt_ratio_limit) = if pool_key.token0 == cash {
-                    (true, pool_price.sqrt_ratio / 2)
-                } else {
-                    (false, pool_price.sqrt_ratio * 2)
-                };
+                let cash_is_token0: bool = pool_key.token0 == cash;
+                let sqrt_ratio_limit = calculate_sqrt_ratio_limit(
+                    pool_price.sqrt_ratio, slippage, cash_is_token0
+                );
                 let route_node = RouteNode { pool_key, sqrt_ratio_limit, skip_ahead: 0 };
                 let token_amount = TokenAmount {
                     token: tracked_asset, amount: topup_amount.into(),
