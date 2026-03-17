@@ -1,10 +1,10 @@
-pub mod atu_abbot_utils {
+pub mod prior_utils {
     use ekubo::interfaces::erc20::{IERC20Dispatcher, IERC20DispatcherTrait};
     use opus::interfaces::{
         IAbbotDispatcher, IGateDispatcher, ISentinelDispatcher, IShrineDispatcher,
     };
     use opus_compose::addresses::mainnet;
-    use opus_compose::atu_abbot::interfaces::atu_abbot::IAtuAbbotDispatcher;
+    use opus_compose::vicariate::interfaces::prior::IPriorDispatcher;
     use snforge_std::{
         ContractClass, ContractClassTrait, DeclareResultTrait, declare, start_cheat_caller_address,
         stop_cheat_caller_address,
@@ -12,13 +12,13 @@ pub mod atu_abbot_utils {
     use starknet::ContractAddress;
 
     #[derive(Copy, Drop)]
-    pub struct AtuAbbotTestClasses {
-        pub atu_abbot: Option<ContractClass>,
+    pub struct PriorTestClasses {
+        pub prior: Option<ContractClass>,
     }
 
     #[derive(Copy, Drop)]
-    pub struct AtuAbbotTestConfig {
-        pub atu_abbot: IAtuAbbotDispatcher,
+    pub struct PriorTestConfig {
+        pub prior: IPriorDispatcher,
         pub abbot: IAbbotDispatcher,
         pub sentinel: ISentinelDispatcher,
         pub shrine: IShrineDispatcher,
@@ -26,13 +26,13 @@ pub mod atu_abbot_utils {
         pub eth_gate: IGateDispatcher,
     }
 
-    // Declare the test contracts required for AtuAbbot tests
-    pub fn declare_contracts() -> AtuAbbotTestClasses {
-        AtuAbbotTestClasses { atu_abbot: Some(*declare("atu_abbot").unwrap().contract_class()) }
+    // Declare the test contracts required for Prior tests
+    pub fn declare_contracts() -> PriorTestClasses {
+        PriorTestClasses { prior: Some(*declare("prior").unwrap().contract_class()) }
     }
 
-    // Deploy AtuAbbot on forked mainnet using existing infrastructure
-    pub fn atu_abbot_deploy(classes: Option<AtuAbbotTestClasses>) -> AtuAbbotTestConfig {
+    // Deploy Prior on forked mainnet using existing infrastructure
+    pub fn prior_deploy(classes: Option<PriorTestClasses>) -> PriorTestConfig {
         let classes = classes.unwrap_or(declare_contracts());
 
         // Use existing mainnet contracts
@@ -41,7 +41,7 @@ pub mod atu_abbot_utils {
         let abbot = IAbbotDispatcher { contract_address: mainnet::ABBOT };
         let eth_gate = IGateDispatcher { contract_address: mainnet::ETH_GATE };
 
-        // Deploy AtuAbbot
+        // Deploy Prior
         let calldata: Array<felt252> = array![
             mainnet::SHRINE.into(),
             mainnet::SENTINEL.into(),
@@ -50,15 +50,11 @@ pub mod atu_abbot_utils {
             mainnet::EKUBO_ROUTER.into(),
             mainnet::EKUBO_CORE.into(),
         ];
-        let (atu_addr, _) = classes
-            .atu_abbot
-            .unwrap()
-            .deploy(@calldata)
-            .expect('atu_abbot deploy fail');
-        let atu_dispatcher = IAtuAbbotDispatcher { contract_address: atu_addr };
+        let (prior_addr, _) = classes.prior.unwrap().deploy(@calldata).expect('prior deploy fail');
+        let prior_dispatcher = IPriorDispatcher { contract_address: prior_addr };
 
-        AtuAbbotTestConfig {
-            atu_abbot: atu_dispatcher, abbot, sentinel, shrine, usdc_token: mainnet::USDC, eth_gate,
+        PriorTestConfig {
+            prior: prior_dispatcher, abbot, sentinel, shrine, usdc_token: mainnet::USDC, eth_gate,
         }
     }
 

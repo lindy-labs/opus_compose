@@ -41,18 +41,25 @@ pub mod stabilizer {
     }
 }
 
-pub mod atu_abbot {
+pub mod vicariate {
     pub mod contracts {
-        pub mod atu_abbot;
+        pub mod prior;
+        pub mod rites {
+            pub mod auto_topup {
+                pub mod auto_topup_rite;
+                pub mod types;
+            }
+        }
     }
     pub mod interfaces {
-        pub mod atu_abbot;
+        pub mod prior;
+        pub mod rite;
     }
     pub mod types;
 
     #[cfg(test)]
     pub mod tests {
-        pub mod test_atu_abbot;
+        pub mod test_prior;
         pub mod utils;
     }
 }
