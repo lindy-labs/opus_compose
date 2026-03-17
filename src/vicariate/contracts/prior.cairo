@@ -18,6 +18,7 @@ pub mod prior {
     };
     use starknet::{ContractAddress, get_caller_address, get_contract_address};
     use wadray::{RAY_ONE, Ray, Wad};
+    use crate::vicariate::interfaces::rite::IRite;
 
     #[storage]
     struct Storage {
@@ -156,20 +157,20 @@ pub mod prior {
         }
 
         fn close_trove(ref self: ContractState, trove_id: u64) {
-            let user = get_caller_address();
-            self.assert_smart_trove_owner(user, trove_id);
+            let caller = get_caller_address();
+            self.assert_smart_trove_owner(caller, trove_id);
 
             // Close trove in Abbot
             self.abbot.read().close_trove(trove_id);
         }
 
         fn deposit(ref self: ContractState, trove_id: u64, yang_asset: AssetBalance) {
-            let user = get_caller_address();
-            self.assert_smart_trove_owner(user, trove_id);
+            let caller: ContractAddress = get_caller_address();
+            self.assert_smart_trove_owner(caller, trove_id);
 
             // Transfer yang from user to this contract
             let yang_erc20 = IERC20Dispatcher { contract_address: yang_asset.address };
-            yang_erc20.transfer_from(user, get_contract_address(), yang_asset.amount.into());
+            yang_erc20.transfer_from(caller, get_contract_address(), yang_asset.amount.into());
 
             // Approve Gate for yang
             let gate_address = self.sentinel.read().get_gate_address(yang_asset.address);
@@ -179,22 +180,22 @@ pub mod prior {
         }
 
         fn withdraw(ref self: ContractState, trove_id: u64, yang_asset: AssetBalance) {
-            let user = get_caller_address();
-            self.assert_smart_trove_owner(user, trove_id);
+            let caller: ContractAddress = get_caller_address();
+            self.assert_smart_trove_owner(caller, trove_id);
 
             self.abbot.read().withdraw(trove_id, yang_asset);
 
             IERC20Dispatcher { contract_address: yang_asset.address }
-                .transfer(user, yang_asset.amount.into());
+                .transfer(caller, yang_asset.amount.into());
         }
 
         fn forge(ref self: ContractState, trove_id: u64, amount: Wad, max_forge_fee_pct: Wad) {
-            let user = get_caller_address();
-            self.assert_smart_trove_owner(user, trove_id);
+            let caller = get_caller_address();
+            self.assert_smart_trove_owner(caller, trove_id);
             self.abbot.read().forge(trove_id, amount, max_forge_fee_pct);
 
             IERC20Dispatcher { contract_address: self.shrine.read().contract_address }
-                .transfer(user, amount.into());
+                .transfer(caller, amount.into());
         }
 
         // User needs to approve this Abbot for transfer
@@ -208,13 +209,17 @@ pub mod prior {
 
     #[abi(embed_v0)]
     impl IPriorImpl of IPrior<ContractState> {
+        //
+        // Config
+        //
+
         fn set_trove_config(ref self: ContractState, trove_id: u64, config: SmartTroveConfig) {
-            assert!(config.relative_threshold <= RAY_ONE.into(), "ATU: Invalid relative threshold");
+            assert!(config.relative_threshold <= RAY_ONE.into(), "PRI: Invalid relative threshold");
 
             self.smart_trove_configs.write(trove_id, config)
         }
 
-        fn get_trove_config(ref self: ContractState, trove_id: u64) -> SmartTroveConfig {
+        fn get_trove_config(self: @ContractState, trove_id: u64) -> SmartTroveConfig {
             self.smart_trove_configs.read(trove_id)
         }
 
@@ -222,14 +227,24 @@ pub mod prior {
             self.smart_trove_ids.read(index)
         }
 
+        //
+        // Rites
+        //
+
         fn get_rite(self: @ContractState, trove_id: u64) -> ContractAddress {
             self.rites.read(trove_id).contract_address
         }
 
         fn set_rite(ref self: ContractState, trove_id: u64, rite: ContractAddress) {
-            assert!(self.smart_trove_owners.read(trove_id).is_non_zero(), "PRI: Not PRI trove");
-            // TODO: Add validation that the rite is valid
-            self.rites.write(trove_id, IRiteDispatcher { contract_address: rite });
+            let caller: ContractAddress = get_caller_address();
+            // This also checks that the trove is a smart trove.
+            // Otherwise, the owner would be zero address.
+            self.assert_smart_trove_owner(caller, trove_id);
+
+            let rite = IRiteDispatcher { contract_address: rite };
+            self.can_execute_rite_helper(rite, trove_id);
+
+            self.rites.write(trove_id, rite);
         }
 
         // Note that this does not check that the LTV does not exceed the relative threhsold
@@ -286,6 +301,10 @@ pub mod prior {
             };
         }
 
+        //
+        // Backwards compatibility with Abbot and Caretaker
+        //
+
         // Mirror Caretaker's release function due to ownership check on primary Abbot
         fn release(ref self: ContractState, trove_id: u64) -> Span<AssetBalance> {
             let caller: ContractAddress = get_caller_address();
@@ -304,7 +323,7 @@ pub mod prior {
     #[generate_trait]
     impl PriorHelpers of PriorHelpersTrait {
         fn assert_smart_trove_owner(self: @ContractState, user: ContractAddress, trove_id: u64) {
-            assert!(self.smart_trove_owners.read(trove_id) == user, "ATY: Not owner");
+            assert!(self.smart_trove_owners.read(trove_id) == user, "PRI: Not owner");
         }
 
         fn can_execute_rite_helper(

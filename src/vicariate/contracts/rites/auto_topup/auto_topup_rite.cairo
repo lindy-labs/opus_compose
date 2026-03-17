@@ -111,7 +111,9 @@ pub mod auto_topup_rite {
         fn get_forge_amount(self: @ContractState, trove_id: u64) -> Wad {
             let config = self.auto_topup_configs.read(trove_id);
             let swap_params: SwapParams = self
-                .preview_topup(trove_id, config.tracked_asset, config.topup_amount, config.slippage);
+                .preview_topup(
+                    trove_id, config.tracked_asset, config.topup_amount, config.slippage,
+                );
             swap_params.forge_amount
         }
 
@@ -148,8 +150,8 @@ pub mod auto_topup_rite {
             );
             assert!(config.destination.is_non_zero(), "ATU: Invalid destination");
             assert!(
-                config.slippage <= MAX_SLIPPAGE.into(),
-                "ATU: Slippage too high",
+                config.slippage.is_non_zero() && config.slippage <= MAX_SLIPPAGE.into(),
+                "ATU: Slippage out of acceptable range",
             );
 
             self.auto_topup_configs.write(trove_id, config);
@@ -180,7 +182,9 @@ pub mod auto_topup_rite {
 
             let config = self.auto_topup_configs.read(trove_id);
             let swap_params: SwapParams = self
-                .preview_topup(trove_id, config.tracked_asset, config.topup_amount, config.slippage);
+                .preview_topup(
+                    trove_id, config.tracked_asset, config.topup_amount, config.slippage,
+                );
 
             prior.on_execute_rite(trove_id, Action::Forge(swap_params.forge_amount));
 
@@ -217,9 +221,9 @@ pub mod auto_topup_rite {
     #[generate_trait]
     impl AutoTopupRiteHelpers of AutoTopupRiteHelpersTrait {
         fn preview_topup(
-            self: @ContractState, 
-            trove_id: u64, 
-            tracked_asset: ContractAddress, 
+            self: @ContractState,
+            trove_id: u64,
+            tracked_asset: ContractAddress,
             topup_amount: u128,
             slippage: Ray,
         ) -> SwapParams {
@@ -236,7 +240,7 @@ pub mod auto_topup_rite {
                 let pool_price: PoolPrice = ekubo_core.get_pool_price(pool_key);
                 let cash_is_token0: bool = pool_key.token0 == cash;
                 let sqrt_ratio_limit = calculate_sqrt_ratio_limit(
-                    pool_price.sqrt_ratio, slippage, cash_is_token0
+                    pool_price.sqrt_ratio, slippage, cash_is_token0,
                 );
                 let route_node = RouteNode { pool_key, sqrt_ratio_limit, skip_ahead: 0 };
                 let token_amount = TokenAmount {

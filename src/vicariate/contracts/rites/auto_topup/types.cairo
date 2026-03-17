@@ -5,7 +5,7 @@ use wadray::Ray;
 pub struct AutoTopupConfig {
     pub tracked_asset: ContractAddress,
     pub min_tracked_asset_balance: u128,
-    // Topup amount is denominated in the trackd asset
+    // Topup amount is denominated in the tracked asset
     // Set to zero to disable auto-topup
     pub topup_amount: u128,
     pub destination: ContractAddress,

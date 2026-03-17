@@ -6,7 +6,7 @@ use starknet::ContractAddress;
 pub trait IPrior<TContractState> {
     // Config functions
     fn set_trove_config(ref self: TContractState, trove_id: u64, config: SmartTroveConfig);
-    fn get_trove_config(ref self: TContractState, trove_id: u64) -> SmartTroveConfig;
+    fn get_trove_config(self: @TContractState, trove_id: u64) -> SmartTroveConfig;
     fn get_trove_id_by_index(self: @TContractState, index: u64) -> u64;
     // Rite functions
     fn get_rite(self: @TContractState, trove_id: u64) -> ContractAddress;
