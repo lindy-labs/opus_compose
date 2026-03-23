@@ -44,7 +44,7 @@ pub mod prior {
     pub enum Event {
         SmartTroveCreated: SmartTroveCreated,
         ConfigUpdated: ConfigUpdated,
-        TopupExecuted: TopupExecuted,
+        RiteSet: RiteSet,
     }
 
     #[derive(Copy, Drop, starknet::Event, PartialEq)]
@@ -66,16 +66,13 @@ pub mod prior {
     }
 
     #[derive(Copy, Drop, starknet::Event, PartialEq)]
-    pub struct TopupExecuted {
+    pub struct RiteSet {
         #[key]
-        pub caller: ContractAddress,
+        pub user: ContractAddress,
         #[key]
         pub trove_id: u64,
-        pub borrow_amount: Wad,
-        pub topup_amount: u128,
-        pub destination: ContractAddress,
+        pub rite: ContractAddress,
     }
-
     #[constructor]
     fn constructor(
         ref self: ContractState,
@@ -245,6 +242,8 @@ pub mod prior {
             self.can_execute_rite_helper(rite, trove_id);
 
             self.rites.write(trove_id, rite);
+
+            self.emit(RiteSet { user: caller, trove_id, rite: rite.contract_address });
         }
 
         // Note that this does not check that the LTV does not exceed the relative threhsold

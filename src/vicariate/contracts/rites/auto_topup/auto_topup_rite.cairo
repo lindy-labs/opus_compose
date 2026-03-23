@@ -65,6 +65,7 @@ pub mod auto_topup_rite {
     pub enum Event {
         AutoTopupConfigUpdated: AutoTopupConfigUpdated,
         TopupExecuted: TopupExecuted,
+        PoolKeySet: PoolKeySet,
     }
 
     #[derive(Copy, Drop, starknet::Event, PartialEq)]
@@ -83,8 +84,16 @@ pub mod auto_topup_rite {
         #[key]
         pub trove_id: u64,
         pub forge_amount: Wad,
+        pub tracked_asset: ContractAddress,
         pub topup_amount: u128,
         pub destination: ContractAddress,
+    }
+
+    #[derive(Copy, Drop, starknet::Event, PartialEq)]
+    pub struct PoolKeySet {
+        #[key]
+        pub asset: ContractAddress,
+        pub pool_key: PoolKey,
     }
 
     #[constructor]
@@ -123,8 +132,9 @@ pub mod auto_topup_rite {
                 minmax(pool_key.token0, pool_key.token1) == minmax(asset, cash),
                 "ATU: Invalid pool key assets",
             );
-
             self.pool_keys.write(asset, pool_key.into());
+
+            self.emit(PoolKeySet { asset, pool_key });
         }
 
         fn set_trove_config(ref self: ContractState, trove_id: u64, config: AutoTopupConfig) {
@@ -211,6 +221,7 @@ pub mod auto_topup_rite {
                         caller,
                         trove_id,
                         forge_amount: swap_params.forge_amount,
+                        tracked_asset: config.tracked_asset,
                         topup_amount: config.topup_amount,
                         destination: config.destination,
                     },

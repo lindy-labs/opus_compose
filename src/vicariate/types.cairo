@@ -1,4 +1,5 @@
 use opus::types::AssetBalance;
+use starknet::ContractAddress;
 use wadray::{Ray, Wad};
 
 #[derive(Copy, Drop, Serde)]
@@ -7,6 +8,8 @@ pub enum Action {
     Melt: Wad,
     Deposit: AssetBalance,
     Withdraw: AssetBalance,
+    // TODO: add flash mint?
+    Flashmint: (ContractAddress, Wad),
 }
 
 #[derive(Copy, Drop, Default, PartialEq, Serde, starknet::Store)]
