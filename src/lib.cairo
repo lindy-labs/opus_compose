@@ -49,6 +49,10 @@ pub mod vicariate {
                 pub mod auto_topup_rite;
                 pub mod types;
             }
+            pub mod auto_dca {
+                pub mod auto_dca_rite;
+                pub mod types;
+            }
         }
     }
     pub mod interfaces {

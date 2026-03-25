@@ -1,13 +1,10 @@
 use ekubo::types::keys::PoolKey;
-use opus_compose::vicariate::contracts::rites::auto_topup::types::AutoTopupConfig;
 use starknet::ContractAddress;
 use wadray::Wad;
 
 #[starknet::interface]
 pub trait IAutoTopupRite<TContractState> {
-    fn get_auto_topup_config(self: @TContractState, trove_id: u64) -> AutoTopupConfig;
     fn set_pool_key(ref self: TContractState, asset: ContractAddress, pool_key: PoolKey);
-    fn set_trove_config(ref self: TContractState, trove_id: u64, config: AutoTopupConfig);
     fn get_forge_amount(self: @TContractState, trove_id: u64) -> Wad;
 }
 
@@ -27,7 +24,6 @@ pub mod auto_topup_rite {
     use opus::interfaces::{IAbbotDispatcher, IAbbotDispatcherTrait};
     use opus_compose::interfaces::erc20::{IERC20Dispatcher, IERC20DispatcherTrait};
     use opus_compose::stabilizer::types::StoragePoolKey;
-    use opus_compose::vicariate::contracts::rites::auto_topup::auto_topup_rite::IAutoTopupRite;
     use opus_compose::vicariate::contracts::rites::auto_topup::types::AutoTopupConfig;
     use opus_compose::vicariate::interfaces::prior::{IPriorDispatcher, IPriorDispatcherTrait};
     use opus_compose::vicariate::interfaces::rite::IRite;
@@ -38,6 +34,7 @@ pub mod auto_topup_rite {
         StoragePointerWriteAccess,
     };
     use starknet::{ContractAddress, get_caller_address};
+    use super::IAutoTopupRite;
     use wadray::{RAY_PERCENT, Ray, Wad};
 
     pub const MAX_SLIPPAGE: u128 = RAY_PERCENT * 20;
@@ -84,7 +81,7 @@ pub mod auto_topup_rite {
         #[key]
         pub trove_id: u64,
         pub forge_amount: Wad,
-        pub tracked_asset: ContractAddress,
+        pub asset: ContractAddress,
         pub topup_amount: u128,
         pub destination: ContractAddress,
     }
@@ -113,15 +110,11 @@ pub mod auto_topup_rite {
 
     #[abi(embed_v0)]
     pub impl IAutoTopupRiteImpl of IAutoTopupRite<ContractState> {
-        fn get_auto_topup_config(self: @ContractState, trove_id: u64) -> AutoTopupConfig {
-            self.auto_topup_configs.read(trove_id)
-        }
-
         fn get_forge_amount(self: @ContractState, trove_id: u64) -> Wad {
             let config = self.auto_topup_configs.read(trove_id);
             let swap_params: SwapParams = self
                 .preview_topup(
-                    trove_id, config.tracked_asset, config.topup_amount, config.slippage,
+                    trove_id, config.asset, config.topup_amount, config.slippage,
                 );
             swap_params.forge_amount
         }
@@ -136,8 +129,25 @@ pub mod auto_topup_rite {
 
             self.emit(PoolKeySet { asset, pool_key });
         }
+    }
 
-        fn set_trove_config(ref self: ContractState, trove_id: u64, config: AutoTopupConfig) {
+    #[abi(embed_v0)]
+    pub impl IRiteImpl of IRite<ContractState> {
+        fn get_rite_id(self: @ContractState) -> felt252 {
+            'AUTO_TOPUP'
+        }
+
+        fn get_trove_config(self: @ContractState, trove_id: u64) -> Span<felt252> {
+            let config = self.auto_topup_configs.read(trove_id);
+            let mut serialized_config: Array<felt252> = Default::default();
+            config.serialize(ref serialized_config);
+            serialized_config.span()
+        }
+
+        fn set_trove_config(ref self: ContractState, trove_id: u64, config: Span<felt252>) {
+            let mut config = config;
+            let config: AutoTopupConfig = Serde::<AutoTopupConfig>::deserialize(ref config).expect('ATU: Invalid config');
+
             let user = get_caller_address();
             let prior_abbot = IAbbotDispatcher {
                 contract_address: self.prior.read().contract_address,
@@ -147,31 +157,31 @@ pub mod auto_topup_rite {
                 "ATU: Not owner",
             );
 
-            assert!(
-                self.pool_keys.read(config.tracked_asset).token0.is_non_zero(), "ATU: No swap path",
-            );
-            assert!(
-                config.topup_amount.is_zero() // Topup is disabled
-                    || config
-                        .topup_amount >= config
-                        .min_tracked_asset_balance // Prevent multiple topups
-                        ,
-                "ATU: Invalid topup amount",
-            );
-            assert!(config.destination.is_non_zero(), "ATU: Invalid destination");
-            assert!(
-                config.slippage.is_non_zero() && config.slippage <= MAX_SLIPPAGE.into(),
-                "ATU: Slippage out of acceptable range",
-            );
+            assert!(config.asset.is_non_zero(), "ATU: Invalid asset");
+            if config.topup_amount.is_non_zero() {
+                assert!(
+                    self.pool_keys.read(config.asset).token0.is_non_zero(), "ATU: No swap path",
+                );
+                assert!(
+                        config
+                            .topup_amount >= config
+                            .min_asset_balance // Prevent multiple topups
+                            ,
+                    "ATU: Invalid topup amount",
+                );
+                assert!(config.destination.is_non_zero(), "ATU: Invalid destination");
+                assert!(
+                    config.slippage.is_non_zero() && config.slippage <= MAX_SLIPPAGE.into(),
+                    "ATU: Slippage out of acceptable range",
+                );
+            }
 
             self.auto_topup_configs.write(trove_id, config);
 
             self.emit(AutoTopupConfigUpdated { user, trove_id, config });
         }
-    }
 
-    #[abi(embed_v0)]
-    pub impl IRiteImpl of IRite<ContractState> {
+
         fn is_ready(self: @ContractState, trove_id: u64) -> bool {
             let config = self.auto_topup_configs.read(trove_id);
             // Zero topup amount is used as a flag for disabling auto-topup
@@ -179,9 +189,13 @@ pub mod auto_topup_rite {
                 return false;
             }
 
-            let tracked_balance = IERC20Dispatcher { contract_address: config.tracked_asset }
+            let tracked_balance = IERC20Dispatcher { contract_address: config.asset }
                 .balance_of(config.destination);
-            tracked_balance < config.min_tracked_asset_balance.into()
+            tracked_balance < config.min_asset_balance.into()
+        }
+
+        fn has_ended(self: @ContractState, trove_id: u64) -> bool {
+            true
         }
 
         fn perform(ref self: ContractState, trove_id: u64) {
@@ -193,10 +207,10 @@ pub mod auto_topup_rite {
             let config = self.auto_topup_configs.read(trove_id);
             let swap_params: SwapParams = self
                 .preview_topup(
-                    trove_id, config.tracked_asset, config.topup_amount, config.slippage,
+                    trove_id, config.asset, config.topup_amount, config.slippage,
                 );
 
-            prior.on_execute_rite(trove_id, Action::Forge(swap_params.forge_amount));
+            prior.on_rite_action(trove_id, Action::Forge(swap_params.forge_amount));
 
             let cash = self.yin.read();
 
@@ -207,7 +221,7 @@ pub mod auto_topup_rite {
 
                 IClearDispatcher { contract_address: ekubo_router.contract_address }
                     .clear_minimum_to_recipient(
-                        EkuboERC20Dispatcher { contract_address: config.tracked_asset },
+                        EkuboERC20Dispatcher { contract_address: config.asset },
                         0,
                         config.destination,
                     );
@@ -221,14 +235,20 @@ pub mod auto_topup_rite {
                         caller,
                         trove_id,
                         forge_amount: swap_params.forge_amount,
-                        tracked_asset: config.tracked_asset,
+                        asset: config.asset,
                         topup_amount: config.topup_amount,
                         destination: config.destination,
                     },
                 );
         }
 
-        fn end(ref self: ContractState, trove_id: u64) {}
+        fn end(ref self: ContractState, trove_id: u64) {
+            let prior = self.prior.read();
+            let caller: ContractAddress = get_caller_address();
+            assert!(caller == prior.contract_address, "ATU: Caller not Prior");
+
+            prior.on_rite_action(trove_id, Action::None);
+        }
     }
 
     #[generate_trait]
@@ -236,15 +256,15 @@ pub mod auto_topup_rite {
         fn preview_topup(
             self: @ContractState,
             trove_id: u64,
-            tracked_asset: ContractAddress,
+            asset: ContractAddress,
             topup_amount: u128,
             slippage: Ray,
         ) -> SwapParams {
             let cash = self.yin.read().contract_address;
-            let pool_key: PoolKey = self.pool_keys.read(tracked_asset).into();
-            assert!(tracked_asset == cash || pool_key.token0.is_non_zero(), "ATU: No swap path");
+            let pool_key: PoolKey = self.pool_keys.read(asset).into();
+            assert!(asset == cash || pool_key.token0.is_non_zero(), "ATU: No swap path");
 
-            if tracked_asset == cash {
+            if asset == cash {
                 SwapParams { forge_amount: topup_amount.into(), swap_data: Option::None }
             } else {
                 let ekubo_core = self.ekubo_core.read();
@@ -257,7 +277,7 @@ pub mod auto_topup_rite {
                 );
                 let route_node = RouteNode { pool_key, sqrt_ratio_limit, skip_ahead: 0 };
                 let token_amount = TokenAmount {
-                    token: tracked_asset, amount: topup_amount.into(),
+                    token: asset, amount: topup_amount.into(),
                 };
                 let quote_delta: Delta = ekubo_router.quote_swap(route_node, token_amount);
                 let cash_amount: u128 = if cash_is_token0 {

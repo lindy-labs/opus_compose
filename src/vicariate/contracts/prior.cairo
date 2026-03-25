@@ -59,6 +59,10 @@ pub mod prior {
         smart_trove_owners: Map<u64, ContractAddress>,
         smart_trove_configs: Map<u64, SmartTroveConfig>,
         rites: Map<u64, IRiteDispatcher>,
+        // Transient variable used to lock the trove ID before a callback to
+        // prevent illegal actions across trove IDs with the same rite
+        // Resets to zero after the callback.
+        transient_trove_id: u64,
     }
 
     //
@@ -293,6 +297,9 @@ pub mod prior {
             let rite = self.rites.read(trove_id);
             assert!(self.can_execute_rite_helper(rite, trove_id), "PRI: Cannot execute rite");
 
+            assert!(self.transient_trove_id.read().is_zero(), "PRI: Another trove in execution");
+            self.transient_trove_id.write(trove_id);
+
             rite.perform(trove_id);
 
             // Check LTV condition if relative_threshold is set
@@ -300,14 +307,38 @@ pub mod prior {
             let trove_health: Health = self.shrine.read().get_trove_health(trove_id);
             let stop_ltv: Ray = trove_health.threshold * config.relative_threshold;
             assert!(trove_health.ltv <= stop_ltv, "PRI: LTV exceeds relative threshold");
+
+            // Guarantee that the callback is executed
+            assert!(self.transient_trove_id.read().is_zero(), "PRI: Callback not executed");
         }
 
-        // Callback function to be called by `rite.perform(...)`
-        // Checks that the caller is the rite specified for the smart trove
-        fn on_execute_rite(ref self: ContractState, trove_id: u64, action: Action) {
+        fn end_rite(ref self: ContractState, trove_id: u64) {
+            let rite = self.rites.read(trove_id);
+
+            assert!(self.transient_trove_id.read().is_zero(), "PRI: Another trove in execution");
+            self.transient_trove_id.write(trove_id);
+
+            rite.end(trove_id);
+
+            // TODO: Refactor
+            // Check LTV condition if relative_threshold is set
+            let config: SmartTroveConfig = self.smart_trove_configs.read(trove_id);
+            let trove_health: Health = self.shrine.read().get_trove_health(trove_id);
+            let stop_ltv: Ray = trove_health.threshold * config.relative_threshold;
+            assert!(trove_health.ltv <= stop_ltv, "PRI: LTV exceeds relative threshold");
+
+            // Guarantee that the callback is executed
+            assert!(self.transient_trove_id.read().is_zero(), "PRI: Callback not executed");
+        }
+
+        // Callback function to be called by `rite.perform(...)` and `rite.end(...)`
+        // Checks the caller is the rite specified for the smart trove.
+        // Checks the trove ID locked in the initial rite call.
+        fn on_rite_action(ref self: ContractState, trove_id: u64, action: Action) {
             let caller: ContractAddress = get_caller_address();
             let rite = self.rites.read(trove_id);
             assert!(caller == rite.contract_address, "PRI: Caller not rite");
+            assert!(self.transient_trove_id.read() == trove_id, "PRI: Execution not started");
 
             match action {
                 Action::Forge(amount) => {
@@ -333,7 +364,10 @@ pub mod prior {
                     IERC20Dispatcher { contract_address: asset_balance.address }
                         .transfer(rite.contract_address, asset_balance.amount.into());
                 },
+                Action::None => (),
             };
+
+            self.transient_trove_id.write(Zero::zero());
         }
 
         //
@@ -423,9 +457,9 @@ pub mod prior {
         ) -> u256 {
             assert!(
                 get_caller_address() == self.flash_mint.read().contract_address,
-                "LEV: Illegal callback",
+                "PRI: Illegal callback",
             );
-            assert!(initiator == get_contract_address(), "LEV: Initiator must be lever");
+            assert!(initiator == get_contract_address(), "PRI: Initiator must be lever");
 
             let ModifyLeverParams {
                 user, action,
@@ -441,8 +475,9 @@ pub mod prior {
             match action {
                 ModifyLeverAction::LeverUp(params) => {
                     let LeverUpParams {
-                        trove_id, max_ltv, yang, max_forge_fee_pct, swaps,
+                        trove_id, yang, swaps,
                     } = params;
+                    let config = self.smart_trove_configs.read(trove_id);
                     let yang_erc20 = IERC20Dispatcher { contract_address: yang };
 
                     // Catch invalid yangs properly
@@ -465,27 +500,28 @@ pub mod prior {
                         );
 
                     // Borrow yin from trove and send to this contract to repay the flash mint
-                    abbot.forge(trove_id, amount.try_into().unwrap(), max_forge_fee_pct);
+                    abbot.forge(trove_id, amount.try_into().unwrap(), config.max_forge_fee_pct);
 
                     let trove_health: Health = shrine.get_trove_health(trove_id);
-                    assert!(trove_health.ltv <= max_ltv, "LEV: Exceeds max LTV");
+                    let max_ltv: Ray = config.relative_threshold * trove_health.threshold;
+                    assert!(trove_health.ltv <= max_ltv, "PRI: Exceeds max LTV");
                 },
                 ModifyLeverAction::LeverDown(params) => {
-                    let LeverDownParams { trove_id, max_ltv, yang, yang_amt, swaps } = params;
-                    let yang_erc20 = IERC20Dispatcher { contract_address: yang };
+                    let LeverDownParams { trove_id, yang_asset, swaps } = params;
+                    let config = self.smart_trove_configs.read(trove_id);
+                    let yang_erc20 = IERC20Dispatcher { contract_address: yang_asset.address };
 
                     // Catch invalid yangs properly
-                    get_valid_gate(sentinel, yang);
+                    get_valid_gate(sentinel, yang_asset.address);
 
                     // Use the flash minted yin to repay the trove's debt
                     abbot.melt(trove_id, amount.try_into().unwrap());
 
                     // Withdraw collateral to this contract
-                    let asset_amt: u128 = sentinel.exit(yang, initiator, yang_amt);
-                    abbot.withdraw(trove_id, AssetBalance { address: yang, amount: asset_amt });
+                    abbot.withdraw(trove_id, yang_asset);
 
                     // Transfer collateral to Ekubo's router and swap for yin
-                    yang_erc20.transfer(router.contract_address, asset_amt.into());
+                    yang_erc20.transfer(router.contract_address, yang_asset.amount.into());
                     router.multi_multihop_swap(swaps);
 
                     // Sanity check to ensure the amount of yin flash minted has been purchased
@@ -501,11 +537,12 @@ pub mod prior {
                     // Transfer any remainder collateral to the user
                     router_clear
                         .clear_minimum_to_recipient(
-                            EkuboERC20Dispatcher { contract_address: yang }, 1, user,
+                            EkuboERC20Dispatcher { contract_address: yang_asset.address }, 1, user,
                         );
 
                     let trove_health: Health = shrine.get_trove_health(trove_id);
-                    assert!(trove_health.ltv <= max_ltv, "LEV: Exceeds max LTV");
+                    let max_ltv: Ray = config.relative_threshold * trove_health.threshold;
+                    assert!(trove_health.ltv <= max_ltv, "PRI: Exceeds max LTV");
                 },
             }
 
@@ -551,7 +588,7 @@ pub mod prior {
     // Helper function to fetch the gate address for a yang, or otherwise throw.
     fn get_valid_gate(sentinel: ISentinelDispatcher, yang: ContractAddress) -> ContractAddress {
         let gate = sentinel.get_gate_address(yang);
-        assert!(gate.is_non_zero(), "LEV: Invalid yang");
+        assert!(gate.is_non_zero(), "PRI: Invalid yang");
         gate
     }
 }

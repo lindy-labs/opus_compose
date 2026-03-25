@@ -5,6 +5,7 @@ use wadray::{Ray, Wad};
 
 #[derive(Copy, Drop, Serde)]
 pub enum Action {
+    None,
     Forge: Wad,
     Melt: Wad,
     Deposit: AssetBalance,
@@ -13,6 +14,7 @@ pub enum Action {
 
 #[derive(Copy, Drop, Default, PartialEq, Serde, starknet::Store)]
 pub struct SmartTroveConfig {
+    // Maximum LTV = relative threshold * threshold
     pub relative_threshold: Ray,
     pub max_forge_fee_pct: Wad,
 }
@@ -34,19 +36,13 @@ pub enum ModifyLeverAction {
 #[derive(Serde, Drop)]
 pub struct LeverUpParams {
     pub trove_id: u64,
-    // Revert if LTV exceeds this value at the end
-    pub max_ltv: Ray,
     pub yang: ContractAddress,
-    pub max_forge_fee_pct: Wad,
     pub swaps: Array<Swap>,
 }
 
 #[derive(Serde, Drop)]
 pub struct LeverDownParams {
     pub trove_id: u64,
-    // Revert if LTV exceeds this value at the end
-    pub max_ltv: Ray,
-    pub yang: ContractAddress,
-    pub yang_amt: Wad, // Amount of yang to withdraw
+    pub yang_asset: AssetBalance,
     pub swaps: Array<Swap>,
 }
