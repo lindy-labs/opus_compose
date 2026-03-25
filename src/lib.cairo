@@ -52,6 +52,7 @@ pub mod vicariate {
         }
     }
     pub mod interfaces {
+        pub mod lever;
         pub mod prior;
         pub mod rite;
     }

@@ -2,23 +2,43 @@
 pub mod prior {
     use core::num::traits::Zero;
     use core::option::OptionTrait;
+    use ekubo::components::clear::{IClearDispatcher, IClearDispatcherTrait};
+    use ekubo::interfaces::erc20::IERC20Dispatcher as EkuboERC20Dispatcher;
+    use ekubo::interfaces::router::{IRouterDispatcher, IRouterDispatcherTrait};
     use opus::interfaces::abbot::IAbbot;
     use opus::interfaces::{
         IAbbotDispatcher, IAbbotDispatcherTrait, ICaretakerDispatcher, ICaretakerDispatcherTrait,
-        ISentinelDispatcher, ISentinelDispatcherTrait, IShrineDispatcher, IShrineDispatcherTrait,
+        IFlashBorrower, IFlashMintDispatcher, IFlashMintDispatcherTrait, ISentinelDispatcher,
+        ISentinelDispatcherTrait, IShrineDispatcher, IShrineDispatcherTrait,
     };
     use opus::types::{AssetBalance, Health};
     use opus_compose::interfaces::erc20::{IERC20Dispatcher, IERC20DispatcherTrait};
+    use opus_compose::vicariate::interfaces::lever::ILever;
     use opus_compose::vicariate::interfaces::prior::IPrior;
     use opus_compose::vicariate::interfaces::rite::{IRiteDispatcher, IRiteDispatcherTrait};
-    use opus_compose::vicariate::types::{Action, SmartTroveConfig};
+    use opus_compose::vicariate::types::{
+        Action, LeverDownParams, LeverUpParams, ModifyLeverAction, ModifyLeverParams,
+        SmartTroveConfig,
+    };
     use starknet::storage::{
         Map, StorageMapReadAccess, StorageMapWriteAccess, StoragePointerReadAccess,
         StoragePointerWriteAccess,
     };
     use starknet::{ContractAddress, get_caller_address, get_contract_address};
     use wadray::{RAY_ONE, Ray, Wad};
-    use crate::vicariate::interfaces::rite::IRite;
+
+    //
+    // Constants
+    //
+
+    // The value of keccak256("ERC3156FlashBorrower.onFlashLoan") as per EIP3156
+    // it is supposed to be returned from the onFlashLoan function by the receiver
+    const ON_FLASH_MINT_SUCCESS: u256 =
+        0x439148f0bbc682ca079e46d6e2c2f0c1e3b820f1a291b069d8882abf8cf18dd9_u256;
+
+    //
+    // Storage
+    //
 
     #[storage]
     struct Storage {
@@ -26,6 +46,8 @@ pub mod prior {
         sentinel: ISentinelDispatcher,
         abbot: IAbbotDispatcher,
         caretaker: ICaretakerDispatcher,
+        flash_mint: IFlashMintDispatcher,
+        ekubo_router: IRouterDispatcher,
         // Total smart troves count (monotonically increasing)
         smart_troves_count: u64,
         smart_trove_ids: Map<u64, u64>,
@@ -39,12 +61,17 @@ pub mod prior {
         rites: Map<u64, IRiteDispatcher>,
     }
 
+    //
+    // Events
+    //
+
     #[event]
     #[derive(Copy, Drop, starknet::Event, PartialEq)]
     pub enum Event {
         SmartTroveCreated: SmartTroveCreated,
         ConfigUpdated: ConfigUpdated,
         RiteSet: RiteSet,
+        // Lever events
     }
 
     #[derive(Copy, Drop, starknet::Event, PartialEq)]
@@ -73,6 +100,11 @@ pub mod prior {
         pub trove_id: u64,
         pub rite: ContractAddress,
     }
+
+    //
+    // Constructor
+    //
+
     #[constructor]
     fn constructor(
         ref self: ContractState,
@@ -80,11 +112,15 @@ pub mod prior {
         sentinel: ContractAddress,
         abbot: ContractAddress,
         caretaker: ContractAddress,
+        flash_mint: ContractAddress,
+        ekubo_router: ContractAddress,
     ) {
         self.shrine.write(IShrineDispatcher { contract_address: shrine });
         self.sentinel.write(ISentinelDispatcher { contract_address: sentinel });
         self.abbot.write(IAbbotDispatcher { contract_address: abbot });
         self.caretaker.write(ICaretakerDispatcher { contract_address: caretaker });
+        self.flash_mint.write(IFlashMintDispatcher { contract_address: flash_mint });
+        self.ekubo_router.write(IRouterDispatcher { contract_address: ekubo_router });
     }
 
     #[abi(embed_v0)]
@@ -319,6 +355,164 @@ pub mod prior {
         }
     }
 
+    #[abi(embed_v0)]
+    impl ILeverImpl of ILever<ContractState> {
+        // Take on leverage to acquire a specific collateral for a Trove
+        // 1. Flash mint yin to this contract
+        // 2. Purchase collateral asset with flash-minted yin via Ekubo
+        // 3. Deposit purchased collateral asset to caller's trove
+        // 4. Borrow yin from caller's trove and mint to this contract
+        fn up(ref self: ContractState, amount: Wad, lever_up_params: LeverUpParams) {
+            let user: ContractAddress = get_caller_address();
+            self.assert_smart_trove_owner(user, lever_up_params.trove_id);
+
+            let mut call_data: Array<felt252> = array![];
+            let modify_lever_params = ModifyLeverParams {
+                user, action: ModifyLeverAction::LeverUp(lever_up_params),
+            };
+            modify_lever_params.serialize(ref call_data);
+
+            self
+                .flash_mint
+                .read()
+                .flash_loan(
+                    get_contract_address(), // receiver
+                    self.shrine.read().contract_address, // token
+                    amount.into(),
+                    call_data.span(),
+                );
+        }
+
+        // Unwind a position for a specific collateral for a Trove
+        // 1. Flash mint yin to this contract
+        // 2. Repay yin for trove
+        // 3. Withdraw collateral asset from trove
+        // 4. Purchase yin with withdrawn collateral asset via Ekubo
+        // 5. Transfer remainder collateral asset to user
+        fn down(ref self: ContractState, amount: Wad, lever_down_params: LeverDownParams) {
+            let user: ContractAddress = get_caller_address();
+            self.assert_smart_trove_owner(user, lever_down_params.trove_id);
+
+            let modify_lever_params = ModifyLeverParams {
+                user, action: ModifyLeverAction::LeverDown(lever_down_params),
+            };
+            let mut call_data: Array<felt252> = array![];
+            modify_lever_params.serialize(ref call_data);
+
+            self
+                .flash_mint
+                .read()
+                .flash_loan(
+                    get_contract_address(), // receiver
+                    self.shrine.read().contract_address, // token
+                    amount.into(),
+                    call_data.span(),
+                );
+        }
+    }
+
+    #[abi(embed_v0)]
+    impl IFlashBorrowerImpl of IFlashBorrower<ContractState> {
+        fn on_flash_loan(
+            ref self: ContractState,
+            initiator: ContractAddress, // this contract
+            token: ContractAddress, // yin
+            amount: u256,
+            fee: u256,
+            mut call_data: Span<felt252>,
+        ) -> u256 {
+            assert!(
+                get_caller_address() == self.flash_mint.read().contract_address,
+                "LEV: Illegal callback",
+            );
+            assert!(initiator == get_contract_address(), "LEV: Initiator must be lever");
+
+            let ModifyLeverParams {
+                user, action,
+            } = Serde::<ModifyLeverParams>::deserialize(ref call_data).unwrap();
+
+            let shrine = self.shrine.read();
+            let yin = IERC20Dispatcher { contract_address: token };
+            let abbot = self.abbot.read();
+            let sentinel = self.sentinel.read();
+            let router = self.ekubo_router.read();
+            let router_clear = IClearDispatcher { contract_address: router.contract_address };
+
+            match action {
+                ModifyLeverAction::LeverUp(params) => {
+                    let LeverUpParams {
+                        trove_id, max_ltv, yang, max_forge_fee_pct, swaps,
+                    } = params;
+                    let yang_erc20 = IERC20Dispatcher { contract_address: yang };
+
+                    // Catch invalid yangs properly
+                    let gate = get_valid_gate(sentinel, yang);
+
+                    // Transfer yin to EKubo's router and swap for collateral
+                    yin.transfer(router.contract_address, amount);
+                    router.multi_multihop_swap(swaps);
+
+                    // Withdraw the collateral asset from Ekubo's router to this contract.
+                    let asset_amt: u256 = router_clear
+                        .clear_minimum(EkuboERC20Dispatcher { contract_address: yang }, 1);
+
+                    // Deposit purchased collateral to trove
+                    yang_erc20.approve(gate, asset_amt);
+                    abbot
+                        .deposit(
+                            trove_id,
+                            AssetBalance { address: yang, amount: asset_amt.try_into().unwrap() },
+                        );
+
+                    // Borrow yin from trove and send to this contract to repay the flash mint
+                    abbot.forge(trove_id, amount.try_into().unwrap(), max_forge_fee_pct);
+
+                    let trove_health: Health = shrine.get_trove_health(trove_id);
+                    assert!(trove_health.ltv <= max_ltv, "LEV: Exceeds max LTV");
+                },
+                ModifyLeverAction::LeverDown(params) => {
+                    let LeverDownParams { trove_id, max_ltv, yang, yang_amt, swaps } = params;
+                    let yang_erc20 = IERC20Dispatcher { contract_address: yang };
+
+                    // Catch invalid yangs properly
+                    get_valid_gate(sentinel, yang);
+
+                    // Use the flash minted yin to repay the trove's debt
+                    abbot.melt(trove_id, amount.try_into().unwrap());
+
+                    // Withdraw collateral to this contract
+                    let asset_amt: u128 = sentinel.exit(yang, initiator, yang_amt);
+                    abbot.withdraw(trove_id, AssetBalance { address: yang, amount: asset_amt });
+
+                    // Transfer collateral to Ekubo's router and swap for yin
+                    yang_erc20.transfer(router.contract_address, asset_amt.into());
+                    router.multi_multihop_swap(swaps);
+
+                    // Sanity check to ensure the amount of yin flash minted has been purchased
+                    // and can be withdrawn
+                    router_clear
+                        .clear_minimum(EkuboERC20Dispatcher { contract_address: token }, amount);
+                    let yin_amount = yin.balance_of(initiator);
+
+                    // Transfer any excess yin back to the user.
+                    if yin_amount > amount {
+                        yin.transfer(user, yin_amount - amount);
+                    }
+                    // Transfer any remainder collateral to the user
+                    router_clear
+                        .clear_minimum_to_recipient(
+                            EkuboERC20Dispatcher { contract_address: yang }, 1, user,
+                        );
+
+                    let trove_health: Health = shrine.get_trove_health(trove_id);
+                    assert!(trove_health.ltv <= max_ltv, "LEV: Exceeds max LTV");
+                },
+            }
+
+            ON_FLASH_MINT_SUCCESS
+        }
+    }
+
     #[generate_trait]
     impl PriorHelpers of PriorHelpersTrait {
         fn assert_smart_trove_owner(self: @ContractState, user: ContractAddress, trove_id: u64) {
@@ -352,5 +546,12 @@ pub mod prior {
             let gate = sentinel.get_gate_address(yang_asset.address);
             yang.approve(gate, yang_asset.amount.into());
         }
+    }
+
+    // Helper function to fetch the gate address for a yang, or otherwise throw.
+    fn get_valid_gate(sentinel: ISentinelDispatcher, yang: ContractAddress) -> ContractAddress {
+        let gate = sentinel.get_gate_address(yang);
+        assert!(gate.is_non_zero(), "LEV: Invalid yang");
+        gate
     }
 }

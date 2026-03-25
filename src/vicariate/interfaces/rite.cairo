@@ -4,6 +4,9 @@ pub trait IRite<TContractState> {
     fn is_ready(self: @TContractState, trove_id: u64) -> bool;
     // Must include a callback to `prior.on_execute_rite(...)`
     fn perform(ref self: TContractState, trove_id: u64);
-    // TODO: Do we need a function to stop rites that last beyond a function call e.g. DCA order?
+    // TODO: does this require a callback to Prior?
+    // Ends a rite that runs for longer than the initial `perform` call e.g. DCA orders.
+    // Does not do anything for one-off rites.
+    fn end(ref self: TContractState, trove_id: u64);
 }
 

@@ -227,6 +227,8 @@ pub mod auto_topup_rite {
                     },
                 );
         }
+
+        fn end(ref self: ContractState, trove_id: u64) {}
     }
 
     #[generate_trait]
