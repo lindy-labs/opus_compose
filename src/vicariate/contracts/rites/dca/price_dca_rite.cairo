@@ -3,15 +3,17 @@ use starknet::ContractAddress;
 use wadray::Wad;
 
 #[starknet::interface]
-pub trait IAutoDcaRite<TContractState> {
+pub trait IPriceDcaRite<TContractState> {
     fn set_pool_key(ref self: TContractState, asset: ContractAddress, pool_key: PoolKey);
 }
 
 #[starknet::contract]
-pub mod auto_dca_rite {
-    use core::cmp::minmax;
+pub mod price_dca_rite {
+    use starknet::get_block_timestamp;
+use core::cmp::minmax;
     use core::num::traits::Zero;
     use ekubo::components::clear::{IClearDispatcher, IClearDispatcherTrait};
+    use ekubo::extensions::oracle::{IOracleDispatcher, IOracleDispatcherTrait};
     use ekubo::interfaces::core::{ICoreDispatcher, ICoreDispatcherTrait};
     use ekubo::interfaces::erc20::IERC20Dispatcher as EkuboERC20Dispatcher;
     use ekubo::interfaces::router::{
@@ -21,9 +23,11 @@ pub mod auto_dca_rite {
     use ekubo::types::keys::PoolKey;
     use ekubo::types::pool_price::PoolPrice;
     use opus::interfaces::{IAbbotDispatcher, IAbbotDispatcherTrait};
+    use opus::utils::math::convert_ekubo_oracle_price_to_wad;
+    use opus_compose::constants;
     use opus_compose::interfaces::erc20::{IERC20Dispatcher, IERC20DispatcherTrait};
     use opus_compose::stabilizer::types::StoragePoolKey;
-    use opus_compose::vicariate::contracts::rites::auto_dca::types::AutoDcaConfig;
+    use opus_compose::vicariate::contracts::rites::dca::types::PriceDcaConfig;
     use opus_compose::vicariate::interfaces::prior::{IPriorDispatcher, IPriorDispatcherTrait};
     use opus_compose::vicariate::interfaces::rite::IRite;
     use opus_compose::vicariate::types::Action;
@@ -33,8 +37,11 @@ pub mod auto_dca_rite {
         StoragePointerWriteAccess,
     };
     use starknet::{ContractAddress, get_caller_address};
-    use super::IAutoDcaRite;
+    use super::IPriceDcaRite;
     use wadray::{RAY_PERCENT, Ray, Wad};
+
+    const CASH_DECIMALS: u8 = 18;
+    pub const TWAP_DURATION: u64 = 5 * 60;
 
     #[storage]
     struct Storage {
@@ -42,39 +49,31 @@ pub mod auto_dca_rite {
         prior: IPriorDispatcher,
         ekubo_core: ICoreDispatcher,
         ekubo_router: IRouterDispatcher,
-        auto_dca_configs: Map<u64, AutoDcaConfig>, // ADCA trove ID -> config
+        ekubo_oracle: IOracleDispatcher,
+        price_dca_configs: Map<u64, PriceDcaConfig>, // ADCA trove ID -> config
         // Mapping of ERC-20 to the key of the pool to swap against.
         // Swaps are made against a single pool to guarantee on-chain execution.
         pool_keys: Map<ContractAddress, StoragePoolKey>,
+        // Mapping of smart trove ID to Ekubo NFT ID
+        // TODO: Should it be reset to zero after order is stopped/completed?
+        twamm_orders: Map<u64, u128>,
     }
 
     #[event]
     #[derive(Copy, Drop, starknet::Event, PartialEq)]
     pub enum Event {
-        AutoDcaConfigUpdated: AutoDcaConfigUpdated,
-        TopupExecuted: TopupExecuted,
+        PriceDcaConfigUpdated: PriceDcaConfigUpdated,
         PoolKeySet: PoolKeySet,
+        TwammOrderCreated: TwammOrderCreated,
     }
 
     #[derive(Copy, Drop, starknet::Event, PartialEq)]
-    pub struct AutoDcaConfigUpdated {
+    pub struct PriceDcaConfigUpdated {
         #[key]
         pub user: ContractAddress,
         #[key]
         pub trove_id: u64,
-        pub config: AutoDcaConfig,
-    }
-
-    #[derive(Copy, Drop, starknet::Event, PartialEq)]
-    pub struct TopupExecuted {
-        #[key]
-        pub caller: ContractAddress,
-        #[key]
-        pub trove_id: u64,
-        pub forge_amount: Wad,
-        pub tracked_asset: ContractAddress,
-        pub topup_amount: u128,
-        pub destination: ContractAddress,
+        pub config: PriceDcaConfig,
     }
 
     #[derive(Copy, Drop, starknet::Event, PartialEq)]
@@ -84,6 +83,17 @@ pub mod auto_dca_rite {
         pub pool_key: PoolKey,
     }
 
+    #[derive(Copy, Drop, starknet::Event, PartialEq)]
+    pub struct TwammOrderCreated {
+        #[key]
+        pub user: ContractAddress,
+        #[key]
+        pub asset: ContractAddress,
+        // This need not be indexed since it is unique for each order
+        pub order_id: u128,
+        pub dca_duration: u64,
+    }
+
     #[constructor]
     fn constructor(
         ref self: ContractState,
@@ -91,23 +101,27 @@ pub mod auto_dca_rite {
         prior: ContractAddress,
         ekubo_router: ContractAddress,
         ekubo_core: ContractAddress,
+        ekubo_oracle: ContractAddress,
     ) {
         self.yin.write(IERC20Dispatcher { contract_address: yin });
         self.prior.write(IPriorDispatcher { contract_address: prior });
 
         self.ekubo_core.write(ICoreDispatcher { contract_address: ekubo_core });
         self.ekubo_router.write(IRouterDispatcher { contract_address: ekubo_router });
+        self.ekubo_oracle.write(IOracleDispatcher { contract_address: ekubo_oracle });
     }
 
     #[abi(embed_v0)]
-    pub impl IAutoDcaRiteImpl of IAutoDcaRite<ContractState> {
+    pub impl IPriceDcaRiteImpl of IPriceDcaRite<ContractState> {
         fn set_pool_key(ref self: ContractState, asset: ContractAddress, pool_key: PoolKey) {
             let cash = self.yin.read().contract_address;
             assert!(
                 minmax(pool_key.token0, pool_key.token1) == minmax(asset, cash),
                 "ADCA: Invalid pool key assets",
             );
-            // TODO: Assert DCA pool
+
+            assert!(pool_key.tick_spacing == constants::EKUBO_TWAMM_TICK_SPACING, "ADCA: Wrong tick spacing");
+
             self.pool_keys.write(asset, pool_key.into());
 
             self.emit(PoolKeySet { asset, pool_key });
@@ -117,11 +131,11 @@ pub mod auto_dca_rite {
     #[abi(embed_v0)]
     pub impl IRiteImpl of IRite<ContractState> {
         fn get_rite_id(self: @ContractState) -> felt252 {
-            'AUTO_DCA'
+            'PRICE_DCA'
         }
 
         fn get_trove_config(self: @ContractState, trove_id: u64) -> Span<felt252> {
-            let config = self.auto_dca_configs.read(trove_id);
+            let config = self.price_dca_configs.read(trove_id);
             let mut serialized_config: Array<felt252> = Default::default();
             config.serialize(ref serialized_config);
             serialized_config.span()
@@ -129,7 +143,7 @@ pub mod auto_dca_rite {
 
         fn set_trove_config(ref self: ContractState, trove_id: u64, config: Span<felt252>) {
             let mut config = config;
-            let config: AutoDcaConfig = Serde::<AutoDcaConfig>::deserialize(ref config).expect('ADCA: Invalid config');
+            let config: PriceDcaConfig = Serde::<PriceDcaConfig>::deserialize(ref config).expect('ADCA: Invalid config');
 
             let user = get_caller_address();
             let prior_abbot = IAbbotDispatcher {
@@ -154,20 +168,30 @@ pub mod auto_dca_rite {
                 // TODO: Sanity check duration
             }
 
-            self.auto_dca_configs.write(trove_id, config);
+            self.price_dca_configs.write(trove_id, config);
 
-            self.emit(AutoDcaConfigUpdated { user, trove_id, config });
+            self.emit(PriceDcaConfigUpdated { user, trove_id, config });
         }
 
         fn is_ready(self: @ContractState, trove_id: u64) -> bool {
-            let config = self.auto_dca_configs.read(trove_id);
-            // Zero buy price is used as a flag for disabling auto-DCA
-            if config.buy_price.is_zero() {
+            let config = self.price_dca_configs.read(trove_id);
+            // Zero order amounts are used as a flag for disabling price-DCA
+            let buy_is_enabled: bool = config.buy_amount.is_non_zero();
+            let sell_is_enabled: bool = config.sell_amount.is_non_zero();
+            if !buy_is_enabled && !sell_is_enabled {
                 return false;
             }
 
-            // TODO
-            true
+            let asset_price: Wad = self.get_asset_price(config.asset, config.period);
+            let should_buy: bool = buy_is_enabled && asset_price <= config.buy_price;
+            let should_sell: bool = sell_is_enabled && asset_price >= config.sell_price;
+
+            if should_buy || should_sell {
+                let existing_order: u128 = self.twamm_orders.read(trove_id);
+                // TODO: Check if there is an existing order
+            }
+
+            false
         }
 
         fn has_ended(self: @ContractState, trove_id: u64) -> bool {
@@ -181,7 +205,7 @@ pub mod auto_dca_rite {
             // Prior should have checked that the rite can be executed
             assert!(caller == prior.contract_address, "ADCA: Caller not Prior");
 
-            let config = self.auto_dca_configs.read(trove_id);
+            let config = self.price_dca_configs.read(trove_id);
 
             //prior.on_rite_action(trove_id, Action::Forge(swap_params.forge_amount));
 
@@ -225,7 +249,21 @@ pub mod auto_dca_rite {
     }
 
     #[generate_trait]
-    impl AutoDcaRiteHelpers of AutoDcaRiteHelpersTrait {
-        
+    impl PriceDcaRiteHelpers of PriceDcaRiteHelpersTrait {
+        // Returns the price of the asset in CASH
+        fn get_asset_price(self: @ContractState, asset: ContractAddress, period: u64) -> Wad {
+            let oracle = self.ekubo_oracle.read();
+            let price_x128: u256 = oracle.get_price_x128_over_last(
+                    asset,
+                    self.yin.read().contract_address,
+                    period
+                );
+
+            convert_ekubo_oracle_price_to_wad(
+                price_x128, 
+                IERC20Dispatcher { contract_address: asset }.decimals(), 
+                CASH_DECIMALS,
+            )
+        }
     }
 }

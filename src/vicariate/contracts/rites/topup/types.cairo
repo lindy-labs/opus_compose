@@ -2,7 +2,7 @@ use starknet::ContractAddress;
 use wadray::Ray;
 
 #[derive(Copy, Drop, PartialEq, Serde, starknet::Store)]
-pub struct AutoTopupConfig {
+pub struct TopupConfig {
     pub asset: ContractAddress,
     pub min_asset_balance: u128,
     // Topup amount is denominated in the tracked asset

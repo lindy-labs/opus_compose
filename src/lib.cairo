@@ -1,4 +1,5 @@
 pub mod addresses;
+pub mod constants;
 pub mod interfaces {
     pub mod erc20;
 }
@@ -45,12 +46,12 @@ pub mod vicariate {
     pub mod contracts {
         pub mod prior;
         pub mod rites {
-            pub mod auto_topup {
-                pub mod auto_topup_rite;
+            pub mod topup {
+                pub mod topup_rite;
                 pub mod types;
             }
-            pub mod auto_dca {
-                pub mod auto_dca_rite;
+            pub mod dca {
+                pub mod price_dca_rite;
                 pub mod types;
             }
         }

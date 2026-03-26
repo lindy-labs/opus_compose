@@ -3,13 +3,13 @@ use starknet::ContractAddress;
 use wadray::Wad;
 
 #[starknet::interface]
-pub trait IAutoTopupRite<TContractState> {
+pub trait ITopupRite<TContractState> {
     fn set_pool_key(ref self: TContractState, asset: ContractAddress, pool_key: PoolKey);
     fn get_forge_amount(self: @TContractState, trove_id: u64) -> Wad;
 }
 
 #[starknet::contract]
-pub mod auto_topup_rite {
+pub mod topup_rite {
     use core::cmp::minmax;
     use core::num::traits::Zero;
     use ekubo::components::clear::{IClearDispatcher, IClearDispatcherTrait};
@@ -24,7 +24,7 @@ pub mod auto_topup_rite {
     use opus::interfaces::{IAbbotDispatcher, IAbbotDispatcherTrait};
     use opus_compose::interfaces::erc20::{IERC20Dispatcher, IERC20DispatcherTrait};
     use opus_compose::stabilizer::types::StoragePoolKey;
-    use opus_compose::vicariate::contracts::rites::auto_topup::types::AutoTopupConfig;
+    use opus_compose::vicariate::contracts::rites::topup::types::TopupConfig;
     use opus_compose::vicariate::interfaces::prior::{IPriorDispatcher, IPriorDispatcherTrait};
     use opus_compose::vicariate::interfaces::rite::IRite;
     use opus_compose::vicariate::types::Action;
@@ -34,7 +34,7 @@ pub mod auto_topup_rite {
         StoragePointerWriteAccess,
     };
     use starknet::{ContractAddress, get_caller_address};
-    use super::IAutoTopupRite;
+    use super::ITopupRite;
     use wadray::{RAY_PERCENT, Ray, Wad};
 
     pub const MAX_SLIPPAGE: u128 = RAY_PERCENT * 20;
@@ -51,7 +51,7 @@ pub mod auto_topup_rite {
         prior: IPriorDispatcher,
         ekubo_core: ICoreDispatcher,
         ekubo_router: IRouterDispatcher,
-        auto_topup_configs: Map<u64, AutoTopupConfig>, // ATU trove ID -> config
+        topup_configs: Map<u64, TopupConfig>, // ATU trove ID -> config
         // Mapping of ERC-20 to the key of the pool to swap against.
         // Swaps are made against a single pool to guarantee on-chain execution.
         pool_keys: Map<ContractAddress, StoragePoolKey>,
@@ -60,18 +60,18 @@ pub mod auto_topup_rite {
     #[event]
     #[derive(Copy, Drop, starknet::Event, PartialEq)]
     pub enum Event {
-        AutoTopupConfigUpdated: AutoTopupConfigUpdated,
+        TopupConfigUpdated: TopupConfigUpdated,
         TopupExecuted: TopupExecuted,
         PoolKeySet: PoolKeySet,
     }
 
     #[derive(Copy, Drop, starknet::Event, PartialEq)]
-    pub struct AutoTopupConfigUpdated {
+    pub struct TopupConfigUpdated {
         #[key]
         pub user: ContractAddress,
         #[key]
         pub trove_id: u64,
-        pub config: AutoTopupConfig,
+        pub config: TopupConfig,
     }
 
     #[derive(Copy, Drop, starknet::Event, PartialEq)]
@@ -109,9 +109,9 @@ pub mod auto_topup_rite {
     }
 
     #[abi(embed_v0)]
-    pub impl IAutoTopupRiteImpl of IAutoTopupRite<ContractState> {
+    pub impl ITopupRiteImpl of ITopupRite<ContractState> {
         fn get_forge_amount(self: @ContractState, trove_id: u64) -> Wad {
-            let config = self.auto_topup_configs.read(trove_id);
+            let config = self.topup_configs.read(trove_id);
             let swap_params: SwapParams = self
                 .preview_topup(
                     trove_id, config.asset, config.topup_amount, config.slippage,
@@ -134,11 +134,11 @@ pub mod auto_topup_rite {
     #[abi(embed_v0)]
     pub impl IRiteImpl of IRite<ContractState> {
         fn get_rite_id(self: @ContractState) -> felt252 {
-            'AUTO_TOPUP'
+            'TOPUP'
         }
 
         fn get_trove_config(self: @ContractState, trove_id: u64) -> Span<felt252> {
-            let config = self.auto_topup_configs.read(trove_id);
+            let config = self.topup_configs.read(trove_id);
             let mut serialized_config: Array<felt252> = Default::default();
             config.serialize(ref serialized_config);
             serialized_config.span()
@@ -146,7 +146,7 @@ pub mod auto_topup_rite {
 
         fn set_trove_config(ref self: ContractState, trove_id: u64, config: Span<felt252>) {
             let mut config = config;
-            let config: AutoTopupConfig = Serde::<AutoTopupConfig>::deserialize(ref config).expect('ATU: Invalid config');
+            let config: TopupConfig = Serde::<TopupConfig>::deserialize(ref config).expect('ATU: Invalid config');
 
             let user = get_caller_address();
             let prior_abbot = IAbbotDispatcher {
@@ -176,14 +176,14 @@ pub mod auto_topup_rite {
                 );
             }
 
-            self.auto_topup_configs.write(trove_id, config);
+            self.topup_configs.write(trove_id, config);
 
-            self.emit(AutoTopupConfigUpdated { user, trove_id, config });
+            self.emit(TopupConfigUpdated { user, trove_id, config });
         }
 
 
         fn is_ready(self: @ContractState, trove_id: u64) -> bool {
-            let config = self.auto_topup_configs.read(trove_id);
+            let config = self.topup_configs.read(trove_id);
             // Zero topup amount is used as a flag for disabling auto-topup
             if config.topup_amount.is_zero() {
                 return false;
@@ -204,7 +204,7 @@ pub mod auto_topup_rite {
             // Prior should have checked that the rite can be executed
             assert!(caller == prior.contract_address, "ATU: Caller not Prior");
 
-            let config = self.auto_topup_configs.read(trove_id);
+            let config = self.topup_configs.read(trove_id);
             let swap_params: SwapParams = self
                 .preview_topup(
                     trove_id, config.asset, config.topup_amount, config.slippage,
@@ -252,7 +252,7 @@ pub mod auto_topup_rite {
     }
 
     #[generate_trait]
-    impl AutoTopupRiteHelpers of AutoTopupRiteHelpersTrait {
+    impl TopupRiteHelpers of TopupRiteHelpersTrait {
         fn preview_topup(
             self: @ContractState,
             trove_id: u64,
