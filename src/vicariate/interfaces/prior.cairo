@@ -14,7 +14,7 @@ pub trait IPrior<TContractState> {
     fn can_execute_rite(self: @TContractState, trove_id: u64) -> bool;
     fn execute_rite(ref self: TContractState, trove_id: u64);
     fn end_rite(ref self: TContractState, trove_id: u64);
-    fn on_rite_action(ref self: TContractState, trove_id: u64, action: Action);
+    fn on_rite_actions(ref self: TContractState, trove_id: u64, actions: Span<Action>);
     // Flashmint functions
     // Mirror Caretaker's release
     fn release(ref self: TContractState, trove_id: u64) -> Span<AssetBalance>;

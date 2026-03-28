@@ -1,6 +1,6 @@
 #[starknet::interface]
 pub trait IRite<TContractState> {
-    fn get_rite_id(self: @TContractState) -> felt252;
+    fn get_rite_id(self: @TContractState) -> ByteArray;
     fn get_trove_config(self: @TContractState, trove_id: u64) -> Span<felt252>;
     fn set_trove_config(ref self: TContractState, trove_id: u64, config: Span<felt252>);
     // Returns whether the rite can be executed based on the rite's conditions

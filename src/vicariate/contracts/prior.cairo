@@ -61,8 +61,12 @@ pub mod prior {
         rites: Map<u64, IRiteDispatcher>,
         // Transient variable used to lock the trove ID before a callback to
         // prevent illegal actions across trove IDs with the same rite
-        // Resets to zero after the callback.
+        // Cleared after the rite execution completes (perform/end).
         transient_trove_id: u64,
+        // Counter incremented on each callback from a rite, used to verify
+        // that at least one callback was made during execution.
+        // Cleared together with transient_trove_id after execution completes.
+        transient_caller_nonce: u64,
     }
 
     //
@@ -278,6 +282,12 @@ pub mod prior {
             // Otherwise, the owner would be zero address.
             self.assert_smart_trove_owner(caller, trove_id);
 
+            // Assert that is no ongoing rite
+            let previous_rite: IRiteDispatcher = self.rites.read(trove_id);
+            if previous_rite.contract_address.is_non_zero() {
+                assert!(previous_rite.has_ended(trove_id), "PRI: Rite ongoing");
+            }
+
             let rite = IRiteDispatcher { contract_address: rite };
             self.can_execute_rite_helper(rite, trove_id);
 
@@ -299,6 +309,7 @@ pub mod prior {
 
             assert!(self.transient_trove_id.read().is_zero(), "PRI: Another trove in execution");
             self.transient_trove_id.write(trove_id);
+            self.transient_caller_nonce.write(Zero::zero());
 
             rite.perform(trove_id);
 
@@ -308,66 +319,51 @@ pub mod prior {
             let stop_ltv: Ray = trove_health.threshold * config.relative_threshold;
             assert!(trove_health.ltv <= stop_ltv, "PRI: LTV exceeds relative threshold");
 
-            // Guarantee that the callback is executed
-            assert!(self.transient_trove_id.read().is_zero(), "PRI: Callback not executed");
+            // Guarantee that at least one callback was executed
+            assert!(!self.transient_caller_nonce.read().is_zero(), "PRI: Callback not executed");
+
+            // Clear lock
+            self.transient_trove_id.write(Zero::zero());
+            self.transient_caller_nonce.write(Zero::zero());
         }
 
+        // Only owner can end rite
+        // Note that the relative threshold is not enforced after ending a rite because
+        // it may otherwise brick the ongoing rite.
         fn end_rite(ref self: ContractState, trove_id: u64) {
-            let rite = self.rites.read(trove_id);
+            let caller = get_caller_address();
+            self.assert_smart_trove_owner(caller, trove_id);
 
             assert!(self.transient_trove_id.read().is_zero(), "PRI: Another trove in execution");
             self.transient_trove_id.write(trove_id);
+            self.transient_caller_nonce.write(Zero::zero());
 
+            let rite = self.rites.read(trove_id);
             rite.end(trove_id);
 
-            // TODO: Refactor
-            // Check LTV condition if relative_threshold is set
-            let config: SmartTroveConfig = self.smart_trove_configs.read(trove_id);
-            let trove_health: Health = self.shrine.read().get_trove_health(trove_id);
-            let stop_ltv: Ray = trove_health.threshold * config.relative_threshold;
-            assert!(trove_health.ltv <= stop_ltv, "PRI: LTV exceeds relative threshold");
+            // Guarantee that at least one callback was executed
+            assert!(!self.transient_caller_nonce.read().is_zero(), "PRI: Callback not executed");
 
-            // Guarantee that the callback is executed
-            assert!(self.transient_trove_id.read().is_zero(), "PRI: Callback not executed");
+            // Clear lock
+            self.transient_trove_id.write(Zero::zero());
+            self.transient_caller_nonce.write(Zero::zero());
         }
 
-        // Callback function to be called by `rite.perform(...)` and `rite.end(...)`
+        // Batch callback function to be called by `rite.perform(...)` and `rite.end(...)`
         // Checks the caller is the rite specified for the smart trove.
         // Checks the trove ID locked in the initial rite call.
-        fn on_rite_action(ref self: ContractState, trove_id: u64, action: Action) {
+        fn on_rite_actions(ref self: ContractState, trove_id: u64, actions: Span<Action>) {
             let caller: ContractAddress = get_caller_address();
             let rite = self.rites.read(trove_id);
             assert!(caller == rite.contract_address, "PRI: Caller not rite");
             assert!(self.transient_trove_id.read() == trove_id, "PRI: Execution not started");
 
-            match action {
-                Action::Forge(amount) => {
-                    let config: SmartTroveConfig = self.smart_trove_configs.read(trove_id);
-                    self.forge(trove_id, amount, config.max_forge_fee_pct);
+            for action in actions {
+                self.execute_action(trove_id, rite.contract_address, *action);
+            }
 
-                    // Transfer to rite
-                    IERC20Dispatcher { contract_address: self.shrine.read().contract_address }
-                        .transfer(rite.contract_address, amount.into());
-                },
-                Action::Melt(amount) => { self.melt(trove_id, amount); },
-                Action::Deposit(asset_balance) => {
-                    // Approve Gate for yang
-                    let gate_address = self.sentinel.read().get_gate_address(asset_balance.address);
-                    let yang_erc20 = IERC20Dispatcher { contract_address: asset_balance.address };
-                    yang_erc20.approve(gate_address, asset_balance.amount.into());
-
-                    self.abbot.read().deposit(trove_id, asset_balance);
-                },
-                Action::Withdraw(asset_balance) => {
-                    self.abbot.read().withdraw(trove_id, asset_balance);
-
-                    IERC20Dispatcher { contract_address: asset_balance.address }
-                        .transfer(rite.contract_address, asset_balance.amount.into());
-                },
-                Action::None => (),
-            };
-
-            self.transient_trove_id.write(Zero::zero());
+            let current_nonce = self.transient_caller_nonce.read();
+            self.transient_caller_nonce.write(current_nonce + 1);
         }
 
         //
@@ -474,9 +470,7 @@ pub mod prior {
 
             match action {
                 ModifyLeverAction::LeverUp(params) => {
-                    let LeverUpParams {
-                        trove_id, yang, swaps,
-                    } = params;
+                    let LeverUpParams { trove_id, yang, swaps } = params;
                     let config = self.smart_trove_configs.read(trove_id);
                     let yang_erc20 = IERC20Dispatcher { contract_address: yang };
 
@@ -568,6 +562,37 @@ pub mod prior {
             }
 
             can_execute
+        }
+
+        fn execute_action(
+            ref self: ContractState, trove_id: u64, rite_address: ContractAddress, action: Action,
+        ) {
+            match action {
+                Action::Forge(amount) => {
+                    let config: SmartTroveConfig = self.smart_trove_configs.read(trove_id);
+                    self.forge(trove_id, amount, config.max_forge_fee_pct);
+
+                    // Transfer to rite
+                    IERC20Dispatcher { contract_address: self.shrine.read().contract_address }
+                        .transfer(rite_address, amount.into());
+                },
+                Action::Melt(amount) => { self.melt(trove_id, amount); },
+                Action::Deposit(asset_balance) => {
+                    // Approve Gate for yang
+                    let gate_address = self.sentinel.read().get_gate_address(asset_balance.address);
+                    let yang_erc20 = IERC20Dispatcher { contract_address: asset_balance.address };
+                    yang_erc20.approve(gate_address, asset_balance.amount.into());
+
+                    self.abbot.read().deposit(trove_id, asset_balance);
+                },
+                Action::Withdraw(asset_balance) => {
+                    self.abbot.read().withdraw(trove_id, asset_balance);
+
+                    IERC20Dispatcher { contract_address: asset_balance.address }
+                        .transfer(rite_address, asset_balance.amount.into());
+                },
+                Action::None => (),
+            };
         }
 
         fn deposit_setup(

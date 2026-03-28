@@ -25,6 +25,7 @@ pub mod topup_rite {
     use opus_compose::interfaces::erc20::{IERC20Dispatcher, IERC20DispatcherTrait};
     use opus_compose::stabilizer::types::StoragePoolKey;
     use opus_compose::vicariate::contracts::rites::topup::types::TopupConfig;
+    use opus_compose::vicariate::contracts::rites::utils::rites_utils;
     use opus_compose::vicariate::interfaces::prior::{IPriorDispatcher, IPriorDispatcherTrait};
     use opus_compose::vicariate::interfaces::rite::IRite;
     use opus_compose::vicariate::types::Action;
@@ -34,8 +35,8 @@ pub mod topup_rite {
         StoragePointerWriteAccess,
     };
     use starknet::{ContractAddress, get_caller_address};
-    use super::ITopupRite;
     use wadray::{RAY_PERCENT, Ray, Wad};
+    use super::ITopupRite;
 
     pub const MAX_SLIPPAGE: u128 = RAY_PERCENT * 20;
 
@@ -77,8 +78,6 @@ pub mod topup_rite {
     #[derive(Copy, Drop, starknet::Event, PartialEq)]
     pub struct TopupExecuted {
         #[key]
-        pub caller: ContractAddress,
-        #[key]
         pub trove_id: u64,
         pub forge_amount: Wad,
         pub asset: ContractAddress,
@@ -113,9 +112,7 @@ pub mod topup_rite {
         fn get_forge_amount(self: @ContractState, trove_id: u64) -> Wad {
             let config = self.topup_configs.read(trove_id);
             let swap_params: SwapParams = self
-                .preview_topup(
-                    trove_id, config.asset, config.topup_amount, config.slippage,
-                );
+                .preview_topup(trove_id, config.asset, config.topup_amount, config.slippage);
             swap_params.forge_amount
         }
 
@@ -133,8 +130,8 @@ pub mod topup_rite {
 
     #[abi(embed_v0)]
     pub impl IRiteImpl of IRite<ContractState> {
-        fn get_rite_id(self: @ContractState) -> felt252 {
-            'TOPUP'
+        fn get_rite_id(self: @ContractState) -> ByteArray {
+            "TOPUP"
         }
 
         fn get_trove_config(self: @ContractState, trove_id: u64) -> Span<felt252> {
@@ -146,7 +143,8 @@ pub mod topup_rite {
 
         fn set_trove_config(ref self: ContractState, trove_id: u64, config: Span<felt252>) {
             let mut config = config;
-            let config: TopupConfig = Serde::<TopupConfig>::deserialize(ref config).expect('ATU: Invalid config');
+            let config: TopupConfig = Serde::<TopupConfig>::deserialize(ref config)
+                .expect('ATU: Invalid config');
 
             let user = get_caller_address();
             let prior_abbot = IAbbotDispatcher {
@@ -163,10 +161,8 @@ pub mod topup_rite {
                     self.pool_keys.read(config.asset).token0.is_non_zero(), "ATU: No swap path",
                 );
                 assert!(
-                        config
-                            .topup_amount >= config
-                            .min_asset_balance // Prevent multiple topups
-                            ,
+                    config.topup_amount >= config.min_asset_balance // Prevent multiple topups
+                    ,
                     "ATU: Invalid topup amount",
                 );
                 assert!(config.destination.is_non_zero(), "ATU: Invalid destination");
@@ -202,15 +198,13 @@ pub mod topup_rite {
             let prior = self.prior.read();
             let caller: ContractAddress = get_caller_address();
             // Prior should have checked that the rite can be executed
-            assert!(caller == prior.contract_address, "ATU: Caller not Prior");
+            rites_utils::assert_caller_is_prior(caller, prior.contract_address, self.get_rite_id());
 
             let config = self.topup_configs.read(trove_id);
             let swap_params: SwapParams = self
-                .preview_topup(
-                    trove_id, config.asset, config.topup_amount, config.slippage,
-                );
+                .preview_topup(trove_id, config.asset, config.topup_amount, config.slippage);
 
-            prior.on_rite_action(trove_id, Action::Forge(swap_params.forge_amount));
+            prior.on_rite_actions(trove_id, array![Action::Forge(swap_params.forge_amount)].span());
 
             let cash = self.yin.read();
 
@@ -232,7 +226,6 @@ pub mod topup_rite {
             self
                 .emit(
                     TopupExecuted {
-                        caller,
                         trove_id,
                         forge_amount: swap_params.forge_amount,
                         asset: config.asset,
@@ -245,9 +238,9 @@ pub mod topup_rite {
         fn end(ref self: ContractState, trove_id: u64) {
             let prior = self.prior.read();
             let caller: ContractAddress = get_caller_address();
-            assert!(caller == prior.contract_address, "ATU: Caller not Prior");
+            rites_utils::assert_caller_is_prior(caller, prior.contract_address, self.get_rite_id());
 
-            prior.on_rite_action(trove_id, Action::None);
+            prior.on_rite_actions(trove_id, array![Action::None].span());
         }
     }
 
@@ -276,9 +269,7 @@ pub mod topup_rite {
                     pool_price.sqrt_ratio, slippage, cash_is_token0,
                 );
                 let route_node = RouteNode { pool_key, sqrt_ratio_limit, skip_ahead: 0 };
-                let token_amount = TokenAmount {
-                    token: asset, amount: topup_amount.into(),
-                };
+                let token_amount = TokenAmount { token: asset, amount: topup_amount.into() };
                 let quote_delta: Delta = ekubo_router.quote_swap(route_node, token_amount);
                 let cash_amount: u128 = if cash_is_token0 {
                     (-quote_delta.amount0).try_into().unwrap()

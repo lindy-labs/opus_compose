@@ -46,6 +46,7 @@ pub mod vicariate {
     pub mod contracts {
         pub mod prior;
         pub mod rites {
+            pub mod utils;
             pub mod topup {
                 pub mod topup_rite;
                 pub mod types;
@@ -53,6 +54,7 @@ pub mod vicariate {
             pub mod dca {
                 pub mod price_dca_rite;
                 pub mod types;
+                pub mod utils;
             }
         }
     }
