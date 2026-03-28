@@ -112,7 +112,7 @@ pub mod topup_rite {
         fn get_forge_amount(self: @ContractState, trove_id: u64) -> Wad {
             let config = self.topup_configs.read(trove_id);
             let swap_params: SwapParams = self
-                .preview_topup(trove_id, config.asset, config.topup_amount, config.slippage);
+                .get_swap_params(config.asset, config.topup_amount, config.slippage);
             swap_params.forge_amount
         }
 
@@ -120,7 +120,7 @@ pub mod topup_rite {
             let cash = self.yin.read().contract_address;
             assert!(
                 minmax(pool_key.token0, pool_key.token1) == minmax(asset, cash),
-                "ATU: Invalid pool key assets",
+                "{}: Invalid pool key assets", RITE_ID(),
             );
             self.pool_keys.write(asset, pool_key.into());
 
@@ -131,7 +131,7 @@ pub mod topup_rite {
     #[abi(embed_v0)]
     pub impl IRiteImpl of IRite<ContractState> {
         fn get_rite_id(self: @ContractState) -> ByteArray {
-            "TOPUP"
+            RITE_ID()
         }
 
         fn get_trove_config(self: @ContractState, trove_id: u64) -> Span<felt252> {
@@ -144,31 +144,31 @@ pub mod topup_rite {
         fn set_trove_config(ref self: ContractState, trove_id: u64, config: Span<felt252>) {
             let mut config = config;
             let config: TopupConfig = Serde::<TopupConfig>::deserialize(ref config)
-                .expect('ATU: Invalid config');
+                .expect('TOPUP: Invalid config');
 
             let user = get_caller_address();
             let prior_abbot = IAbbotDispatcher {
                 contract_address: self.prior.read().contract_address,
             };
             assert!(
-                prior_abbot.get_trove_owner(trove_id).expect('ATU: Trove not found') == user,
-                "ATU: Not owner",
+                prior_abbot.get_trove_owner(trove_id).expect('TOPUP: Trove not found') == user,
+                "{}: Not owner", RITE_ID()
             );
 
-            assert!(config.asset.is_non_zero(), "ATU: Invalid asset");
+            assert!(config.asset.is_non_zero(), "{}: Invalid asset", RITE_ID());
             if config.topup_amount.is_non_zero() {
                 assert!(
-                    self.pool_keys.read(config.asset).token0.is_non_zero(), "ATU: No swap path",
+                    self.pool_keys.read(config.asset).token0.is_non_zero(), "{}: No swap path", RITE_ID()
                 );
                 assert!(
                     config.topup_amount >= config.min_asset_balance // Prevent multiple topups
                     ,
-                    "ATU: Invalid topup amount",
+                    "{}: Invalid topup amount", RITE_ID()
                 );
-                assert!(config.destination.is_non_zero(), "ATU: Invalid destination");
+                assert!(config.destination.is_non_zero(), "{}: Invalid destination", RITE_ID());
                 assert!(
                     config.slippage.is_non_zero() && config.slippage <= MAX_SLIPPAGE.into(),
-                    "ATU: Slippage out of acceptable range",
+                    "{}: Slippage out of acceptable range", RITE_ID()
                 );
             }
 
@@ -202,7 +202,7 @@ pub mod topup_rite {
 
             let config = self.topup_configs.read(trove_id);
             let swap_params: SwapParams = self
-                .preview_topup(trove_id, config.asset, config.topup_amount, config.slippage);
+                .get_swap_params(config.asset, config.topup_amount, config.slippage);
 
             prior.on_rite_actions(trove_id, array![Action::Forge(swap_params.forge_amount)].span());
 
@@ -246,16 +246,15 @@ pub mod topup_rite {
 
     #[generate_trait]
     impl TopupRiteHelpers of TopupRiteHelpersTrait {
-        fn preview_topup(
+        fn get_swap_params(
             self: @ContractState,
-            trove_id: u64,
             asset: ContractAddress,
             topup_amount: u128,
             slippage: Ray,
         ) -> SwapParams {
             let cash = self.yin.read().contract_address;
             let pool_key: PoolKey = self.pool_keys.read(asset).into();
-            assert!(asset == cash || pool_key.token0.is_non_zero(), "ATU: No swap path");
+            assert!(asset == cash || pool_key.token0.is_non_zero(), "{}: No swap path", RITE_ID());
 
             if asset == cash {
                 SwapParams { forge_amount: topup_amount.into(), swap_data: Option::None }
@@ -282,5 +281,9 @@ pub mod topup_rite {
                 }
             }
         }
+    }
+
+    fn RITE_ID() -> ByteArray {
+        "TOPUP"
     }
 }
