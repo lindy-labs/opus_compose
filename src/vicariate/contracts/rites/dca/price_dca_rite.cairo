@@ -126,13 +126,13 @@ pub mod price_dca_rite {
             assert!(
                 minmax(pool_key.token0, pool_key.token1) == minmax(asset, cash),
                 "{}: Invalid pool key assets",
-                self.get_rite_id(),
+                RITE_ID(),
             );
 
             assert!(
                 pool_key.tick_spacing == constants::EKUBO_TWAMM_TICK_SPACING,
                 "{}: Wrong tick spacing",
-                self.get_rite_id(),
+                RITE_ID(),
             );
 
             self.pool_keys.write(asset, pool_key.into());
@@ -144,7 +144,7 @@ pub mod price_dca_rite {
     #[abi(embed_v0)]
     pub impl IRiteImpl of IRite<ContractState> {
         fn get_rite_id(self: @ContractState) -> ByteArray {
-            "PRICE_DCA"
+            RITE_ID()
         }
 
         fn get_trove_config(self: @ContractState, trove_id: u64) -> Span<felt252> {
@@ -155,7 +155,7 @@ pub mod price_dca_rite {
         }
 
         fn set_trove_config(ref self: ContractState, trove_id: u64, config: Span<felt252>) {
-            assert!(!self.has_ended(trove_id), "{}: Ongoing order", self.get_rite_id());
+            assert!(!self.has_ended(trove_id), "{}: Ongoing order", RITE_ID());
 
             let mut config = config;
             let config: PriceDcaConfig = Serde::<PriceDcaConfig>::deserialize(ref config)
@@ -168,21 +168,21 @@ pub mod price_dca_rite {
             assert!(
                 prior_abbot.get_trove_owner(trove_id).expect('PRICE_DCA: Trove not found') == user,
                 "{}: Not owner",
-                self.get_rite_id(),
+                RITE_ID(),
             );
 
-            assert!(config.asset.is_non_zero(), "{}: Invalid asset", self.get_rite_id());
+            assert!(config.asset.is_non_zero(), "{}: Invalid asset", RITE_ID());
             if config.buy_price.is_non_zero() {
                 assert!(
                     self.pool_keys.read(config.asset).token0.is_non_zero(),
                     "{}: No swap path",
-                    self.get_rite_id(),
+                    RITE_ID(),
                 );
                 assert!(
                     config.sell_price.is_zero() // Sell DCA is disabled
                         || config.sell_price > config.buy_price,
                     "{}: Invalid sell price",
-                    self.get_rite_id(),
+                    RITE_ID(),
                 );
             }
 
@@ -213,7 +213,7 @@ pub mod price_dca_rite {
             let prior = self.prior.read();
             let caller: ContractAddress = get_caller_address();
             // Prior should have checked that the rite can be executed
-            rites_utils::assert_caller_is_prior(caller, prior.contract_address, self.get_rite_id());
+            rites_utils::assert_caller_is_prior(caller, prior.contract_address, RITE_ID());
 
             // Close existing + complete order if any
             // Reverts if existing + ongoing order
@@ -287,7 +287,7 @@ pub mod price_dca_rite {
         fn end(ref self: ContractState, trove_id: u64) {
             let prior = self.prior.read();
             let caller: ContractAddress = get_caller_address();
-            rites_utils::assert_caller_is_prior(caller, prior.contract_address, self.get_rite_id());
+            rites_utils::assert_caller_is_prior(caller, prior.contract_address, RITE_ID());
 
             self.close_order(trove_id, true);
         }
@@ -390,7 +390,7 @@ pub mod price_dca_rite {
                 },
                 OrderStatus::CompletedNotWithdrawn => {},
                 OrderStatus::Ongoing => {
-                    assert!(force_closure, "{}: Ongoing order", self.get_rite_id());
+                    assert!(force_closure, "{}: Ongoing order", RITE_ID());
 
                     let order_key = order_key.unwrap();
                     let order_info = order_info.unwrap();
@@ -458,5 +458,9 @@ pub mod price_dca_rite {
                     },
                 );
         }
+    }
+
+    fn RITE_ID() -> ByteArray {
+        "PRICE_DCA"
     }
 }
