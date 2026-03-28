@@ -1,11 +1,11 @@
 use ekubo::types::keys::PoolKey;
+use opus_compose::vicariate::contracts::rites::topup::types::SwapParams;
 use starknet::ContractAddress;
-use wadray::Wad;
 
 #[starknet::interface]
 pub trait ITopupRite<TContractState> {
     fn set_pool_key(ref self: TContractState, asset: ContractAddress, pool_key: PoolKey);
-    fn get_forge_amount(self: @TContractState, trove_id: u64) -> Wad;
+    fn get_swap_params(self: @TContractState, trove_id: u64) -> SwapParams;
 }
 
 #[starknet::contract]
@@ -24,7 +24,7 @@ pub mod topup_rite {
     use opus::interfaces::{IAbbotDispatcher, IAbbotDispatcherTrait};
     use opus_compose::interfaces::erc20::{IERC20Dispatcher, IERC20DispatcherTrait};
     use opus_compose::stabilizer::types::StoragePoolKey;
-    use opus_compose::vicariate::contracts::rites::topup::types::TopupConfig;
+    use opus_compose::vicariate::contracts::rites::topup::types::{SwapParams, TopupConfig};
     use opus_compose::vicariate::contracts::rites::utils::rites_utils;
     use opus_compose::vicariate::interfaces::prior::{IPriorDispatcher, IPriorDispatcherTrait};
     use opus_compose::vicariate::interfaces::rite::IRite;
@@ -40,11 +40,6 @@ pub mod topup_rite {
 
     pub const MAX_SLIPPAGE: u128 = RAY_PERCENT * 20;
 
-    #[derive(Copy, Drop)]
-    pub struct SwapParams {
-        forge_amount: Wad,
-        swap_data: Option<(RouteNode, TokenAmount)>,
-    }
 
     #[storage]
     struct Storage {
@@ -109,11 +104,10 @@ pub mod topup_rite {
 
     #[abi(embed_v0)]
     pub impl ITopupRiteImpl of ITopupRite<ContractState> {
-        fn get_forge_amount(self: @ContractState, trove_id: u64) -> Wad {
+        fn get_swap_params(self: @ContractState, trove_id: u64) -> SwapParams {
             let config = self.topup_configs.read(trove_id);
-            let swap_params: SwapParams = self
-                .get_swap_params(config.asset, config.topup_amount, config.slippage);
-            swap_params.forge_amount
+            self
+                .get_swap_params_helper(config.asset, config.topup_amount, config.slippage)
         }
 
         fn set_pool_key(ref self: ContractState, asset: ContractAddress, pool_key: PoolKey) {
@@ -202,7 +196,7 @@ pub mod topup_rite {
 
             let config = self.topup_configs.read(trove_id);
             let swap_params: SwapParams = self
-                .get_swap_params(config.asset, config.topup_amount, config.slippage);
+                .get_swap_params_helper(config.asset, config.topup_amount, config.slippage);
 
             prior.on_rite_actions(trove_id, array![Action::Forge(swap_params.forge_amount)].span());
 
@@ -246,7 +240,7 @@ pub mod topup_rite {
 
     #[generate_trait]
     impl TopupRiteHelpers of TopupRiteHelpersTrait {
-        fn get_swap_params(
+        fn get_swap_params_helper(
             self: @ContractState,
             asset: ContractAddress,
             topup_amount: u128,

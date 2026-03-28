@@ -1,5 +1,14 @@
+use ekubo::interfaces::router::{
+    RouteNode, TokenAmount,
+};
 use starknet::ContractAddress;
-use wadray::Ray;
+use wadray::{Ray, Wad};
+
+#[derive(Copy, Drop, Serde)]
+pub struct SwapParams {
+    pub forge_amount: Wad,
+    pub swap_data: Option<(RouteNode, TokenAmount)>,
+}
 
 #[derive(Copy, Drop, PartialEq, Serde, starknet::Store)]
 pub struct TopupConfig {
