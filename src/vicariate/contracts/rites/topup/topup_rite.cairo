@@ -19,8 +19,10 @@ pub mod topup_rite {
     use ekubo::types::pool_price::PoolPrice;
     use opus::interfaces::{IAbbotDispatcher, IAbbotDispatcherTrait};
     use opus_compose::interfaces::erc20::{IERC20Dispatcher, IERC20DispatcherTrait};
-    use opus_compose::vicariate::contracts::rites::components::pool_key_manager::{IPoolKeyManager, pool_key_manager_component};
-        use opus_compose::vicariate::contracts::rites::topup::types::{SwapParams, TopupConfig};
+    use opus_compose::vicariate::contracts::rites::components::pool_key_manager::{
+        IPoolKeyManager, pool_key_manager_component,
+    };
+    use opus_compose::vicariate::contracts::rites::topup::types::{SwapParams, TopupConfig};
     use opus_compose::vicariate::contracts::rites::utils::rites_utils;
     use opus_compose::vicariate::interfaces::prior::{IPriorDispatcher, IPriorDispatcherTrait};
     use opus_compose::vicariate::interfaces::rite::IRite;
@@ -36,9 +38,12 @@ pub mod topup_rite {
 
     pub const MAX_SLIPPAGE: u128 = RAY_PERCENT * 20;
 
-    component!(path: pool_key_manager_component, storage: pool_key_manager, event: PoolKeyManagerEvent);
+    component!(
+        path: pool_key_manager_component, storage: pool_key_manager, event: PoolKeyManagerEvent,
+    );
 
-    impl PoolKeyManagerInternalImpl = pool_key_manager_component::PoolKeyManagerHelpers<ContractState>;
+    impl PoolKeyManagerInternalImpl =
+        pool_key_manager_component::PoolKeyManagerHelpers<ContractState>;
 
     #[storage]
     struct Storage {
@@ -113,8 +118,7 @@ pub mod topup_rite {
     pub impl ITopupRiteImpl of ITopupRite<ContractState> {
         fn get_swap_params(self: @ContractState, trove_id: u64) -> SwapParams {
             let config = self.topup_configs.read(trove_id);
-            self
-                .get_swap_params_helper(config.asset, config.topup_amount, config.slippage)
+            self.get_swap_params_helper(config.asset, config.topup_amount, config.slippage)
         }
     }
 
@@ -142,24 +146,33 @@ pub mod topup_rite {
             };
             assert!(
                 prior_abbot.get_trove_owner(trove_id).expect('TOPUP: Trove not found') == user,
-                "{}: Not owner", RITE_ID()
+                "{}: Not owner",
+                RITE_ID(),
             );
 
             assert!(config.asset.is_non_zero(), "{}: Invalid asset", RITE_ID());
             if config.topup_amount.is_non_zero() {
                 assert!(
-                    config.asset == self.yin.read().contract_address || 
-                    self.pool_key_manager.get_pool_key_helper(config.asset).token0.is_non_zero(), "{}: No swap path", RITE_ID()
+                    config.asset == self.yin.read().contract_address
+                        || self
+                            .pool_key_manager
+                            .get_pool_key_helper(config.asset)
+                            .token0
+                            .is_non_zero(),
+                    "{}: No swap path",
+                    RITE_ID(),
                 );
                 assert!(
                     config.topup_amount >= config.min_asset_balance // Prevent multiple topups
                     ,
-                    "{}: Invalid topup amount", RITE_ID()
+                    "{}: Invalid topup amount",
+                    RITE_ID(),
                 );
                 assert!(config.destination.is_non_zero(), "{}: Invalid destination", RITE_ID());
                 assert!(
                     config.slippage.is_non_zero() && config.slippage <= MAX_SLIPPAGE.into(),
-                    "{}: Slippage out of acceptable range", RITE_ID()
+                    "{}: Slippage out of acceptable range",
+                    RITE_ID(),
                 );
             }
 
@@ -238,10 +251,7 @@ pub mod topup_rite {
     #[generate_trait]
     impl TopupRiteHelpers of TopupRiteHelpersTrait {
         fn get_swap_params_helper(
-            self: @ContractState,
-            asset: ContractAddress,
-            topup_amount: u128,
-            slippage: Ray,
+            self: @ContractState, asset: ContractAddress, topup_amount: u128, slippage: Ray,
         ) -> SwapParams {
             let cash = self.yin.read().contract_address;
             let pool_key: PoolKey = self.pool_key_manager.get_pool_key_helper(asset);

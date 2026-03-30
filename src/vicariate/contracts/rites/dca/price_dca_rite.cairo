@@ -10,7 +10,9 @@ pub mod price_dca_rite {
     use opus::utils::math::convert_ekubo_oracle_price_to_wad;
     use opus_compose::constants;
     use opus_compose::interfaces::erc20::{IERC20Dispatcher, IERC20DispatcherTrait};
-    use opus_compose::vicariate::contracts::rites::components::pool_key_manager::{IPoolKeyManager, pool_key_manager_component};
+    use opus_compose::vicariate::contracts::rites::components::pool_key_manager::{
+        IPoolKeyManager, pool_key_manager_component,
+    };
     use opus_compose::vicariate::contracts::rites::dca::types::{
         ConsolidatedOrderData, DcaDurationTrait, DcaOrder, OrderStatus, OrderType, PriceDcaConfig,
     };
@@ -29,9 +31,12 @@ pub mod price_dca_rite {
     const CASH_DECIMALS: u8 = 18;
     pub const MINIMUM_TWAP_PERIOD: u64 = 5 * 60;
 
-    component!(path: pool_key_manager_component, storage: pool_key_manager, event: PoolKeyManagerEvent);
+    component!(
+        path: pool_key_manager_component, storage: pool_key_manager, event: PoolKeyManagerEvent,
+    );
 
-    impl PoolKeyManagerInternalImpl = pool_key_manager_component::PoolKeyManagerHelpers<ContractState>;
+    impl PoolKeyManagerInternalImpl =
+        pool_key_manager_component::PoolKeyManagerHelpers<ContractState>;
 
     #[storage]
     struct Storage {
@@ -169,11 +174,7 @@ pub mod price_dca_rite {
                 );
             }
             if activated_buy && activated_sell {
-                assert!(
-                    config.sell_price > config.buy_price,
-                    "{}: Invalid sell price",
-                    RITE_ID(),
-                );
+                assert!(config.sell_price > config.buy_price, "{}: Invalid sell price", RITE_ID());
             }
 
             self.price_dca_configs.write(trove_id, config);
@@ -251,8 +252,11 @@ pub mod price_dca_rite {
             let start_time: u64 = get_block_timestamp();
             let end_time: u64 = config.dca_duration.to_valid_end_time(start_time);
             let order_key = OrderKey {
-                sell_token, buy_token, fee: pool_key.fee, // Zero can be used for order that starts immediately
-                start_time: 0, end_time,
+                sell_token,
+                buy_token,
+                fee: pool_key.fee, // Zero can be used for order that starts immediately
+                start_time: 0,
+                end_time,
             };
 
             let (position_id, _sale_rate) = ekubo_positions

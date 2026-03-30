@@ -1,6 +1,4 @@
-use ekubo::interfaces::router::{
-    RouteNode, TokenAmount,
-};
+use ekubo::interfaces::router::{RouteNode, TokenAmount};
 use starknet::ContractAddress;
 use wadray::{Ray, Wad};
 

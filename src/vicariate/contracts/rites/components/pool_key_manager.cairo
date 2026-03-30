@@ -14,10 +14,8 @@ pub mod pool_key_manager_component {
     use core::num::traits::Zero;
     use ekubo::types::keys::PoolKey;
     use opus_compose::stabilizer::types::StoragePoolKey;
-    use starknet::storage::{
-        Map, StorageMapReadAccess, StorageMapWriteAccess,
-    };
     use starknet::ContractAddress;
+    use starknet::storage::{Map, StorageMapReadAccess, StorageMapWriteAccess};
 
     #[storage]
     pub struct Storage {
@@ -61,9 +59,7 @@ pub mod pool_key_manager_component {
             self.pool_keys.read(asset).into()
         }
 
-        fn clear_pool_key_helper(
-            ref self: ComponentState<TContractState>, asset: ContractAddress,
-        ) {
+        fn clear_pool_key_helper(ref self: ComponentState<TContractState>, asset: ContractAddress) {
             let zero_key = StoragePoolKey {
                 token0: Zero::zero(),
                 token1: Zero::zero(),
