@@ -1,14 +1,5 @@
-use ekubo::types::keys::PoolKey;
-use starknet::ContractAddress;
-
-#[starknet::interface]
-pub trait IPriceDcaRite<TContractState> {
-    fn set_pool_key(ref self: TContractState, asset: ContractAddress, pool_key: PoolKey);
-}
-
 #[starknet::contract]
 pub mod price_dca_rite {
-    use core::cmp::minmax;
     use core::num::traits::Zero;
     use ekubo::extensions::oracle::{IOracleDispatcher, IOracleDispatcherTrait};
     use ekubo::interfaces::extensions::twamm::{OrderInfo, OrderKey};
@@ -19,7 +10,7 @@ pub mod price_dca_rite {
     use opus::utils::math::convert_ekubo_oracle_price_to_wad;
     use opus_compose::constants;
     use opus_compose::interfaces::erc20::{IERC20Dispatcher, IERC20DispatcherTrait};
-    use opus_compose::stabilizer::types::StoragePoolKey;
+    use opus_compose::vicariate::contracts::rites::components::pool_key_manager::{IPoolKeyManager, pool_key_manager_component};
     use opus_compose::vicariate::contracts::rites::dca::types::{
         ConsolidatedOrderData, DcaDurationTrait, DcaOrder, OrderStatus, OrderType, PriceDcaConfig,
     };
@@ -34,10 +25,13 @@ pub mod price_dca_rite {
     };
     use starknet::{ContractAddress, get_block_timestamp, get_caller_address};
     use wadray::Wad;
-    use super::IPriceDcaRite;
 
     const CASH_DECIMALS: u8 = 18;
     pub const TWAP_DURATION: u64 = 5 * 60;
+
+    component!(path: pool_key_manager_component, storage: pool_key_manager, event: PoolKeyManagerEvent);
+
+    impl PoolKeyManagerInternalImpl = pool_key_manager_component::PoolKeyManagerHelpers<ContractState>;
 
     #[storage]
     struct Storage {
@@ -46,18 +40,17 @@ pub mod price_dca_rite {
         ekubo_oracle: IOracleDispatcher,
         ekubo_positions: IPositionsDispatcher,
         price_dca_configs: Map<u64, PriceDcaConfig>, // PDCA trove ID -> config
-        // Mapping of ERC-20 to the key of the pool to swap against.
-        // Swaps are made against a single pool to guarantee on-chain execution.
-        pool_keys: Map<ContractAddress, StoragePoolKey>,
         // Mapping of smart trove ID to Ekubo NFT ID
         twamm_orders: Map<u64, DcaOrder>,
+        #[substorage(v0)]
+        pool_key_manager: pool_key_manager_component::Storage,
     }
 
     #[event]
     #[derive(Copy, Drop, starknet::Event, PartialEq)]
     pub enum Event {
         PriceDcaConfigUpdated: PriceDcaConfigUpdated,
-        PoolKeySet: PoolKeySet,
+        PoolKeyManagerEvent: pool_key_manager_component::Event,
         TwammOrderCreated: TwammOrderCreated,
         TwammOrderClosed: TwammOrderClosed,
     }
@@ -69,13 +62,6 @@ pub mod price_dca_rite {
         #[key]
         pub trove_id: u64,
         pub config: PriceDcaConfig,
-    }
-
-    #[derive(Copy, Drop, starknet::Event, PartialEq)]
-    pub struct PoolKeySet {
-        #[key]
-        pub asset: ContractAddress,
-        pub pool_key: PoolKey,
     }
 
     #[derive(Copy, Drop, starknet::Event, PartialEq)]
@@ -120,24 +106,24 @@ pub mod price_dca_rite {
     }
 
     #[abi(embed_v0)]
-    pub impl IPriceDcaRiteImpl of IPriceDcaRite<ContractState> {
+    pub impl IPoolKeyManagerImpl of IPoolKeyManager<ContractState> {
         fn set_pool_key(ref self: ContractState, asset: ContractAddress, pool_key: PoolKey) {
-            let cash = self.yin.read().contract_address;
-            assert!(
-                minmax(pool_key.token0, pool_key.token1) == minmax(asset, cash),
-                "{}: Invalid pool key assets",
-                RITE_ID(),
-            );
-
             assert!(
                 pool_key.tick_spacing == constants::EKUBO_TWAMM_TICK_SPACING,
                 "{}: Wrong tick spacing",
                 RITE_ID(),
             );
 
-            self.pool_keys.write(asset, pool_key.into());
+            let cash = self.yin.read().contract_address;
+            self.pool_key_manager.set_pool_key_helper(cash, asset, pool_key);
+        }
 
-            self.emit(PoolKeySet { asset, pool_key });
+        fn get_pool_key(self: @ContractState, asset: ContractAddress) -> PoolKey {
+            self.pool_key_manager.get_pool_key_helper(asset)
+        }
+
+        fn clear_pool_key(ref self: ContractState, asset: ContractAddress) {
+            self.pool_key_manager.clear_pool_key_helper(asset);
         }
     }
 
@@ -174,7 +160,7 @@ pub mod price_dca_rite {
             assert!(config.asset.is_non_zero(), "{}: Invalid asset", RITE_ID());
             if config.buy_price.is_non_zero() {
                 assert!(
-                    self.pool_keys.read(config.asset).token0.is_non_zero(),
+                    self.pool_key_manager.get_pool_key_helper(config.asset).token0.is_non_zero(),
                     "{}: No swap path",
                     RITE_ID(),
                 );
@@ -256,7 +242,7 @@ pub mod price_dca_rite {
                 },
             }
 
-            let pool_key = self.pool_keys.read(config.asset);
+            let pool_key = self.pool_key_manager.get_pool_key_helper(config.asset);
             let start_time: u64 = get_block_timestamp();
             let end_time: u64 = config.dca_duration.to_valid_end_time(start_time);
             let order_key = OrderKey {

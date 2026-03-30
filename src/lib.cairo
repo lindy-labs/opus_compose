@@ -46,6 +46,10 @@ pub mod vicariate {
     pub mod contracts {
         pub mod prior;
         pub mod rites {
+            pub mod components {
+                pub mod pool_key_manager;
+            }
+            pub mod interfaces;
             pub mod utils;
             pub mod topup {
                 pub mod topup_rite;
