@@ -27,7 +27,7 @@ pub mod price_dca_rite {
     use wadray::Wad;
 
     const CASH_DECIMALS: u8 = 18;
-    pub const TWAP_DURATION: u64 = 5 * 60;
+    pub const MINIMUM_TWAP_PERIOD: u64 = 5 * 60;
 
     component!(path: pool_key_manager_component, storage: pool_key_manager, event: PoolKeyManagerEvent);
 
@@ -146,6 +146,7 @@ pub mod price_dca_rite {
             let mut config = config;
             let config: PriceDcaConfig = Serde::<PriceDcaConfig>::deserialize(ref config)
                 .expect('PRICE_DCA: Invalid config');
+            assert!(config.period >= MINIMUM_TWAP_PERIOD, "{}: TWAP period too short", RITE_ID());
 
             let user = get_caller_address();
             let prior_abbot = IAbbotDispatcher {
@@ -158,15 +159,18 @@ pub mod price_dca_rite {
             );
 
             assert!(config.asset.is_non_zero(), "{}: Invalid asset", RITE_ID());
-            if config.buy_price.is_non_zero() {
+            let activated_buy: bool = config.buy_price.is_non_zero();
+            let activated_sell: bool = config.sell_price.is_non_zero();
+            if activated_buy || activated_sell {
                 assert!(
                     self.pool_key_manager.get_pool_key_helper(config.asset).token0.is_non_zero(),
                     "{}: No swap path",
                     RITE_ID(),
                 );
+            }
+            if activated_buy && activated_sell {
                 assert!(
-                    config.sell_price.is_zero() // Sell DCA is disabled
-                        || config.sell_price > config.buy_price,
+                    config.sell_price > config.buy_price,
                     "{}: Invalid sell price",
                     RITE_ID(),
                 );
@@ -177,6 +181,7 @@ pub mod price_dca_rite {
             self.emit(PriceDcaConfigUpdated { user, trove_id, config });
         }
 
+        // Returns true if price conditions and no existing ongoing order
         fn is_ready(self: @ContractState, trove_id: u64) -> bool {
             let order_type: OrderType = self.price_conditions_met(trove_id);
             match order_type {

@@ -148,6 +148,7 @@ pub mod topup_rite {
             assert!(config.asset.is_non_zero(), "{}: Invalid asset", RITE_ID());
             if config.topup_amount.is_non_zero() {
                 assert!(
+                    config.asset == self.yin.read().contract_address || 
                     self.pool_key_manager.get_pool_key_helper(config.asset).token0.is_non_zero(), "{}: No swap path", RITE_ID()
                 );
                 assert!(
