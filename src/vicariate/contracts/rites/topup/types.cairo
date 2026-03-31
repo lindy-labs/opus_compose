@@ -1,4 +1,5 @@
 use ekubo::interfaces::router::{RouteNode, TokenAmount};
+use opus_compose::vicariate::contracts::rites::types::EkuboPoolParams;
 use starknet::ContractAddress;
 use wadray::{Ray, Wad};
 
@@ -11,6 +12,7 @@ pub struct SwapParams {
 #[derive(Copy, Drop, PartialEq, Serde, starknet::Store)]
 pub struct TopupConfig {
     pub asset: ContractAddress,
+    pub pool_params: EkuboPoolParams,
     pub min_asset_balance: u128,
     // Topup amount is denominated in the tracked asset
     // Set to zero to disable auto-topup
@@ -18,4 +20,3 @@ pub struct TopupConfig {
     pub destination: ContractAddress,
     pub slippage: Ray,
 }
-

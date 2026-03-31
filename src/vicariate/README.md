@@ -20,8 +20,11 @@ Rites must implement the `IRite` interface.
 The call sequence for an action is as follows:
 1. User calls `prior.execute_rite(...)`
 2. `prior.execute_rite(...)` calls `rite.perform(...)`
-3. `rite.perform(...)` calls `prior.on_execute_rite(...)` to perform the necessary action on the Trove
+3. `rite.perform(...)` calls `prior.on_execute_rite(...)` to perform the necessary action(s) on the Trove
 4. Execution returns to `rite.perform(...)`
 5. Steps (3) and (4) may be repeated more than once
 6. The execution logic for (4) is completed, and execution returns to `prior.execute_rite(...)` which checks the smart trove's LTV
 
+## General principles for designing a Rite
+
+- Access control should be avoided as far as possible. Where possible, let the user specify the configuration instead.

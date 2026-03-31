@@ -1,4 +1,5 @@
 use ekubo::interfaces::extensions::twamm::{OrderInfo, OrderKey};
+use opus_compose::vicariate::contracts::rites::types::EkuboPoolParams;
 use starknet::ContractAddress;
 use wadray::Wad;
 
@@ -85,6 +86,7 @@ pub impl DcaDurationImpl of DcaDurationTrait {
 #[derive(Copy, Drop, PartialEq, Serde, starknet::Store)]
 pub struct PriceDcaConfig {
     pub asset: ContractAddress,
+    pub pool_params: EkuboPoolParams,
     pub buy_price: Wad,
     // Set `buy_amount` to zero to disable buy orders
     // Denominated in CASH
@@ -93,10 +95,10 @@ pub struct PriceDcaConfig {
     // Set `sell_amount` to zero to disable sell orders
     // Denominated in asset
     pub sell_amount: u128,
+    // Duration used to check the TWAP for asset
+    pub twap_duration: u64,
     // Duration of DCA order
-    pub dca_duration: DcaDuration,
-    // Period to check the TWAP for asset
-    pub period: u64,
+    pub order_duration: DcaDuration,
 }
 
 #[derive(Copy, Drop, Default, PartialEq, Serde, starknet::Store)]

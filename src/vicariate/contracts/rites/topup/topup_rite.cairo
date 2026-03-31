@@ -19,10 +19,8 @@ pub mod topup_rite {
     use ekubo::types::pool_price::PoolPrice;
     use opus::interfaces::{IAbbotDispatcher, IAbbotDispatcherTrait};
     use opus_compose::interfaces::erc20::{IERC20Dispatcher, IERC20DispatcherTrait};
-    use opus_compose::vicariate::contracts::rites::components::pool_key_manager::{
-        IPoolKeyManager, pool_key_manager_component,
-    };
     use opus_compose::vicariate::contracts::rites::topup::types::{SwapParams, TopupConfig};
+    use opus_compose::vicariate::contracts::rites::types::{EkuboPoolParams, EkuboPoolParamsTrait};
     use opus_compose::vicariate::contracts::rites::utils::rites_utils;
     use opus_compose::vicariate::interfaces::prior::{IPriorDispatcher, IPriorDispatcherTrait};
     use opus_compose::vicariate::interfaces::rite::IRite;
@@ -38,13 +36,6 @@ pub mod topup_rite {
 
     pub const MAX_SLIPPAGE: u128 = RAY_PERCENT * 20;
 
-    component!(
-        path: pool_key_manager_component, storage: pool_key_manager, event: PoolKeyManagerEvent,
-    );
-
-    impl PoolKeyManagerInternalImpl =
-        pool_key_manager_component::PoolKeyManagerHelpers<ContractState>;
-
     #[storage]
     struct Storage {
         yin: IERC20Dispatcher,
@@ -52,8 +43,6 @@ pub mod topup_rite {
         ekubo_core: ICoreDispatcher,
         ekubo_router: IRouterDispatcher,
         topup_configs: Map<u64, TopupConfig>, // ATU trove ID -> config
-        #[substorage(v0)]
-        pool_key_manager: pool_key_manager_component::Storage,
     }
 
     #[event]
@@ -61,7 +50,6 @@ pub mod topup_rite {
     pub enum Event {
         TopupConfigUpdated: TopupConfigUpdated,
         TopupExecuted: TopupExecuted,
-        PoolKeyManagerEvent: pool_key_manager_component::Event,
     }
 
     #[derive(Copy, Drop, starknet::Event, PartialEq)]
@@ -99,30 +87,6 @@ pub mod topup_rite {
     }
 
     #[abi(embed_v0)]
-    pub impl IPoolKeyManagerImpl of IPoolKeyManager<ContractState> {
-        fn set_pool_key(ref self: ContractState, asset: ContractAddress, pool_key: PoolKey) {
-            let cash = self.yin.read().contract_address;
-            self.pool_key_manager.set_pool_key_helper(cash, asset, pool_key);
-        }
-
-        fn get_pool_key(self: @ContractState, asset: ContractAddress) -> PoolKey {
-            self.pool_key_manager.get_pool_key_helper(asset)
-        }
-
-        fn clear_pool_key(ref self: ContractState, asset: ContractAddress) {
-            self.pool_key_manager.clear_pool_key_helper(asset);
-        }
-    }
-
-    #[abi(embed_v0)]
-    pub impl ITopupRiteImpl of ITopupRite<ContractState> {
-        fn get_swap_params(self: @ContractState, trove_id: u64) -> SwapParams {
-            let config = self.topup_configs.read(trove_id);
-            self.get_swap_params_helper(config.asset, config.topup_amount, config.slippage)
-        }
-    }
-
-    #[abi(embed_v0)]
     pub impl IRiteImpl of IRite<ContractState> {
         fn get_rite_id(self: @ContractState) -> ByteArray {
             RITE_ID()
@@ -150,15 +114,17 @@ pub mod topup_rite {
                 RITE_ID(),
             );
 
-            assert!(config.asset.is_non_zero(), "{}: Invalid asset", RITE_ID());
+            assert!(
+                config.asset.is_non_zero(),
+                "{}: Invalid asset",
+                RITE_ID(),
+            );
             if config.topup_amount.is_non_zero() {
+                let cash = self.yin.read().contract_address;
+
                 assert!(
-                    config.asset == self.yin.read().contract_address
-                        || self
-                            .pool_key_manager
-                            .get_pool_key_helper(config.asset)
-                            .token0
-                            .is_non_zero(),
+                    config.asset == cash
+                        || config.pool_params.tick_spacing.is_non_zero(),
                     "{}: No swap path",
                     RITE_ID(),
                 );
@@ -205,16 +171,17 @@ pub mod topup_rite {
             rites_utils::assert_caller_is_prior(caller, prior.contract_address, self.get_rite_id());
 
             let config = self.topup_configs.read(trove_id);
+            let cash = self.yin.read().contract_address;
             let swap_params: SwapParams = self
-                .get_swap_params_helper(config.asset, config.topup_amount, config.slippage);
+                .get_swap_params_helper(config.pool_params, config.asset, config.topup_amount, config.slippage, cash);
 
             prior.on_rite_actions(trove_id, array![Action::Forge(swap_params.forge_amount)].span());
 
-            let cash = self.yin.read();
+            let yin = self.yin.read();
 
             if let Some((route_node, token_amount)) = swap_params.swap_data {
                 let ekubo_router = self.ekubo_router.read();
-                cash.transfer(ekubo_router.contract_address, swap_params.forge_amount.into());
+                yin.transfer(ekubo_router.contract_address, swap_params.forge_amount.into());
                 ekubo_router.swap(route_node, token_amount);
 
                 IClearDispatcher { contract_address: ekubo_router.contract_address }
@@ -224,7 +191,7 @@ pub mod topup_rite {
                         config.destination,
                     );
             } else {
-                cash.transfer(config.destination, swap_params.forge_amount.into());
+                yin.transfer(config.destination, swap_params.forge_amount.into());
             }
 
             self
@@ -248,18 +215,26 @@ pub mod topup_rite {
         }
     }
 
+    #[abi(embed_v0)]
+    pub impl ITopupRiteImpl of ITopupRite<ContractState> {
+        fn get_swap_params(self: @ContractState, trove_id: u64) -> SwapParams {
+            let config = self.topup_configs.read(trove_id);
+            let cash = self.yin.read().contract_address;
+            self
+                .get_swap_params_helper(config.pool_params, config.asset, config.topup_amount, config.slippage, cash)
+        }
+    }
+
     #[generate_trait]
     impl TopupRiteHelpers of TopupRiteHelpersTrait {
         fn get_swap_params_helper(
-            self: @ContractState, asset: ContractAddress, topup_amount: u128, slippage: Ray,
+            self: @ContractState, pool_params: EkuboPoolParams, asset: ContractAddress, topup_amount: u128, slippage: Ray,
+            cash: ContractAddress,
         ) -> SwapParams {
-            let cash = self.yin.read().contract_address;
-            let pool_key: PoolKey = self.pool_key_manager.get_pool_key_helper(asset);
-            assert!(asset == cash || pool_key.token0.is_non_zero(), "{}: No swap path", RITE_ID());
-
             if asset == cash {
                 SwapParams { forge_amount: topup_amount.into(), swap_data: Option::None }
             } else {
+                let pool_key: PoolKey = pool_params.into_pool_key(asset, cash);
                 let ekubo_core = self.ekubo_core.read();
                 let ekubo_router = self.ekubo_router.read();
 

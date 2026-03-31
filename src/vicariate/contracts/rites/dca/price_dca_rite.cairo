@@ -10,9 +10,7 @@ pub mod price_dca_rite {
     use opus::utils::math::convert_ekubo_oracle_price_to_wad;
     use opus_compose::constants;
     use opus_compose::interfaces::erc20::{IERC20Dispatcher, IERC20DispatcherTrait};
-    use opus_compose::vicariate::contracts::rites::components::pool_key_manager::{
-        IPoolKeyManager, pool_key_manager_component,
-    };
+    use opus_compose::vicariate::contracts::rites::types::EkuboPoolParamsTrait;
     use opus_compose::vicariate::contracts::rites::dca::types::{
         ConsolidatedOrderData, DcaDurationTrait, DcaOrder, OrderStatus, OrderType, PriceDcaConfig,
     };
@@ -29,14 +27,7 @@ pub mod price_dca_rite {
     use wadray::Wad;
 
     const CASH_DECIMALS: u8 = 18;
-    pub const MINIMUM_TWAP_PERIOD: u64 = 5 * 60;
-
-    component!(
-        path: pool_key_manager_component, storage: pool_key_manager, event: PoolKeyManagerEvent,
-    );
-
-    impl PoolKeyManagerInternalImpl =
-        pool_key_manager_component::PoolKeyManagerHelpers<ContractState>;
+    pub const MINIMUM_TWAP_DURATION: u64 = 5 * 60;
 
     #[storage]
     struct Storage {
@@ -47,15 +38,12 @@ pub mod price_dca_rite {
         price_dca_configs: Map<u64, PriceDcaConfig>, // PDCA trove ID -> config
         // Mapping of smart trove ID to Ekubo NFT ID
         twamm_orders: Map<u64, DcaOrder>,
-        #[substorage(v0)]
-        pool_key_manager: pool_key_manager_component::Storage,
     }
 
     #[event]
     #[derive(Copy, Drop, starknet::Event, PartialEq)]
     pub enum Event {
         PriceDcaConfigUpdated: PriceDcaConfigUpdated,
-        PoolKeyManagerEvent: pool_key_manager_component::Event,
         TwammOrderCreated: TwammOrderCreated,
         TwammOrderClosed: TwammOrderClosed,
     }
@@ -79,7 +67,7 @@ pub mod price_dca_rite {
         pub order_id: u64,
         pub order_type: OrderType,
         pub fee: u128,
-        pub dca_duration: u64,
+        pub order_duration: u64,
     }
 
     #[derive(Copy, Drop, starknet::Event, PartialEq)]
@@ -111,28 +99,6 @@ pub mod price_dca_rite {
     }
 
     #[abi(embed_v0)]
-    pub impl IPoolKeyManagerImpl of IPoolKeyManager<ContractState> {
-        fn set_pool_key(ref self: ContractState, asset: ContractAddress, pool_key: PoolKey) {
-            assert!(
-                pool_key.tick_spacing == constants::EKUBO_TWAMM_TICK_SPACING,
-                "{}: Wrong tick spacing",
-                RITE_ID(),
-            );
-
-            let cash = self.yin.read().contract_address;
-            self.pool_key_manager.set_pool_key_helper(cash, asset, pool_key);
-        }
-
-        fn get_pool_key(self: @ContractState, asset: ContractAddress) -> PoolKey {
-            self.pool_key_manager.get_pool_key_helper(asset)
-        }
-
-        fn clear_pool_key(ref self: ContractState, asset: ContractAddress) {
-            self.pool_key_manager.clear_pool_key_helper(asset);
-        }
-    }
-
-    #[abi(embed_v0)]
     pub impl IRiteImpl of IRite<ContractState> {
         fn get_rite_id(self: @ContractState) -> ByteArray {
             RITE_ID()
@@ -151,7 +117,7 @@ pub mod price_dca_rite {
             let mut config = config;
             let config: PriceDcaConfig = Serde::<PriceDcaConfig>::deserialize(ref config)
                 .expect('PRICE_DCA: Invalid config');
-            assert!(config.period >= MINIMUM_TWAP_PERIOD, "{}: TWAP period too short", RITE_ID());
+            assert!(config.twap_duration >= MINIMUM_TWAP_DURATION, "{}: TWAP duration too short", RITE_ID());
 
             let user = get_caller_address();
             let prior_abbot = IAbbotDispatcher {
@@ -163,13 +129,17 @@ pub mod price_dca_rite {
                 RITE_ID(),
             );
 
-            assert!(config.asset.is_non_zero(), "{}: Invalid asset", RITE_ID());
+            assert!(
+                config.asset.is_non_zero(),
+                "{}: Invalid asset",
+                RITE_ID(),
+            );
             let activated_buy: bool = config.buy_price.is_non_zero();
             let activated_sell: bool = config.sell_price.is_non_zero();
             if activated_buy || activated_sell {
                 assert!(
-                    self.pool_key_manager.get_pool_key_helper(config.asset).token0.is_non_zero(),
-                    "{}: No swap path",
+                    config.pool_params.tick_spacing == constants::EKUBO_TWAMM_TICK_SPACING,
+                    "{}: Wrong tick spacing",
                     RITE_ID(),
                 );
             }
@@ -212,6 +182,8 @@ pub mod price_dca_rite {
             self.close_order(trove_id, false);
 
             let config = self.price_dca_configs.read(trove_id);
+            let cash = self.yin.read().contract_address;
+            let pool_key: PoolKey = config.pool_params.into_pool_key(config.asset, cash);
 
             let yin = self.yin.read();
             let ekubo_positions = self.ekubo_positions.read();
@@ -248,9 +220,8 @@ pub mod price_dca_rite {
                 },
             }
 
-            let pool_key = self.pool_key_manager.get_pool_key_helper(config.asset);
             let start_time: u64 = get_block_timestamp();
-            let end_time: u64 = config.dca_duration.to_valid_end_time(start_time);
+            let end_time: u64 = config.order_duration.to_valid_end_time(start_time);
             let order_key = OrderKey {
                 sell_token,
                 buy_token,
@@ -274,7 +245,7 @@ pub mod price_dca_rite {
                         order_id: position_id,
                         order_type,
                         fee: pool_key.fee,
-                        dca_duration: config.dca_duration.to_seconds(),
+                        order_duration: config.order_duration.to_seconds(),
                     },
                 );
         }
@@ -291,10 +262,10 @@ pub mod price_dca_rite {
     #[generate_trait]
     impl PriceDcaRiteHelpers of PriceDcaRiteHelpersTrait {
         // Returns the price of the asset in CASH
-        fn get_asset_price(self: @ContractState, asset: ContractAddress, period: u64) -> Wad {
+        fn get_asset_price(self: @ContractState, asset: ContractAddress, twap_duration: u64) -> Wad {
             let oracle = self.ekubo_oracle.read();
             let price_x128: u256 = oracle
-                .get_price_x128_over_last(asset, self.yin.read().contract_address, period);
+                .get_price_x128_over_last(asset, self.yin.read().contract_address, twap_duration);
 
             convert_ekubo_oracle_price_to_wad(
                 price_x128, IERC20Dispatcher { contract_address: asset }.decimals(), CASH_DECIMALS,
@@ -310,7 +281,7 @@ pub mod price_dca_rite {
                 return OrderType::None;
             }
 
-            let asset_price: Wad = self.get_asset_price(config.asset, config.period);
+            let asset_price: Wad = self.get_asset_price(config.asset, config.twap_duration);
             let should_buy: bool = buy_is_enabled && asset_price <= config.buy_price;
             let should_sell: bool = sell_is_enabled && asset_price >= config.sell_price;
             if should_buy {

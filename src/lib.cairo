@@ -45,10 +45,8 @@ pub mod stabilizer {
 pub mod vicariate {
     pub mod contracts {
         pub mod prior;
-        pub mod rites {
-            pub mod components {
-                pub mod pool_key_manager;
-            }
+            pub mod rites {
+            pub mod types;
             pub mod interfaces;
             pub mod utils;
             pub mod topup {

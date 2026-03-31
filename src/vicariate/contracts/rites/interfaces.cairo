@@ -1,4 +1,2 @@
-// This file previously contained ITopupRite with only set_pool_key.
-// set_pool_key and get_pool_key are now provided by the PoolKeyManager component
-// (src/vicariate/contracts/rites/components/pool_key_manager.cairo).
+// Pool keys are now specified per-trove by users in their config.
 // Contract-specific interfaces are defined inline in each contract file.
