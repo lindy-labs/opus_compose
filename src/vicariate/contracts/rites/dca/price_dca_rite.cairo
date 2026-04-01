@@ -117,7 +117,7 @@ pub mod price_dca_rite {
             let mut config = config;
             let config: PriceDcaConfig = Serde::<PriceDcaConfig>::deserialize(ref config)
                 .expect('PRICE_DCA: Invalid config');
-            assert!(config.twap_duration >= MINIMUM_TWAP_DURATION, "{}: TWAP duration too short", RITE_ID());
+            assert!(config.durations.twap_duration >= MINIMUM_TWAP_DURATION, "{}: TWAP duration too short", RITE_ID());
 
             let user = get_caller_address();
             let prior_abbot = IAbbotDispatcher {
@@ -221,7 +221,7 @@ pub mod price_dca_rite {
             }
 
             let start_time: u64 = get_block_timestamp();
-            let end_time: u64 = config.order_duration.to_valid_end_time(start_time);
+            let end_time: u64 = config.durations.order_duration.to_valid_end_time(start_time);
             let order_key = OrderKey {
                 sell_token,
                 buy_token,
@@ -245,7 +245,7 @@ pub mod price_dca_rite {
                         order_id: position_id,
                         order_type,
                         fee: pool_key.fee,
-                        order_duration: config.order_duration.to_seconds(),
+                        order_duration: config.durations.order_duration.to_seconds(),
                     },
                 );
         }
@@ -281,7 +281,7 @@ pub mod price_dca_rite {
                 return OrderType::None;
             }
 
-            let asset_price: Wad = self.get_asset_price(config.asset, config.twap_duration);
+            let asset_price: Wad = self.get_asset_price(config.asset, config.durations.twap_duration);
             let should_buy: bool = buy_is_enabled && asset_price <= config.buy_price;
             let should_sell: bool = sell_is_enabled && asset_price >= config.sell_price;
             if should_buy {
