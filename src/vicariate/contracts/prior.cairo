@@ -255,6 +255,8 @@ pub mod prior {
         //
 
         fn set_trove_config(ref self: ContractState, trove_id: u64, config: SmartTroveConfig) {
+            let user: ContractAddress = get_caller_address();
+            self.assert_smart_trove_owner(user, trove_id);
             assert!(config.relative_threshold <= RAY_ONE.into(), "PRI: Invalid relative threshold");
 
             self.smart_trove_configs.write(trove_id, config)
@@ -554,14 +556,16 @@ pub mod prior {
             self: @ContractState, rite: IRiteDispatcher, trove_id: u64,
         ) -> bool {
             let can_execute: bool = rite.is_ready(trove_id);
-
-            let config: SmartTroveConfig = self.smart_trove_configs.read(trove_id);
-            let forge_fee_pct: Wad = self.shrine.read().get_forge_fee_pct();
-            if forge_fee_pct > config.max_forge_fee_pct {
-                return false;
+            if can_execute {
+                let config: SmartTroveConfig = self.smart_trove_configs.read(trove_id);
+                let forge_fee_pct: Wad = self.shrine.read().get_forge_fee_pct();
+                if forge_fee_pct > config.max_forge_fee_pct {
+                    return false;
+                }
+                true
+            } else {
+                false
             }
-
-            can_execute
         }
 
         fn execute_action(
@@ -570,13 +574,13 @@ pub mod prior {
             match action {
                 Action::Forge(amount) => {
                     let config: SmartTroveConfig = self.smart_trove_configs.read(trove_id);
-                    self.forge(trove_id, amount, config.max_forge_fee_pct);
+                    self.abbot.read().forge(trove_id, amount, config.max_forge_fee_pct);
 
                     // Transfer to rite
                     IERC20Dispatcher { contract_address: self.shrine.read().contract_address }
                         .transfer(rite_address, amount.into());
                 },
-                Action::Melt(amount) => { self.melt(trove_id, amount); },
+                Action::Melt(amount) => { self.abbot.read().melt(trove_id, amount); },
                 Action::Deposit(asset_balance) => {
                     // Approve Gate for yang
                     let gate_address = self.sentinel.read().get_gate_address(asset_balance.address);

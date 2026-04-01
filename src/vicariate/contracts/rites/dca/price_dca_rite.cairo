@@ -112,7 +112,7 @@ pub mod price_dca_rite {
         }
 
         fn set_trove_config(ref self: ContractState, trove_id: u64, config: Span<felt252>) {
-            assert!(!self.has_ended(trove_id), "{}: Ongoing order", RITE_ID());
+            assert!(self.has_ended(trove_id), "{}: Ongoing order", RITE_ID());
 
             let mut config = config;
             let config: PriceDcaConfig = Serde::<PriceDcaConfig>::deserialize(ref config)
@@ -163,6 +163,10 @@ pub mod price_dca_rite {
 
         fn has_ended(self: @ContractState, trove_id: u64) -> bool {
             let order: DcaOrder = self.twamm_orders.read(trove_id);
+            if order.position_id.is_zero() {
+                return true;
+            }
+            
             let config = self.price_dca_configs.read(trove_id);
             let consolidated = self.get_consolidated_order_data(order, config.asset);
             match consolidated.order_status {
@@ -360,6 +364,7 @@ pub mod price_dca_rite {
 
                     let order_key = order_key.unwrap();
                     let order_info = order_info.unwrap();
+                    // Withdraw remaining sell tokens directly to Prior
                     remaining_sell_token = ekubo_positions
                         .decrease_sale_rate_to(
                             order.position_id,
@@ -370,12 +375,17 @@ pub mod price_dca_rite {
                 },
             }
 
+            // Withdraw purchased tokens directly to Prior
             let order_key = order_key.unwrap();
             purchased_buy_token = ekubo_positions
                 .withdraw_proceeds_from_sale_to(
                     order.position_id, order_key, prior.contract_address,
                 );
+            
 
+            let yin: IERC20Dispatcher = self.yin.read();
+            let mut buy_token: ContractAddress = Zero::zero();
+            let mut sell_token: ContractAddress = Zero::zero();
             let mut actions: Array<Action> = Default::default();
             match order.order_type {
                 OrderType::BuyAsset => {
@@ -383,13 +393,19 @@ pub mod price_dca_rite {
                         AssetBalance { address: config.asset, amount: purchased_buy_token },
                     );
                     actions.append(action);
+
+                    buy_token = config.asset;
+                    sell_token = yin.contract_address;
                 },
                 OrderType::SellAsset => {
                     let action = Action::Melt(purchased_buy_token.into());
                     actions.append(action);
+
+                    buy_token = yin.contract_address;
+                    sell_token = config.asset;
                 },
                 OrderType::None => { return; },
-            }
+            };
 
             if remaining_sell_token.is_non_zero() {
                 match order.order_type {
