@@ -17,6 +17,10 @@ const TWO_POW_192_U256: u256 = 0x10000000000000000000000000000000000000000000000
 const MASK_62_U256: u256 = 0x3FFFFFFFFFFFFFFF;
 const TWO_POW_62_U256: u256 = 0x4000000000000000;
 
+// PriceConditions packing shifts and masks (each side packed into felt252)
+// Layout per felt252: amount (lower 128 bits) | price (upper 123 bits) = 251 bits
+const MASK_123_U128: u128 = 0x7FFFFFFFFFFFFFFFFFFFFFFFFFFFFF;
+
 #[derive(Copy, Drop, Debug, Default, PartialEq, Serde, starknet::Store)]
 pub enum OrderType {
     BuyAsset,
@@ -156,10 +160,19 @@ impl DcaDurationsPacking of StorePacking<DcaDurations, u128> {
     }
 }
 
-#[derive(Copy, Drop, PartialEq, Serde, starknet::Store)]
-pub struct PriceDcaConfig {
-    pub asset: ContractAddress,
-    pub pool_params: EkuboPoolParams,
+/// Storage representation of PriceConditions — 2 felt252s = 2 storage slots
+/// (down from 4 slots when fields were stored individually).
+#[derive(Copy, Drop, starknet::Store)]
+pub struct PackedPriceConditions {
+    pub buy: felt252,
+    pub sell: felt252,
+}
+
+/// Groups buy/sell price and amount conditions for price-triggered DCA.
+/// Packs into PackedPriceConditions (2 felt252s) via StorePacking:
+///   each felt252 layout: amount (lower 128 bits) | price (upper 123 bits)
+#[derive(Copy, Drop, Debug, PartialEq, Serde)]
+pub struct PriceConditions {
     pub buy_price: Wad,
     // Set `buy_amount` to zero to disable buy orders
     // Denominated in CASH
@@ -168,6 +181,50 @@ pub struct PriceDcaConfig {
     // Set `sell_amount` to zero to disable sell orders
     // Denominated in asset
     pub sell_amount: u128,
+}
+
+impl PriceConditionsPacking of StorePacking<PriceConditions, PackedPriceConditions> {
+    fn pack(value: PriceConditions) -> PackedPriceConditions {
+        let buy_price_u128: u128 = value.buy_price.into();
+        let buy_price_masked: u128 = buy_price_u128 & MASK_123_U128;
+        let buy_amount_u128: u128 = value.buy_amount.into();
+        let buy_packed: u256 = buy_amount_u128.into()
+            + (buy_price_masked.into() * TWO_POW_128_U256);
+
+        let sell_price_u128: u128 = value.sell_price.into();
+        let sell_price_masked: u128 = sell_price_u128 & MASK_123_U128;
+        let sell_packed: u256 = value.sell_amount.into()
+            + (sell_price_masked.into() * TWO_POW_128_U256);
+
+        PackedPriceConditions {
+            buy: buy_packed.try_into().unwrap(),
+            sell: sell_packed.try_into().unwrap(),
+        }
+    }
+
+    fn unpack(value: PackedPriceConditions) -> PriceConditions {
+        let buy_u256: u256 = value.buy.into();
+        let sell_u256: u256 = value.sell.into();
+
+        let buy_amount: u128 = (buy_u256 & MASK_128_U256).try_into().unwrap();
+        let buy_price: u128 = ((buy_u256 / TWO_POW_128_U256) & MASK_123_U128.into()).try_into().unwrap();
+        let sell_amount: u128 = (sell_u256 & MASK_128_U256).try_into().unwrap();
+        let sell_price: u128 = ((sell_u256 / TWO_POW_128_U256) & MASK_123_U128.into()).try_into().unwrap();
+
+        PriceConditions {
+            buy_price: buy_price.into(),
+            buy_amount: buy_amount.into(),
+            sell_price: sell_price.into(),
+            sell_amount,
+        }
+    }
+}
+
+#[derive(Copy, Drop, PartialEq, Serde, starknet::Store)]
+pub struct PriceDcaConfig {
+    pub asset: ContractAddress,
+    pub pool_params: EkuboPoolParams,
+    pub price_conditions: PriceConditions,
     // Duration used to check the TWAP for asset, and duration of DCA order
     pub durations: DcaDurations,
 }

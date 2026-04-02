@@ -137,8 +137,8 @@ pub mod price_dca_rite {
                 "{}: Invalid asset",
                 RITE_ID(),
             );
-            let activated_buy: bool = config.buy_price.is_non_zero();
-            let activated_sell: bool = config.sell_price.is_non_zero();
+            let activated_buy: bool = config.price_conditions.buy_price.is_non_zero();
+            let activated_sell: bool = config.price_conditions.sell_price.is_non_zero();
             if activated_buy || activated_sell {
                 assert!(
                     config.pool_params.tick_spacing == constants::EKUBO_TWAMM_TICK_SPACING,
@@ -147,7 +147,7 @@ pub mod price_dca_rite {
                 );
             }
             if activated_buy && activated_sell {
-                assert!(config.sell_price > config.buy_price, "{}: Invalid sell price", RITE_ID());
+                assert!(config.price_conditions.sell_price > config.price_conditions.buy_price, "{}: Invalid sell price", RITE_ID());
             }
 
             self.price_dca_configs.write(trove_id, config);
@@ -203,25 +203,25 @@ pub mod price_dca_rite {
             let order_type = self.get_order_type(config);
             match order_type {
                 OrderType::BuyAsset => {
-                    let action = Action::Forge(config.buy_amount);
+                    let action = Action::Forge(config.price_conditions.buy_amount);
                     prior.on_rite_actions(trove_id, array![action].span());
-                    yin.transfer(ekubo_positions.contract_address, config.buy_amount.into());
+                    yin.transfer(ekubo_positions.contract_address, config.price_conditions.buy_amount.into());
 
                     sell_token = yin.contract_address;
                     buy_token = config.asset;
-                    dca_amount = config.buy_amount.into();
+                    dca_amount = config.price_conditions.buy_amount.into();
                 },
                 OrderType::SellAsset => {
                     let action = Action::Withdraw(
-                        AssetBalance { address: config.asset, amount: config.sell_amount },
+                        AssetBalance { address: config.asset, amount: config.price_conditions.sell_amount },
                     );
                     prior.on_rite_actions(trove_id, array![action].span());
                     IERC20Dispatcher { contract_address: config.asset }
-                        .transfer(ekubo_positions.contract_address, config.sell_amount.into());
+                        .transfer(ekubo_positions.contract_address, config.price_conditions.sell_amount.into());
 
                     sell_token = config.asset;
                     buy_token = yin.contract_address;
-                    dca_amount = config.sell_amount;
+                    dca_amount = config.price_conditions.sell_amount;
                 },
                 OrderType::None => {
                     // Should be unreachable via Prior since `is_ready` returns false
@@ -286,15 +286,15 @@ pub mod price_dca_rite {
         // Returns the order type based on the price conditions configured
         fn get_order_type(self: @ContractState, config: PriceDcaConfig) -> OrderType {
             // Zero order amounts are used as a flag for disabling price-DCA
-            let buy_is_enabled: bool = config.buy_amount.is_non_zero();
-            let sell_is_enabled: bool = config.sell_amount.is_non_zero();
+            let buy_is_enabled: bool = config.price_conditions.buy_amount.is_non_zero();
+            let sell_is_enabled: bool = config.price_conditions.sell_amount.is_non_zero();
             if !buy_is_enabled && !sell_is_enabled {
                 return OrderType::None;
             }
 
             let asset_price: Wad = self.get_asset_price(config.asset, config.durations.twap_duration);
-            let should_buy: bool = buy_is_enabled && asset_price <= config.buy_price;
-            let should_sell: bool = sell_is_enabled && asset_price >= config.sell_price;
+            let should_buy: bool = buy_is_enabled && asset_price <= config.price_conditions.buy_price;
+            let should_sell: bool = sell_is_enabled && asset_price >= config.price_conditions.sell_price;
             if should_buy {
                 OrderType::BuyAsset
             } else if should_sell {

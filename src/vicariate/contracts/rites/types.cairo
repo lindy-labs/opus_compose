@@ -9,14 +9,14 @@ const MASK_128_U256: u256 = 0xFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFF;
 
 // Ekubo pool parameters for constructing a PoolKey.
 // token0 and token1 are derived from (asset, cash) via minmax at call time.
-#[derive(Copy, Drop, Debug, PartialEq, Serde, starknet::Store)]
+#[derive(Copy, Drop, Debug, PartialEq, Serde)]
 pub struct EkuboPoolParams {
     pub fee: u128,
     pub tick_spacing: u128,
     pub extension: ContractAddress,
 }
 
-#[derive(Copy, Drop, PartialEq, Serde)]
+#[derive(Copy, Drop, PartialEq, Serde, starknet::Store)]
 pub struct PackedEkuboPoolParams {
     // Max tick spacing is 354892, which is guaranteed to fit 
     // into the upper 123 bits
