@@ -179,6 +179,7 @@ pub mod topup_rite {
 
             let yin = self.yin.read();
 
+            let mut excess_yin: u256 = Zero::zero();
             if let Some((route_node, token_amount)) = swap_params.swap_data {
                 let ekubo_router = self.ekubo_router.read();
                 yin.transfer(ekubo_router.contract_address, swap_params.forge_amount.into());
@@ -190,8 +191,19 @@ pub mod topup_rite {
                         0,
                         config.destination,
                     );
+                excess_yin = IClearDispatcher { contract_address: ekubo_router.contract_address }
+                    .clear_minimum_to_recipient(
+                        EkuboERC20Dispatcher { contract_address: yin.contract_address },
+                        0,
+                        prior.contract_address,
+                    );
             } else {
                 yin.transfer(config.destination, swap_params.forge_amount.into());
+            }
+
+            // Repay excess yin
+            if excess_yin.is_non_zero() {
+                prior.on_rite_actions(trove_id, array![Action::Melt(excess_yin.try_into().unwrap())].span());
             }
 
             self

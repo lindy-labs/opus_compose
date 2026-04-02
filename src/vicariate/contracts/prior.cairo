@@ -445,6 +445,7 @@ pub mod prior {
 
     #[abi(embed_v0)]
     impl IFlashBorrowerImpl of IFlashBorrower<ContractState> {
+        // The flash mint contract that is used should not charge any fee.
         fn on_flash_loan(
             ref self: ContractState,
             initiator: ContractAddress, // this contract

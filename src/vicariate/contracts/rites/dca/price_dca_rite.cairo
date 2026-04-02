@@ -112,7 +112,10 @@ pub mod price_dca_rite {
         }
 
         fn set_trove_config(ref self: ContractState, trove_id: u64, config: Span<felt252>) {
-            assert!(self.has_ended(trove_id), "{}: Ongoing order", RITE_ID());
+            let current_config = self.price_dca_configs.read(trove_id);
+            let order: DcaOrder = self.twamm_orders.read(trove_id);
+            let order_data = self.get_consolidated_order_data(order, current_config.asset);
+            assert!(order_data.order_status == OrderStatus::None, "{}: Ongoing order", RITE_ID());
 
             let mut config = config;
             let config: PriceDcaConfig = Serde::<PriceDcaConfig>::deserialize(ref config)
@@ -154,8 +157,8 @@ pub mod price_dca_rite {
 
         // Returns true if price conditions and no existing ongoing order
         fn is_ready(self: @ContractState, trove_id: u64) -> bool {
-            let order_type: OrderType = self.price_conditions_met(trove_id);
-            match order_type {
+            let config = self.price_dca_configs.read(trove_id);
+            match self.get_order_type(config) {
                 OrderType::BuyAsset | OrderType::SellAsset => { self.has_ended(trove_id) },
                 OrderType::None => false,
             }
@@ -181,11 +184,13 @@ pub mod price_dca_rite {
             // Prior should have checked that the rite can be executed
             rites_utils::assert_caller_is_prior(caller, prior.contract_address, RITE_ID());
 
+            let config = self.price_dca_configs.read(trove_id);
+            let order: DcaOrder = self.twamm_orders.read(trove_id);
+
             // Close existing + complete order if any
             // Reverts if existing + ongoing order
-            self.close_order(trove_id, false);
+            self.close_order(trove_id, false, config, order);
 
-            let config = self.price_dca_configs.read(trove_id);
             let cash = self.yin.read().contract_address;
             let pool_key: PoolKey = config.pool_params.into_pool_key(config.asset, cash);
 
@@ -195,7 +200,7 @@ pub mod price_dca_rite {
             let mut sell_token: ContractAddress = Zero::zero();
             let mut buy_token: ContractAddress = Zero::zero();
             let mut dca_amount: u128 = Zero::zero();
-            let order_type = self.price_conditions_met(trove_id);
+            let order_type = self.get_order_type(config);
             match order_type {
                 OrderType::BuyAsset => {
                     let action = Action::Forge(config.buy_amount);
@@ -259,7 +264,9 @@ pub mod price_dca_rite {
             let caller: ContractAddress = get_caller_address();
             rites_utils::assert_caller_is_prior(caller, prior.contract_address, RITE_ID());
 
-            self.close_order(trove_id, true);
+            let config = self.price_dca_configs.read(trove_id);
+            let order: DcaOrder = self.twamm_orders.read(trove_id);
+            self.close_order(trove_id, true, config, order);
         }
     }
 
@@ -276,8 +283,8 @@ pub mod price_dca_rite {
             )
         }
 
-        fn price_conditions_met(self: @ContractState, trove_id: u64) -> OrderType {
-            let config = self.price_dca_configs.read(trove_id);
+        // Returns the order type based on the price conditions configured
+        fn get_order_type(self: @ContractState, config: PriceDcaConfig) -> OrderType {
             // Zero order amounts are used as a flag for disabling price-DCA
             let buy_is_enabled: bool = config.buy_amount.is_non_zero();
             let sell_is_enabled: bool = config.sell_amount.is_non_zero();
@@ -338,9 +345,13 @@ pub mod price_dca_rite {
         // Returns a tuple of the amount of sell tokens (only non-zero if the order
         // is stopped before completion) and the amount of buy tokens, both withdrawn
         // to Prior directly.
-        fn close_order(ref self: ContractState, trove_id: u64, force_closure: bool) {
-            let config = self.price_dca_configs.read(trove_id);
-            let order: DcaOrder = self.twamm_orders.read(trove_id);
+        fn close_order(
+            ref self: ContractState,
+            trove_id: u64,
+            force_closure: bool,
+            config: PriceDcaConfig,
+            order: DcaOrder,
+        ) {
             let ConsolidatedOrderData {
                 order_key, order_status, order_info,
             } = self.get_consolidated_order_data(order, config.asset);

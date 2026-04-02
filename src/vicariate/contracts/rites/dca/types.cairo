@@ -88,12 +88,13 @@ pub impl DcaDurationImpl of DcaDurationTrait {
     }
 
     // Calculates a valid Ekubo end timestamp for this duration.
-    // Formula: end_time = ts + period - ts % step
-    // This rounds the start time down to a step boundary, then adds the period.
+    // Rounds (now + period) up to the next step boundary to ensure
+    // the end_time is both in the future and aligned to a multiple of the step size.
     fn to_valid_end_time(self: DcaDuration, now: u64) -> u64 {
         let period = self.to_seconds();
         let step = self.get_step_size();
-        now + period - now % step
+        let target = now + period;
+        target + (step - target % step) % step
     }
 
     /// Returns the variant index (0-9) for storage packing.
