@@ -171,13 +171,11 @@ pub mod topup_rite {
             rites_utils::assert_caller_is_prior(caller, prior.contract_address, self.get_rite_id());
 
             let config = self.topup_configs.read(trove_id);
-            let cash = self.yin.read().contract_address;
+            let yin = self.yin.read();
             let swap_params: SwapParams = self
-                .get_swap_params_helper(config.pool_params, config.asset, config.topup_amount, config.slippage, cash);
+                .get_swap_params_helper(config.pool_params, config.asset, config.topup_amount, config.slippage, yin.contract_address);
 
             prior.on_rite_actions(trove_id, array![Action::Forge(swap_params.forge_amount)].span());
-
-            let yin = self.yin.read();
 
             let mut excess_yin: u256 = Zero::zero();
             if let Some((route_node, token_amount)) = swap_params.swap_data {

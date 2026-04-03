@@ -305,6 +305,7 @@ pub mod prior {
             self.can_execute_rite_helper(rite, trove_id)
         }
 
+        // Can be called by anyone
         fn execute_rite(ref self: ContractState, trove_id: u64) {
             let rite = self.rites.read(trove_id);
             assert!(self.can_execute_rite_helper(rite, trove_id), "PRI: Cannot execute rite");
@@ -361,7 +362,7 @@ pub mod prior {
             assert!(self.transient_trove_id.read() == trove_id, "PRI: Execution not started");
 
             for action in actions {
-                self.execute_action(trove_id, rite.contract_address, *action);
+                self.execute_action(trove_id, rite.contract_address, self.abbot.read(), *action);
             }
 
             let current_nonce = self.transient_caller_nonce.read();
@@ -464,7 +465,7 @@ pub mod prior {
                 user, action,
             } = Serde::<ModifyLeverParams>::deserialize(ref call_data).unwrap();
 
-            let shrine = self.shrine.read();
+            let shrine = IShrineDispatcher { contract_address: token };
             let yin = IERC20Dispatcher { contract_address: token };
             let abbot = self.abbot.read();
             let sentinel = self.sentinel.read();
@@ -534,7 +535,7 @@ pub mod prior {
                     // Transfer any remainder collateral to the user
                     router_clear
                         .clear_minimum_to_recipient(
-                            EkuboERC20Dispatcher { contract_address: yang_asset.address }, 1, user,
+                            EkuboERC20Dispatcher { contract_address: yang_asset.address }, 0, user,
                         );
 
                     let trove_health: Health = shrine.get_trove_health(trove_id);
@@ -570,28 +571,32 @@ pub mod prior {
         }
 
         fn execute_action(
-            ref self: ContractState, trove_id: u64, rite_address: ContractAddress, action: Action,
+            ref self: ContractState, 
+            trove_id: u64, 
+            rite_address: ContractAddress, 
+            abbot: IAbbotDispatcher,
+            action: Action,
         ) {
             match action {
                 Action::Forge(amount) => {
                     let config: SmartTroveConfig = self.smart_trove_configs.read(trove_id);
-                    self.abbot.read().forge(trove_id, amount, config.max_forge_fee_pct);
+                    abbot.forge(trove_id, amount, config.max_forge_fee_pct);
 
                     // Transfer to rite
                     IERC20Dispatcher { contract_address: self.shrine.read().contract_address }
                         .transfer(rite_address, amount.into());
                 },
-                Action::Melt(amount) => { self.abbot.read().melt(trove_id, amount); },
+                Action::Melt(amount) => { abbot.melt(trove_id, amount); },
                 Action::Deposit(asset_balance) => {
                     // Approve Gate for yang
                     let gate_address = self.sentinel.read().get_gate_address(asset_balance.address);
                     let yang_erc20 = IERC20Dispatcher { contract_address: asset_balance.address };
                     yang_erc20.approve(gate_address, asset_balance.amount.into());
 
-                    self.abbot.read().deposit(trove_id, asset_balance);
+                    abbot.deposit(trove_id, asset_balance);
                 },
                 Action::Withdraw(asset_balance) => {
-                    self.abbot.read().withdraw(trove_id, asset_balance);
+                    abbot.withdraw(trove_id, asset_balance);
 
                     IERC20Dispatcher { contract_address: asset_balance.address }
                         .transfer(rite_address, asset_balance.amount.into());
