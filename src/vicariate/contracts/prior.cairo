@@ -36,6 +36,8 @@ pub mod prior {
     const ON_FLASH_MINT_SUCCESS: u256 =
         0x439148f0bbc682ca079e46d6e2c2f0c1e3b820f1a291b069d8882abf8cf18dd9_u256;
 
+    // Extracted from Shrine
+    pub const MAX_RELATIVE_THRESHOLD: u128 = RAY_ONE;
     pub const MAX_FORGE_FEE_PCT: u128 = 4 * WAD_ONE;
 
     //
@@ -259,7 +261,7 @@ pub mod prior {
             let user: ContractAddress = get_caller_address();
             self.assert_smart_trove_owner(user, trove_id);
 
-            assert!(config.relative_threshold <= RAY_ONE.into(), "PRI: Invalid relative threshold");
+            assert!(config.relative_threshold <= MAX_RELATIVE_THRESHOLD.into(), "PRI: Invalid relative threshold");
             assert!(config.max_forge_fee_pct <= MAX_FORGE_FEE_PCT.into(), "PRI: Invalid max forge fee");
 
             self.smart_trove_configs.write(trove_id, config)
@@ -480,10 +482,6 @@ pub mod prior {
                 ModifyLeverAction::LeverUp(params) => {
                     let LeverUpParams { trove_id, yang, swaps } = params;
                     let config = self.smart_trove_configs.read(trove_id);
-                    let yang_erc20 = IERC20Dispatcher { contract_address: yang };
-
-                    // Catch invalid yangs properly
-                    let gate = get_valid_gate(sentinel, yang);
 
                     // Transfer yin to Ekubo's router and swap for collateral
                     yin.transfer(router.contract_address, amount);
@@ -494,7 +492,7 @@ pub mod prior {
                         .clear_minimum(EkuboERC20Dispatcher { contract_address: yang }, 1);
 
                     // Deposit purchased collateral to trove
-                    yang_erc20.approve(gate, asset_amt);
+                    self.approve_token_for_gate(sentinel, yang, asset_amt);
                     abbot
                         .deposit(
                             trove_id,
@@ -507,9 +505,6 @@ pub mod prior {
                 ModifyLeverAction::LeverDown(params) => {
                     let LeverDownParams { trove_id, yang_asset, swaps } = params;
                     let yang_erc20 = IERC20Dispatcher { contract_address: yang_asset.address };
-
-                    // Catch invalid yangs properly
-                    get_valid_gate(sentinel, yang_asset.address);
 
                     // Use the flash minted yin to repay the trove's debt
                     abbot.melt(trove_id, amount.try_into().unwrap());
@@ -583,11 +578,7 @@ pub mod prior {
                 },
                 Action::Melt(amount) => { abbot.melt(trove_id, amount); },
                 Action::Deposit(asset_balance) => {
-                    // Approve Gate for yang
-                    let gate_address = self.sentinel.read().get_gate_address(asset_balance.address);
-                    let yang_erc20 = IERC20Dispatcher { contract_address: asset_balance.address };
-                    yang_erc20.approve(gate_address, asset_balance.amount.into());
-
+                    self.approve_token_for_gate(self.sentinel.read(), asset_balance.address, asset_balance.amount.into());
                     abbot.deposit(trove_id, asset_balance);
                 },
                 Action::Withdraw(asset_balance) => {
@@ -600,6 +591,17 @@ pub mod prior {
             };
         }
 
+        fn approve_token_for_gate(
+            ref self: ContractState,
+            sentinel: ISentinelDispatcher,
+            token: ContractAddress,
+            amount: u256,
+        ) {
+            // Invalid yangs will be caught in `sentinel.enter(...)`
+            let gate = sentinel.get_gate_address(token);
+            IERC20Dispatcher { contract_address: token }.approve(gate, amount);
+        }
+
         fn deposit_setup(
             ref self: ContractState,
             sentinel: ISentinelDispatcher,
@@ -610,15 +612,7 @@ pub mod prior {
             let yang = IERC20Dispatcher { contract_address: yang_asset.address };
             yang.transfer_from(user, prior, yang_asset.amount.into());
 
-            let gate = sentinel.get_gate_address(yang_asset.address);
-            yang.approve(gate, yang_asset.amount.into());
+            self.approve_token_for_gate(sentinel, yang_asset.address, yang_asset.amount.into());
         }
-    }
-
-    // Helper function to fetch the gate address for a yang, or otherwise throw.
-    fn get_valid_gate(sentinel: ISentinelDispatcher, yang: ContractAddress) -> ContractAddress {
-        let gate = sentinel.get_gate_address(yang);
-        assert!(gate.is_non_zero(), "PRI: Invalid yang");
-        gate
     }
 }
