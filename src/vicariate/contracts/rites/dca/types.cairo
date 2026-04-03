@@ -145,8 +145,7 @@ pub struct DcaDurations {
 
 impl DcaDurationsPacking of StorePacking<DcaDurations, u128> {
     fn pack(value: DcaDurations) -> u128 {
-        value.twap_duration.into()
-            + (value.order_duration.into_index().into() * TWO_POW_64_U128)
+        value.twap_duration.into() + (value.order_duration.into_index().into() * TWO_POW_64_U128)
     }
 
     fn unpack(value: u128) -> DcaDurations {
@@ -197,8 +196,7 @@ impl PriceConditionsPacking of StorePacking<PriceConditions, PackedPriceConditio
             + (sell_price_masked.into() * TWO_POW_128_U256);
 
         PackedPriceConditions {
-            buy: buy_packed.try_into().unwrap(),
-            sell: sell_packed.try_into().unwrap(),
+            buy: buy_packed.try_into().unwrap(), sell: sell_packed.try_into().unwrap(),
         }
     }
 
@@ -207,9 +205,13 @@ impl PriceConditionsPacking of StorePacking<PriceConditions, PackedPriceConditio
         let sell_u256: u256 = value.sell.into();
 
         let buy_amount: u128 = (buy_u256 & MASK_128_U256).try_into().unwrap();
-        let buy_price: u128 = ((buy_u256 / TWO_POW_128_U256) & MASK_123_U128.into()).try_into().unwrap();
+        let buy_price: u128 = ((buy_u256 / TWO_POW_128_U256) & MASK_123_U128.into())
+            .try_into()
+            .unwrap();
         let sell_amount: u128 = (sell_u256 & MASK_128_U256).try_into().unwrap();
-        let sell_price: u128 = ((sell_u256 / TWO_POW_128_U256) & MASK_123_U128.into()).try_into().unwrap();
+        let sell_price: u128 = ((sell_u256 / TWO_POW_128_U256) & MASK_123_U128.into())
+            .try_into()
+            .unwrap();
 
         PriceConditions {
             buy_price: buy_price.into(),
@@ -275,7 +277,9 @@ impl DcaOrderPacking of StorePacking<DcaOrder, u256> {
             fee: (value & MASK_128_U256).try_into().unwrap(),
             position_id: ((value / TWO_POW_128_U256) & MASK_64_U256).try_into().unwrap(),
             end_time: (end_time_and_type & MASK_62_U256).try_into().unwrap(),
-            order_type: order_type_from_index((end_time_and_type / TWO_POW_62_U256).try_into().unwrap()),
+            order_type: order_type_from_index(
+                (end_time_and_type / TWO_POW_62_U256).try_into().unwrap(),
+            ),
         }
     }
 }

@@ -4,7 +4,8 @@ use starknet::ContractAddress;
 use starknet::storage_access::StorePacking;
 use wadray::{Ray, Wad};
 
-// Packing constants for SmartTroveConfig — relative_threshold in lower 128 bits, max_forge_fee_pct in upper 123 bits
+// Packing constants for SmartTroveConfig — relative_threshold in lower 128 bits,
+// max_forge_fee_pct in upper 123 bits
 const TWO_POW_128: u256 = 0x100000000000000000000000000000000;
 const MASK_128: u256 = 0xFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFF;
 const MASK_123: u256 = 0x7FFFFFFFFFFFFFFFFFFFFFFFFFFFFF;
@@ -40,7 +41,10 @@ impl SmartTroveConfigPacking of StorePacking<SmartTroveConfig, felt252> {
         let value: u256 = value.into();
         let relative_threshold: u128 = (value & MASK_128).try_into().unwrap();
         let max_forge_fee_pct: u128 = ((value / TWO_POW_128) & MASK_123).try_into().unwrap();
-        SmartTroveConfig { relative_threshold: relative_threshold.into(), max_forge_fee_pct: max_forge_fee_pct.into() }
+        SmartTroveConfig {
+            relative_threshold: relative_threshold.into(),
+            max_forge_fee_pct: max_forge_fee_pct.into(),
+        }
     }
 }
 

@@ -25,7 +25,7 @@ pub mod prior {
         StoragePointerWriteAccess,
     };
     use starknet::{ContractAddress, get_caller_address, get_contract_address};
-    use wadray::{RAY_ONE, Ray, Wad, WAD_ONE};
+    use wadray::{RAY_ONE, Ray, WAD_ONE, Wad};
 
     //
     // Constants
@@ -213,12 +213,7 @@ pub mod prior {
             let caller: ContractAddress = get_caller_address();
             self.assert_smart_trove_owner(caller, trove_id);
 
-            self.deposit_setup(
-                self.sentinel.read(),
-                get_contract_address(),
-                caller,
-                yang_asset
-            );
+            self.deposit_setup(self.sentinel.read(), get_contract_address(), caller, yang_asset);
 
             self.abbot.read().deposit(trove_id, yang_asset);
         }
@@ -261,8 +256,13 @@ pub mod prior {
             let user: ContractAddress = get_caller_address();
             self.assert_smart_trove_owner(user, trove_id);
 
-            assert!(config.relative_threshold <= MAX_RELATIVE_THRESHOLD.into(), "PRI: Invalid relative threshold");
-            assert!(config.max_forge_fee_pct <= MAX_FORGE_FEE_PCT.into(), "PRI: Invalid max forge fee");
+            assert!(
+                config.relative_threshold <= MAX_RELATIVE_THRESHOLD.into(),
+                "PRI: Invalid relative threshold",
+            );
+            assert!(
+                config.max_forge_fee_pct <= MAX_FORGE_FEE_PCT.into(), "PRI: Invalid max forge fee",
+            );
 
             self.smart_trove_configs.write(trove_id, config)
         }
@@ -561,9 +561,9 @@ pub mod prior {
         }
 
         fn execute_action(
-            ref self: ContractState, 
-            trove_id: u64, 
-            rite_address: ContractAddress, 
+            ref self: ContractState,
+            trove_id: u64,
+            rite_address: ContractAddress,
             abbot: IAbbotDispatcher,
             action: Action,
         ) {
@@ -578,7 +578,12 @@ pub mod prior {
                 },
                 Action::Melt(amount) => { abbot.melt(trove_id, amount); },
                 Action::Deposit(asset_balance) => {
-                    self.approve_token_for_gate(self.sentinel.read(), asset_balance.address, asset_balance.amount.into());
+                    self
+                        .approve_token_for_gate(
+                            self.sentinel.read(),
+                            asset_balance.address,
+                            asset_balance.amount.into(),
+                        );
                     abbot.deposit(trove_id, asset_balance);
                 },
                 Action::Withdraw(asset_balance) => {

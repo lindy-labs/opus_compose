@@ -45,9 +45,9 @@ pub mod stabilizer {
 pub mod vicariate {
     pub mod contracts {
         pub mod prior;
-            pub mod rites {
-            pub mod types;
+        pub mod rites {
             pub mod interfaces;
+            pub mod types;
             pub mod utils;
             pub mod topup {
                 pub mod topup_rite;

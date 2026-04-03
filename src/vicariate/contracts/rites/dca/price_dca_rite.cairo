@@ -10,11 +10,11 @@ pub mod price_dca_rite {
     use opus::utils::math::convert_ekubo_oracle_price_to_wad;
     use opus_compose::constants;
     use opus_compose::interfaces::erc20::{IERC20Dispatcher, IERC20DispatcherTrait};
-    use opus_compose::vicariate::contracts::rites::types::EkuboPoolParamsTrait;
     use opus_compose::vicariate::contracts::rites::dca::types::{
         ConsolidatedOrderData, DcaDurationTrait, DcaOrder, OrderStatus, OrderType, PriceDcaConfig,
     };
     use opus_compose::vicariate::contracts::rites::dca::utils::dca_utils;
+    use opus_compose::vicariate::contracts::rites::types::EkuboPoolParamsTrait;
     use opus_compose::vicariate::contracts::rites::utils::rites_utils;
     use opus_compose::vicariate::interfaces::prior::{IPriorDispatcher, IPriorDispatcherTrait};
     use opus_compose::vicariate::interfaces::rite::IRite;
@@ -120,7 +120,11 @@ pub mod price_dca_rite {
             let mut config = config;
             let config: PriceDcaConfig = Serde::<PriceDcaConfig>::deserialize(ref config)
                 .expect('PRICE_DCA: Invalid config');
-            assert!(config.durations.twap_duration >= MINIMUM_TWAP_DURATION, "{}: TWAP duration too short", RITE_ID());
+            assert!(
+                config.durations.twap_duration >= MINIMUM_TWAP_DURATION,
+                "{}: TWAP duration too short",
+                RITE_ID(),
+            );
 
             let user = get_caller_address();
             let prior_abbot = IAbbotDispatcher {
@@ -132,11 +136,7 @@ pub mod price_dca_rite {
                 RITE_ID(),
             );
 
-            assert!(
-                config.asset.is_non_zero(),
-                "{}: Invalid asset",
-                RITE_ID(),
-            );
+            assert!(config.asset.is_non_zero(), "{}: Invalid asset", RITE_ID());
             let activated_buy: bool = config.price_conditions.buy_price.is_non_zero();
             let activated_sell: bool = config.price_conditions.sell_price.is_non_zero();
             if activated_buy || activated_sell {
@@ -147,7 +147,11 @@ pub mod price_dca_rite {
                 );
             }
             if activated_buy && activated_sell {
-                assert!(config.price_conditions.sell_price > config.price_conditions.buy_price, "{}: Invalid sell price", RITE_ID());
+                assert!(
+                    config.price_conditions.sell_price > config.price_conditions.buy_price,
+                    "{}: Invalid sell price",
+                    RITE_ID(),
+                );
             }
 
             self.price_dca_configs.write(trove_id, config);
@@ -169,7 +173,7 @@ pub mod price_dca_rite {
             if order.position_id.is_zero() {
                 return true;
             }
-            
+
             let config = self.price_dca_configs.read(trove_id);
             let consolidated = self.get_consolidated_order_data(order, config.asset);
             match consolidated.order_status {
@@ -191,7 +195,9 @@ pub mod price_dca_rite {
             self.close_order(trove_id, false, config, order);
 
             let yin = self.yin.read();
-            let pool_key: PoolKey = config.pool_params.into_pool_key(config.asset, yin.contract_address);
+            let pool_key: PoolKey = config
+                .pool_params
+                .into_pool_key(config.asset, yin.contract_address);
 
             let ekubo_positions = self.ekubo_positions.read();
 
@@ -203,7 +209,11 @@ pub mod price_dca_rite {
                 OrderType::BuyAsset => {
                     let action = Action::Forge(config.price_conditions.buy_amount);
                     prior.on_rite_actions(trove_id, array![action].span());
-                    yin.transfer(ekubo_positions.contract_address, config.price_conditions.buy_amount.into());
+                    yin
+                        .transfer(
+                            ekubo_positions.contract_address,
+                            config.price_conditions.buy_amount.into(),
+                        );
 
                     sell_token = yin.contract_address;
                     buy_token = config.asset;
@@ -211,18 +221,23 @@ pub mod price_dca_rite {
                 },
                 OrderType::SellAsset => {
                     let action = Action::Withdraw(
-                        AssetBalance { address: config.asset, amount: config.price_conditions.sell_amount },
+                        AssetBalance {
+                            address: config.asset, amount: config.price_conditions.sell_amount,
+                        },
                     );
                     prior.on_rite_actions(trove_id, array![action].span());
                     IERC20Dispatcher { contract_address: config.asset }
-                        .transfer(ekubo_positions.contract_address, config.price_conditions.sell_amount.into());
+                        .transfer(
+                            ekubo_positions.contract_address,
+                            config.price_conditions.sell_amount.into(),
+                        );
 
                     sell_token = config.asset;
                     buy_token = yin.contract_address;
                     dca_amount = config.price_conditions.sell_amount;
                 },
                 OrderType::None => {
-                    // Should be unreachable because Prior already checked if 
+                    // Should be unreachable because Prior already checked if
                     // rite is ready for execution
                     return;
                 },
@@ -272,7 +287,9 @@ pub mod price_dca_rite {
     #[generate_trait]
     impl PriceDcaRiteHelpers of PriceDcaRiteHelpersTrait {
         // Returns the price of the asset in CASH
-        fn get_asset_price(self: @ContractState, asset: ContractAddress, twap_duration: u64) -> Wad {
+        fn get_asset_price(
+            self: @ContractState, asset: ContractAddress, twap_duration: u64,
+        ) -> Wad {
             let oracle = self.ekubo_oracle.read();
             let price_x128: u256 = oracle
                 .get_price_x128_over_last(asset, self.yin.read().contract_address, twap_duration);
@@ -291,9 +308,12 @@ pub mod price_dca_rite {
                 return OrderType::None;
             }
 
-            let asset_price: Wad = self.get_asset_price(config.asset, config.durations.twap_duration);
-            let should_buy: bool = buy_is_enabled && asset_price <= config.price_conditions.buy_price;
-            let should_sell: bool = sell_is_enabled && asset_price >= config.price_conditions.sell_price;
+            let asset_price: Wad = self
+                .get_asset_price(config.asset, config.durations.twap_duration);
+            let should_buy: bool = buy_is_enabled
+                && asset_price <= config.price_conditions.buy_price;
+            let should_sell: bool = sell_is_enabled
+                && asset_price >= config.price_conditions.sell_price;
             if should_buy {
                 OrderType::BuyAsset
             } else if should_sell {
@@ -391,7 +411,6 @@ pub mod price_dca_rite {
                 .withdraw_proceeds_from_sale_to(
                     order.position_id, order_key, prior.contract_address,
                 );
-            
 
             let yin: IERC20Dispatcher = self.yin.read();
             let mut buy_token: ContractAddress = Zero::zero();
@@ -415,7 +434,7 @@ pub mod price_dca_rite {
                     sell_token = config.asset;
                 },
                 OrderType::None => { return; },
-            };
+            }
 
             if remaining_sell_token.is_non_zero() {
                 match order.order_type {

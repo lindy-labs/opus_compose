@@ -18,7 +18,7 @@ pub struct EkuboPoolParams {
 
 #[derive(Copy, Drop, PartialEq, Serde, starknet::Store)]
 pub struct PackedEkuboPoolParams {
-    // Max tick spacing is 354892, which is guaranteed to fit 
+    // Max tick spacing is 354892, which is guaranteed to fit
     // into the upper 123 bits
     pub fee_and_tick_spacing: felt252,
     pub extension: ContractAddress,
@@ -26,7 +26,9 @@ pub struct PackedEkuboPoolParams {
 
 #[generate_trait]
 pub impl EkuboPoolParamsImpl of EkuboPoolParamsTrait {
-    fn into_pool_key(self: EkuboPoolParams, asset: ContractAddress, cash: ContractAddress) -> PoolKey {
+    fn into_pool_key(
+        self: EkuboPoolParams, asset: ContractAddress, cash: ContractAddress,
+    ) -> PoolKey {
         let (token0, token1) = minmax(asset, cash);
         PoolKey {
             token0,
@@ -40,7 +42,10 @@ pub impl EkuboPoolParamsImpl of EkuboPoolParamsTrait {
 
 impl EkuboPoolParamsPacking of StorePacking<EkuboPoolParams, PackedEkuboPoolParams> {
     fn pack(value: EkuboPoolParams) -> PackedEkuboPoolParams {
-        PackedEkuboPoolParams { fee_and_tick_spacing: value.fee.into() + (value.tick_spacing.into() * TWO_POW_128), extension: value.extension }
+        PackedEkuboPoolParams {
+            fee_and_tick_spacing: value.fee.into() + (value.tick_spacing.into() * TWO_POW_128),
+            extension: value.extension,
+        }
     }
 
     fn unpack(value: PackedEkuboPoolParams) -> EkuboPoolParams {

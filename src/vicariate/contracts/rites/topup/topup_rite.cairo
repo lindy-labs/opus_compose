@@ -42,7 +42,7 @@ pub mod topup_rite {
         prior: IPriorDispatcher,
         ekubo_core: ICoreDispatcher,
         ekubo_router: IRouterDispatcher,
-        topup_configs: Map<u64, TopupConfig>, // ATU trove ID -> config
+        topup_configs: Map<u64, TopupConfig> // ATU trove ID -> config
     }
 
     #[event]
@@ -114,23 +114,22 @@ pub mod topup_rite {
                 RITE_ID(),
             );
 
-            assert!(
-                config.asset.is_non_zero(),
-                "{}: Invalid asset",
-                RITE_ID(),
-            );
+            assert!(config.asset.is_non_zero(), "{}: Invalid asset", RITE_ID());
             if config.amounts.topup_amount.is_non_zero() {
                 let cash = self.yin.read().contract_address;
 
                 assert!(
-                    config.asset == cash
-                        || config.pool_params.tick_spacing.is_non_zero(),
+                    config.asset == cash || config.pool_params.tick_spacing.is_non_zero(),
                     "{}: No swap path",
                     RITE_ID(),
                 );
                 assert!(
-                    config.amounts.topup_amount >= config.amounts.min_asset_balance // Prevent multiple topups
-                    ,
+                    config
+                        .amounts
+                        .topup_amount >= config
+                        .amounts
+                        .min_asset_balance // Prevent multiple topups
+                        ,
                     "{}: Invalid topup amount",
                     RITE_ID(),
                 );
@@ -173,7 +172,13 @@ pub mod topup_rite {
             let config = self.topup_configs.read(trove_id);
             let yin = self.yin.read();
             let swap_params: SwapParams = self
-                .get_swap_params_helper(config.pool_params, config.asset, config.amounts.topup_amount, config.slippage, yin.contract_address);
+                .get_swap_params_helper(
+                    config.pool_params,
+                    config.asset,
+                    config.amounts.topup_amount,
+                    config.slippage,
+                    yin.contract_address,
+                );
 
             prior.on_rite_actions(trove_id, array![Action::Forge(swap_params.forge_amount)].span());
 
@@ -201,7 +206,10 @@ pub mod topup_rite {
 
             // Repay excess yin
             if excess_yin.is_non_zero() {
-                prior.on_rite_actions(trove_id, array![Action::Melt(excess_yin.try_into().unwrap())].span());
+                prior
+                    .on_rite_actions(
+                        trove_id, array![Action::Melt(excess_yin.try_into().unwrap())].span(),
+                    );
             }
 
             self
@@ -231,14 +239,24 @@ pub mod topup_rite {
             let config = self.topup_configs.read(trove_id);
             let cash = self.yin.read().contract_address;
             self
-                .get_swap_params_helper(config.pool_params, config.asset, config.amounts.topup_amount, config.slippage, cash)
+                .get_swap_params_helper(
+                    config.pool_params,
+                    config.asset,
+                    config.amounts.topup_amount,
+                    config.slippage,
+                    cash,
+                )
         }
     }
 
     #[generate_trait]
     impl TopupRiteHelpers of TopupRiteHelpersTrait {
         fn get_swap_params_helper(
-            self: @ContractState, pool_params: EkuboPoolParams, asset: ContractAddress, topup_amount: u128, slippage: Ray,
+            self: @ContractState,
+            pool_params: EkuboPoolParams,
+            asset: ContractAddress,
+            topup_amount: u128,
+            slippage: Ray,
             cash: ContractAddress,
         ) -> SwapParams {
             if asset == cash {

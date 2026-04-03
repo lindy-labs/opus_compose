@@ -1,7 +1,7 @@
-use opus_compose::vicariate::contracts::rites::types::EkuboPoolParams;
 use opus_compose::vicariate::contracts::rites::dca::types::{
     DcaDuration, DcaDurations, DcaOrder, OrderType,
 };
+use opus_compose::vicariate::contracts::rites::types::EkuboPoolParams;
 use starknet::storage_access::StorePacking;
 
 // --- EkuboPoolParams packing tests ---
@@ -20,9 +20,7 @@ fn test_ekubo_pool_params_packing() {
 #[test]
 fn test_ekubo_pool_params_packing_zero() {
     let pool_params = EkuboPoolParams {
-        fee: 0_u128,
-        tick_spacing: 0_u128,
-        extension: 0.try_into().unwrap(),
+        fee: 0_u128, tick_spacing: 0_u128, extension: 0.try_into().unwrap(),
     };
     let unpacked: EkuboPoolParams = StorePacking::unpack(StorePacking::pack(pool_params));
     assert_eq!(pool_params, unpacked, "ekubo pool params zero packing failed");

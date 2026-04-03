@@ -16,7 +16,7 @@ pub struct SwapParams {
 
 // Packs min_asset_balance and topup_amount into a felt252 at 125 bits each.
 // Layout: [topup_amount (bits 125–249) | min_asset_balance (bits 0–124)]
-// Max value per member: 2^125 - 1 
+// Max value per member: 2^125 - 1
 #[derive(Copy, Drop, Debug, PartialEq, Serde)]
 pub struct TopupAmounts {
     pub min_asset_balance: u128,

@@ -1,5 +1,4 @@
 use opus_compose::vicariate::types::{LeverDownParams, LeverUpParams};
-use starknet::ContractAddress;
 use wadray::Wad;
 
 #[starknet::interface]
