@@ -25,7 +25,7 @@ pub mod prior {
         StoragePointerWriteAccess,
     };
     use starknet::{ContractAddress, get_caller_address, get_contract_address};
-    use wadray::{RAY_ONE, Ray, Wad};
+    use wadray::{RAY_ONE, Ray, Wad, WAD_ONE};
 
     //
     // Constants
@@ -35,6 +35,8 @@ pub mod prior {
     // it is supposed to be returned from the onFlashLoan function by the receiver
     const ON_FLASH_MINT_SUCCESS: u256 =
         0x439148f0bbc682ca079e46d6e2c2f0c1e3b820f1a291b069d8882abf8cf18dd9_u256;
+
+    pub const MAX_FORGE_FEE_PCT: u128 = 4 * WAD_ONE;
 
     //
     // Storage
@@ -209,13 +211,12 @@ pub mod prior {
             let caller: ContractAddress = get_caller_address();
             self.assert_smart_trove_owner(caller, trove_id);
 
-            // Transfer yang from user to this contract
-            let yang_erc20 = IERC20Dispatcher { contract_address: yang_asset.address };
-            yang_erc20.transfer_from(caller, get_contract_address(), yang_asset.amount.into());
-
-            // Approve Gate for yang
-            let gate_address = self.sentinel.read().get_gate_address(yang_asset.address);
-            yang_erc20.approve(gate_address, yang_asset.amount.into());
+            self.deposit_setup(
+                self.sentinel.read(),
+                get_contract_address(),
+                caller,
+                yang_asset
+            );
 
             self.abbot.read().deposit(trove_id, yang_asset);
         }
@@ -257,7 +258,9 @@ pub mod prior {
         fn set_trove_config(ref self: ContractState, trove_id: u64, config: SmartTroveConfig) {
             let user: ContractAddress = get_caller_address();
             self.assert_smart_trove_owner(user, trove_id);
+
             assert!(config.relative_threshold <= RAY_ONE.into(), "PRI: Invalid relative threshold");
+            assert!(config.max_forge_fee_pct <= MAX_FORGE_FEE_PCT.into(), "PRI: Invalid max forge fee");
 
             self.smart_trove_configs.write(trove_id, config)
         }
@@ -444,6 +447,8 @@ pub mod prior {
         }
     }
 
+    // Lever actions are not subject to the relative threshold since they are
+    // manually initiated by the user.
     #[abi(embed_v0)]
     impl IFlashBorrowerImpl of IFlashBorrower<ContractState> {
         // The flash mint contract that is used should not charge any fee.
@@ -465,7 +470,6 @@ pub mod prior {
                 user, action,
             } = Serde::<ModifyLeverParams>::deserialize(ref call_data).unwrap();
 
-            let shrine = IShrineDispatcher { contract_address: token };
             let yin = IERC20Dispatcher { contract_address: token };
             let abbot = self.abbot.read();
             let sentinel = self.sentinel.read();
@@ -481,7 +485,7 @@ pub mod prior {
                     // Catch invalid yangs properly
                     let gate = get_valid_gate(sentinel, yang);
 
-                    // Transfer yin to EKubo's router and swap for collateral
+                    // Transfer yin to Ekubo's router and swap for collateral
                     yin.transfer(router.contract_address, amount);
                     router.multi_multihop_swap(swaps);
 
@@ -499,14 +503,9 @@ pub mod prior {
 
                     // Borrow yin from trove and send to this contract to repay the flash mint
                     abbot.forge(trove_id, amount.try_into().unwrap(), config.max_forge_fee_pct);
-
-                    let trove_health: Health = shrine.get_trove_health(trove_id);
-                    let max_ltv: Ray = config.relative_threshold * trove_health.threshold;
-                    assert!(trove_health.ltv <= max_ltv, "PRI: Exceeds max LTV");
                 },
                 ModifyLeverAction::LeverDown(params) => {
                     let LeverDownParams { trove_id, yang_asset, swaps } = params;
-                    let config = self.smart_trove_configs.read(trove_id);
                     let yang_erc20 = IERC20Dispatcher { contract_address: yang_asset.address };
 
                     // Catch invalid yangs properly
@@ -537,10 +536,6 @@ pub mod prior {
                         .clear_minimum_to_recipient(
                             EkuboERC20Dispatcher { contract_address: yang_asset.address }, 0, user,
                         );
-
-                    let trove_health: Health = shrine.get_trove_health(trove_id);
-                    let max_ltv: Ray = config.relative_threshold * trove_health.threshold;
-                    assert!(trove_health.ltv <= max_ltv, "PRI: Exceeds max LTV");
                 },
             }
 

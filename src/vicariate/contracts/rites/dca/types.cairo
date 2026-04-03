@@ -135,8 +135,8 @@ pub impl DcaDurationImpl of DcaDurationTrait {
     }
 }
 
-/// Packs twap_duration (u64) and order_duration (DcaDuration, 4 bits) into a single u128.
-/// Layout: [order_duration (4 bits) | twap_duration (64 bits)] = 68 bits
+// Packs twap_duration (u64) and order_duration (DcaDuration, 4 bits) into a single u128.
+// Layout: [order_duration (4 bits) | twap_duration (64 bits)] = 68 bits
 #[derive(Copy, Drop, Debug, PartialEq, Serde)]
 pub struct DcaDurations {
     pub twap_duration: u64,
@@ -160,17 +160,17 @@ impl DcaDurationsPacking of StorePacking<DcaDurations, u128> {
     }
 }
 
-/// Storage representation of PriceConditions — 2 felt252s = 2 storage slots
-/// (down from 4 slots when fields were stored individually).
+// Storage representation of PriceConditions — 2 felt252s = 2 storage slots
+// (down from 4 slots when fields were stored individually).
 #[derive(Copy, Drop, starknet::Store)]
 pub struct PackedPriceConditions {
     pub buy: felt252,
     pub sell: felt252,
 }
 
-/// Groups buy/sell price and amount conditions for price-triggered DCA.
-/// Packs into PackedPriceConditions (2 felt252s) via StorePacking:
-///   each felt252 layout: amount (lower 128 bits) | price (upper 123 bits)
+// Groups buy/sell price and amount conditions for price-triggered DCA.
+// Packs into PackedPriceConditions (2 felt252s) via StorePacking:
+//   each felt252 layout: amount (lower 128 bits) | price (upper 123 bits)
 #[derive(Copy, Drop, Debug, PartialEq, Serde)]
 pub struct PriceConditions {
     pub buy_price: Wad,
@@ -229,12 +229,12 @@ pub struct PriceDcaConfig {
     pub durations: DcaDurations,
 }
 
-/// Packs DcaOrder into a u256 (2 storage slots instead of 4).
-/// Layout (as u256):
-///   low  128 bits : fee
-///   next 64 bits  : position_id
-///   next 62 bits  : end_time (top 2 bits of u64 are always zero for timestamps)
-///   top   2 bits  : order_type
+// Packs DcaOrder into a u256 (2 storage slots instead of 4).
+// Layout (as u256):
+//   low  128 bits : fee
+//   next 64 bits  : position_id
+//   next 62 bits  : end_time (top 2 bits of u64 are always zero for timestamps)
+//   top   2 bits  : order_type
 #[derive(Copy, Drop, Debug, Default, PartialEq, Serde)]
 pub struct DcaOrder {
     pub position_id: u64,
