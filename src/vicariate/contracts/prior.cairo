@@ -1,5 +1,6 @@
 #[starknet::contract]
 pub mod prior {
+    use core::cmp::min;
     use core::num::traits::Zero;
     use core::option::OptionTrait;
     use ekubo::components::clear::{IClearDispatcher, IClearDispatcherTrait};
@@ -70,7 +71,7 @@ pub mod prior {
         // Counter incremented on each callback from a rite, used to verify
         // that at least one callback was made during execution.
         // Cleared together with transient_trove_id after execution completes.
-        transient_caller_nonce: u64,
+        transient_action_nonce: u64,
     }
 
     //
@@ -256,13 +257,10 @@ pub mod prior {
             let user: ContractAddress = get_caller_address();
             self.assert_smart_trove_owner(user, trove_id);
 
-            assert!(
-                config.relative_threshold <= MAX_RELATIVE_THRESHOLD.into(),
-                "PRI: Invalid relative threshold",
-            );
-            assert!(
-                config.max_forge_fee_pct <= MAX_FORGE_FEE_PCT.into(), "PRI: Invalid max forge fee",
-            );
+            let mut config = config;
+            config
+                .relative_threshold = min(config.relative_threshold, MAX_RELATIVE_THRESHOLD.into());
+            config.max_forge_fee_pct = min(config.max_forge_fee_pct, MAX_FORGE_FEE_PCT.into());
 
             self.smart_trove_configs.write(trove_id, config)
         }
@@ -317,7 +315,6 @@ pub mod prior {
 
             assert!(self.transient_trove_id.read().is_zero(), "PRI: Another trove in execution");
             self.transient_trove_id.write(trove_id);
-            self.transient_caller_nonce.write(Zero::zero());
 
             rite.perform(trove_id);
 
@@ -327,12 +324,8 @@ pub mod prior {
             let stop_ltv: Ray = trove_health.threshold * config.relative_threshold;
             assert!(trove_health.ltv <= stop_ltv, "PRI: LTV exceeds relative threshold");
 
-            // Guarantee that at least one callback was executed
-            assert!(!self.transient_caller_nonce.read().is_zero(), "PRI: Callback not executed");
-
-            // Clear lock
-            self.transient_trove_id.write(Zero::zero());
-            self.transient_caller_nonce.write(Zero::zero());
+            self.assert_callback();
+            self.clear_locks();
         }
 
         // Only owner can end rite
@@ -344,17 +337,12 @@ pub mod prior {
 
             assert!(self.transient_trove_id.read().is_zero(), "PRI: Another trove in execution");
             self.transient_trove_id.write(trove_id);
-            self.transient_caller_nonce.write(Zero::zero());
 
             let rite = self.rites.read(trove_id);
             rite.end(trove_id);
 
-            // Guarantee that at least one callback was executed
-            assert!(!self.transient_caller_nonce.read().is_zero(), "PRI: Callback not executed");
-
-            // Clear lock
-            self.transient_trove_id.write(Zero::zero());
-            self.transient_caller_nonce.write(Zero::zero());
+            self.assert_callback();
+            self.clear_locks();
         }
 
         // Batch callback function to be called by `rite.perform(...)` and `rite.end(...)`
@@ -370,8 +358,8 @@ pub mod prior {
                 self.execute_action(trove_id, rite.contract_address, self.abbot.read(), *action);
             }
 
-            let current_nonce = self.transient_caller_nonce.read();
-            self.transient_caller_nonce.write(current_nonce + 1);
+            let current_nonce = self.transient_action_nonce.read();
+            self.transient_action_nonce.write(current_nonce + 1);
         }
 
         //
@@ -540,9 +528,22 @@ pub mod prior {
 
     #[generate_trait]
     impl PriorHelpers of PriorHelpersTrait {
+        //
+        // Assertions
+        //
+
         fn assert_smart_trove_owner(self: @ContractState, user: ContractAddress, trove_id: u64) {
             assert!(self.smart_trove_owners.read(trove_id) == user, "PRI: Not owner");
         }
+
+        fn assert_callback(self: @ContractState) {
+            // Guarantee that at least one callback was executed
+            assert!(!self.transient_action_nonce.read().is_zero(), "PRI: Callback not executed");
+        }
+
+        //
+        // View helpers
+        //
 
         fn can_execute_rite_helper(
             self: @ContractState, rite: IRiteDispatcher, trove_id: u64,
@@ -558,6 +559,15 @@ pub mod prior {
             } else {
                 false
             }
+        }
+
+        //
+        // State-modifying helpers
+        //
+
+        fn clear_locks(ref self: ContractState) {
+            self.transient_trove_id.write(Zero::zero());
+            self.transient_action_nonce.write(Zero::zero());
         }
 
         fn execute_action(
