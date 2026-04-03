@@ -71,7 +71,7 @@ pub mod prior {
         // Counter incremented on each callback from a rite, used to verify
         // that at least one callback was made during execution.
         // Cleared together with transient_trove_id after execution completes.
-        transient_action_nonce: u64,
+        transient_action_nonce: usize,
     }
 
     //
@@ -84,7 +84,10 @@ pub mod prior {
         SmartTroveCreated: SmartTroveCreated,
         ConfigUpdated: ConfigUpdated,
         RiteSet: RiteSet,
-        // Lever events
+        RiteExecuted: RiteExecuted,
+        RiteEnded: RiteEnded,
+        LeverUp: LeverUp,
+        LeverDown: LeverDown
     }
 
     #[derive(Copy, Drop, starknet::Event, PartialEq)]
@@ -101,8 +104,7 @@ pub mod prior {
         pub user: ContractAddress,
         #[key]
         pub trove_id: u64,
-        pub relative_threshold: Ray,
-        pub max_forge_fee_pct: Wad,
+        pub config: SmartTroveConfig
     }
 
     #[derive(Copy, Drop, starknet::Event, PartialEq)]
@@ -111,7 +113,53 @@ pub mod prior {
         pub user: ContractAddress,
         #[key]
         pub trove_id: u64,
+        #[key]
         pub rite: ContractAddress,
+    }
+
+    #[derive(Copy, Drop, starknet::Event, PartialEq)]
+    pub struct RiteExecuted {
+        #[key]
+        pub caller: ContractAddress,
+        #[key]
+        pub trove_id: u64,
+        #[key]
+        pub rite: ContractAddress,
+        actions_count: usize
+    }
+
+    #[derive(Copy, Drop, starknet::Event, PartialEq)]
+    pub struct RiteEnded {
+        #[key]
+        pub caller: ContractAddress,
+        #[key]
+        pub trove_id: u64,
+        #[key]
+        pub rite: ContractAddress,
+        actions_count: usize
+    }
+
+    #[derive(Copy, Drop, starknet::Event, PartialEq)]
+    pub struct LeverUp {
+        #[key]
+        pub user: ContractAddress,
+        #[key]
+        pub trove_id: u64,
+        #[key]
+        pub yang: ContractAddress,
+        pub amount: Wad,
+    }
+
+    #[derive(Copy, Drop, starknet::Event, PartialEq)]
+    pub struct LeverDown {
+        #[key]
+        pub user: ContractAddress,
+        #[key]
+        pub trove_id: u64,
+        #[key]
+        pub yang: ContractAddress,
+        pub amount: Wad,
+        pub yang_asset_amount: u128
     }
 
     //
@@ -262,7 +310,13 @@ pub mod prior {
                 .relative_threshold = min(config.relative_threshold, MAX_RELATIVE_THRESHOLD.into());
             config.max_forge_fee_pct = min(config.max_forge_fee_pct, MAX_FORGE_FEE_PCT.into());
 
-            self.smart_trove_configs.write(trove_id, config)
+            self.smart_trove_configs.write(trove_id, config);
+
+            self.emit(ConfigUpdated {
+                user,
+                trove_id,
+                config
+            });
         }
 
         fn get_trove_config(self: @ContractState, trove_id: u64) -> SmartTroveConfig {
@@ -281,17 +335,13 @@ pub mod prior {
             self.rites.read(trove_id).contract_address
         }
 
+        // This function explicitly allows a user to change rites even if there is an ongoing rite
+        // that has not ended so as to prevent a rite from bricking a trove for whatever reason.
         fn set_rite(ref self: ContractState, trove_id: u64, rite: ContractAddress) {
             let caller: ContractAddress = get_caller_address();
             // This also checks that the trove is a smart trove.
             // Otherwise, the owner would be zero address.
             self.assert_smart_trove_owner(caller, trove_id);
-
-            // Assert that is no ongoing rite
-            let previous_rite: IRiteDispatcher = self.rites.read(trove_id);
-            if previous_rite.contract_address.is_non_zero() {
-                assert!(previous_rite.has_ended(trove_id), "PRI: Rite ongoing");
-            }
 
             let rite = IRiteDispatcher { contract_address: rite };
             self.can_execute_rite_helper(rite, trove_id);
@@ -324,8 +374,11 @@ pub mod prior {
             let stop_ltv: Ray = trove_health.threshold * config.relative_threshold;
             assert!(trove_health.ltv <= stop_ltv, "PRI: LTV exceeds relative threshold");
 
+            let actions_count: usize = self.transient_action_nonce.read();
             self.assert_callback();
             self.clear_locks();
+
+            self.emit(RiteExecuted { caller: get_caller_address(), trove_id, rite: rite.contract_address, actions_count });
         }
 
         // Only owner can end rite
@@ -341,8 +394,11 @@ pub mod prior {
             let rite = self.rites.read(trove_id);
             rite.end(trove_id);
 
+            let actions_count: usize = self.transient_action_nonce.read();
             self.assert_callback();
             self.clear_locks();
+
+            self.emit(RiteExecuted { caller: get_caller_address(), trove_id, rite: rite.contract_address, actions_count });
         }
 
         // Batch callback function to be called by `rite.perform(...)` and `rite.end(...)`
@@ -390,8 +446,10 @@ pub mod prior {
         // 4. Borrow yin from caller's trove and mint to this contract
         fn up(ref self: ContractState, amount: Wad, lever_up_params: LeverUpParams) {
             let user: ContractAddress = get_caller_address();
-            self.assert_smart_trove_owner(user, lever_up_params.trove_id);
+            let trove_id: u64 = lever_up_params.trove_id;
+            self.assert_smart_trove_owner(user, trove_id);
 
+            let yang = lever_up_params.yang;
             let mut call_data: Array<felt252> = array![];
             let modify_lever_params = ModifyLeverParams {
                 user, action: ModifyLeverAction::LeverUp(lever_up_params),
@@ -407,6 +465,8 @@ pub mod prior {
                     amount.into(),
                     call_data.span(),
                 );
+
+            self.emit(LeverUp { user, trove_id, amount, yang });
         }
 
         // Unwind a position for a specific collateral for a Trove
@@ -417,8 +477,11 @@ pub mod prior {
         // 5. Transfer remainder collateral asset to user
         fn down(ref self: ContractState, amount: Wad, lever_down_params: LeverDownParams) {
             let user: ContractAddress = get_caller_address();
-            self.assert_smart_trove_owner(user, lever_down_params.trove_id);
+            let trove_id: u64 = lever_down_params.trove_id;
+            self.assert_smart_trove_owner(user, trove_id);
 
+            let yang = lever_down_params.yang_asset.address;
+            let yang_asset_amount = lever_down_params.yang_asset.amount;
             let modify_lever_params = ModifyLeverParams {
                 user, action: ModifyLeverAction::LeverDown(lever_down_params),
             };
@@ -434,6 +497,8 @@ pub mod prior {
                     amount.into(),
                     call_data.span(),
                 );
+
+            self.emit(LeverDown { user, trove_id, amount, yang, yang_asset_amount });
         }
     }
 
