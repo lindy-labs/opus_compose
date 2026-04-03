@@ -184,14 +184,10 @@ pub mod price_dca_rite {
             // Prior should have checked that the rite can be executed
             rites_utils::assert_caller_is_prior(caller, prior.contract_address, RITE_ID());
 
-            let config = self.price_dca_configs.read(trove_id);
-            let order_type = self.get_order_type(config);
-            assert!(order_type != OrderType::None, "{}: Price conditions not met", RITE_ID());
-
-            let order: DcaOrder = self.twamm_orders.read(trove_id);
-
             // Close existing + complete order if any
             // Reverts if existing + ongoing order
+            let config = self.price_dca_configs.read(trove_id);
+            let order: DcaOrder = self.twamm_orders.read(trove_id);
             self.close_order(trove_id, false, config, order);
 
             let yin = self.yin.read();
@@ -202,6 +198,7 @@ pub mod price_dca_rite {
             let mut sell_token: ContractAddress = Zero::zero();
             let mut buy_token: ContractAddress = Zero::zero();
             let mut dca_amount: u128 = Zero::zero();
+            let order_type = self.get_order_type(config);
             match order_type {
                 OrderType::BuyAsset => {
                     let action = Action::Forge(config.price_conditions.buy_amount);
@@ -225,7 +222,8 @@ pub mod price_dca_rite {
                     dca_amount = config.price_conditions.sell_amount;
                 },
                 OrderType::None => {
-                    // Should be unreachable via Prior due to assertion above
+                    // Should be unreachable because Prior already checked if 
+                    // rite is ready for execution
                     return;
                 },
             }

@@ -119,7 +119,7 @@ pub mod topup_rite {
                 "{}: Invalid asset",
                 RITE_ID(),
             );
-            if config.topup_amount.is_non_zero() {
+            if config.amounts.topup_amount.is_non_zero() {
                 let cash = self.yin.read().contract_address;
 
                 assert!(
@@ -129,7 +129,7 @@ pub mod topup_rite {
                     RITE_ID(),
                 );
                 assert!(
-                    config.topup_amount >= config.min_asset_balance // Prevent multiple topups
+                    config.amounts.topup_amount >= config.amounts.min_asset_balance // Prevent multiple topups
                     ,
                     "{}: Invalid topup amount",
                     RITE_ID(),
@@ -151,13 +151,13 @@ pub mod topup_rite {
         fn is_ready(self: @ContractState, trove_id: u64) -> bool {
             let config = self.topup_configs.read(trove_id);
             // Zero topup amount is used as a flag for disabling auto-topup
-            if config.topup_amount.is_zero() {
+            if config.amounts.topup_amount.is_zero() {
                 return false;
             }
 
             let tracked_balance = IERC20Dispatcher { contract_address: config.asset }
                 .balance_of(config.destination);
-            tracked_balance < config.min_asset_balance.into()
+            tracked_balance < config.amounts.min_asset_balance.into()
         }
 
         fn has_ended(self: @ContractState, trove_id: u64) -> bool {
@@ -173,7 +173,7 @@ pub mod topup_rite {
             let config = self.topup_configs.read(trove_id);
             let yin = self.yin.read();
             let swap_params: SwapParams = self
-                .get_swap_params_helper(config.pool_params, config.asset, config.topup_amount, config.slippage, yin.contract_address);
+                .get_swap_params_helper(config.pool_params, config.asset, config.amounts.topup_amount, config.slippage, yin.contract_address);
 
             prior.on_rite_actions(trove_id, array![Action::Forge(swap_params.forge_amount)].span());
 
@@ -210,7 +210,7 @@ pub mod topup_rite {
                         trove_id,
                         forge_amount: swap_params.forge_amount,
                         asset: config.asset,
-                        topup_amount: config.topup_amount,
+                        topup_amount: config.amounts.topup_amount,
                         destination: config.destination,
                     },
                 );
@@ -231,7 +231,7 @@ pub mod topup_rite {
             let config = self.topup_configs.read(trove_id);
             let cash = self.yin.read().contract_address;
             self
-                .get_swap_params_helper(config.pool_params, config.asset, config.topup_amount, config.slippage, cash)
+                .get_swap_params_helper(config.pool_params, config.asset, config.amounts.topup_amount, config.slippage, cash)
         }
     }
 
