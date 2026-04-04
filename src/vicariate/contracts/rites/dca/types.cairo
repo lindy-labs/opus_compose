@@ -4,7 +4,7 @@ use starknet::ContractAddress;
 use starknet::storage_access::StorePacking;
 use wadray::Wad;
 
-// DcaDurations packing shifts and masks (packed into u128)
+// PriceDcaDurations packing shifts and masks (packed into u128)
 const TWO_POW_64_U128: u128 = 0x10000000000000000;
 const MASK_64_U128: u128 = 0xFFFFFFFFFFFFFFFF;
 const MASK_4_U128: u128 = 0xF;
@@ -41,8 +41,8 @@ pub enum OrderStatus {
 // Predefined DCA duration options with Ekubo-compatible end times.
 // Each variant maps to a specific duration in seconds and step size
 // for valid timestamp calculation.
-#[derive(Copy, Drop, Debug, PartialEq, Serde)]
-pub enum DcaDuration {
+#[derive(Copy, Drop, Debug, PartialEq, Serde, starknet::Store)]
+pub enum DcaOrderDuration {
     ThreeHours,
     SixHours,
     TwelveHours,
@@ -58,43 +58,43 @@ pub enum DcaDuration {
 
 #[generate_trait]
 pub impl DcaDurationImpl of DcaDurationTrait {
-    /// Returns the duration in seconds for the given DcaDuration variant.
-    fn to_seconds(self: DcaDuration) -> u64 {
+    /// Returns the duration in seconds for the given DcaOrderDuration variant.
+    fn to_seconds(self: DcaOrderDuration) -> u64 {
         const HOUR: u64 = 60 * 60;
         const DAY: u64 = 24 * HOUR;
         const WEEK: u64 = 7 * DAY;
         const MONTH: u64 = 30 * DAY;
 
         match self {
-            DcaDuration::ThreeHours(()) => 3 * HOUR,
-            DcaDuration::SixHours(()) => 6 * HOUR,
-            DcaDuration::TwelveHours(()) => 12 * HOUR,
-            DcaDuration::TwentyFourHours(()) => DAY,
-            DcaDuration::ThreeDays(()) => 3 * DAY,
-            DcaDuration::OneWeek(()) => WEEK,
-            DcaDuration::TwoWeeks(()) => 2 * WEEK,
-            DcaDuration::OneMonth(()) => MONTH,
-            DcaDuration::ThreeMonths(()) => 3 * MONTH,
-            DcaDuration::SixMonths(()) => 6 * MONTH,
+            DcaOrderDuration::ThreeHours(()) => 3 * HOUR,
+            DcaOrderDuration::SixHours(()) => 6 * HOUR,
+            DcaOrderDuration::TwelveHours(()) => 12 * HOUR,
+            DcaOrderDuration::TwentyFourHours(()) => DAY,
+            DcaOrderDuration::ThreeDays(()) => 3 * DAY,
+            DcaOrderDuration::OneWeek(()) => WEEK,
+            DcaOrderDuration::TwoWeeks(()) => 2 * WEEK,
+            DcaOrderDuration::OneMonth(()) => MONTH,
+            DcaOrderDuration::ThreeMonths(()) => 3 * MONTH,
+            DcaOrderDuration::SixMonths(()) => 6 * MONTH,
         }
     }
 
     // Returns the Ekubo time step size for the given duration.
     // Ekubo requires end timestamps to be multiples of a step size
     // that depends on the duration from now.
-    fn get_step_size(self: DcaDuration) -> u64 {
+    fn get_step_size(self: DcaOrderDuration) -> u64 {
         match self {
-            DcaDuration::ThreeHours | DcaDuration::SixHours | DcaDuration::TwelveHours => 4096,
-            DcaDuration::TwentyFourHours | DcaDuration::ThreeDays | DcaDuration::OneWeek => 65536,
-            DcaDuration::TwoWeeks | DcaDuration::OneMonth | DcaDuration::ThreeMonths |
-            DcaDuration::SixMonths => 1048576,
+            DcaOrderDuration::ThreeHours | DcaOrderDuration::SixHours | DcaOrderDuration::TwelveHours => 4096,
+            DcaOrderDuration::TwentyFourHours | DcaOrderDuration::ThreeDays | DcaOrderDuration::OneWeek => 65536,
+            DcaOrderDuration::TwoWeeks | DcaOrderDuration::OneMonth | DcaOrderDuration::ThreeMonths |
+            DcaOrderDuration::SixMonths => 1048576,
         }
     }
 
     // Calculates a valid Ekubo end timestamp for this duration.
     // Rounds (now + period) up to the next step boundary to ensure
     // the end_time is both in the future and aligned to a multiple of the step size.
-    fn to_valid_end_time(self: DcaDuration, now: u64) -> u64 {
+    fn to_valid_end_time(self: DcaOrderDuration, now: u64) -> u64 {
         let period = self.to_seconds();
         let step = self.get_step_size();
         let target = now + period;
@@ -102,57 +102,57 @@ pub impl DcaDurationImpl of DcaDurationTrait {
     }
 
     /// Returns the variant index (0-9) for storage packing.
-    fn into_index(self: DcaDuration) -> u8 {
+    fn into_index(self: DcaOrderDuration) -> u8 {
         match self {
-            DcaDuration::ThreeHours => 0,
-            DcaDuration::SixHours => 1,
-            DcaDuration::TwelveHours => 2,
-            DcaDuration::TwentyFourHours => 3,
-            DcaDuration::ThreeDays => 4,
-            DcaDuration::OneWeek => 5,
-            DcaDuration::TwoWeeks => 6,
-            DcaDuration::OneMonth => 7,
-            DcaDuration::ThreeMonths => 8,
-            DcaDuration::SixMonths => 9,
+            DcaOrderDuration::ThreeHours => 0,
+            DcaOrderDuration::SixHours => 1,
+            DcaOrderDuration::TwelveHours => 2,
+            DcaOrderDuration::TwentyFourHours => 3,
+            DcaOrderDuration::ThreeDays => 4,
+            DcaOrderDuration::OneWeek => 5,
+            DcaOrderDuration::TwoWeeks => 6,
+            DcaOrderDuration::OneMonth => 7,
+            DcaOrderDuration::ThreeMonths => 8,
+            DcaOrderDuration::SixMonths => 9,
         }
     }
 
-    /// Reconstructs a DcaDuration from its variant index (0-9).
-    fn from_index(index: u8) -> DcaDuration {
+    /// Reconstructs a DcaOrderDuration from its variant index (0-9).
+    fn from_index(index: u8) -> DcaOrderDuration {
         match index {
-            0 => DcaDuration::ThreeHours,
-            1 => DcaDuration::SixHours,
-            2 => DcaDuration::TwelveHours,
-            3 => DcaDuration::TwentyFourHours,
-            4 => DcaDuration::ThreeDays,
-            5 => DcaDuration::OneWeek,
-            6 => DcaDuration::TwoWeeks,
-            7 => DcaDuration::OneMonth,
-            8 => DcaDuration::ThreeMonths,
-            9 => DcaDuration::SixMonths,
-            _ => panic!("Invalid DcaDuration index"),
+            0 => DcaOrderDuration::ThreeHours,
+            1 => DcaOrderDuration::SixHours,
+            2 => DcaOrderDuration::TwelveHours,
+            3 => DcaOrderDuration::TwentyFourHours,
+            4 => DcaOrderDuration::ThreeDays,
+            5 => DcaOrderDuration::OneWeek,
+            6 => DcaOrderDuration::TwoWeeks,
+            7 => DcaOrderDuration::OneMonth,
+            8 => DcaOrderDuration::ThreeMonths,
+            9 => DcaOrderDuration::SixMonths,
+            _ => panic!("Invalid DcaOrderDuration index"),
         }
     }
 }
 
-// Packs twap_duration (u64) and order_duration (DcaDuration, 4 bits) into a single u128.
+// Packs twap_duration (u64) and order_duration (DcaOrderDuration, 4 bits) into a single u128.
 // Layout: [order_duration (4 bits) | twap_duration (64 bits)] = 68 bits
 #[derive(Copy, Drop, Debug, PartialEq, Serde)]
-pub struct DcaDurations {
+pub struct PriceDcaDurations {
     pub twap_duration: u64,
-    pub order_duration: DcaDuration,
+    pub order_duration: DcaOrderDuration,
 }
 
-impl DcaDurationsPacking of StorePacking<DcaDurations, u128> {
-    fn pack(value: DcaDurations) -> u128 {
+impl PriceDcaDurationsPacking of StorePacking<PriceDcaDurations, u128> {
+    fn pack(value: PriceDcaDurations) -> u128 {
         value.twap_duration.into() + (value.order_duration.into_index().into() * TWO_POW_64_U128)
     }
 
-    fn unpack(value: u128) -> DcaDurations {
+    fn unpack(value: u128) -> PriceDcaDurations {
         let twap_duration = value & MASK_64_U128;
         let order_index = (value / TWO_POW_64_U128) & MASK_4_U128;
 
-        DcaDurations {
+        PriceDcaDurations {
             twap_duration: twap_duration.try_into().unwrap(),
             order_duration: DcaDurationTrait::from_index(order_index.try_into().unwrap()),
         }
@@ -228,7 +228,39 @@ pub struct PriceDcaConfig {
     pub pool_params: EkuboPoolParams,
     pub price_conditions: PriceConditions,
     // Duration used to check the TWAP for asset, and duration of DCA order
-    pub durations: DcaDurations,
+    pub durations: PriceDcaDurations,
+}
+
+#[derive(Copy, Drop, PartialEq, Serde, starknet::Store)]
+pub struct TimeDcaConfig {
+    pub asset: ContractAddress,
+    pub pool_params: EkuboPoolParams,
+    pub frequency: u64,
+    pub durations: TimeDcaDurations,
+}
+
+// Packs twap_duration (u64) and order_duration (DcaOrderDuration, 4 bits) into a single u128.
+// Layout: [order_duration (4 bits) | twap_duration (64 bits)] = 68 bits
+#[derive(Copy, Drop, Debug, PartialEq, Serde)]
+pub struct TimeDcaDurations {
+    pub order_frequency: u64,
+    pub order_duration: DcaOrderDuration,
+}
+
+impl TimeDcaDurationsPacking of StorePacking<TimeDcaDurations, u128> {
+    fn pack(value: TimeDcaDurations) -> u128 {
+        value.order_frequency.into() + (value.order_duration.into_index().into() * TWO_POW_64_U128)
+    }
+
+    fn unpack(value: u128) -> TimeDcaDurations {
+        let order_frequency = value & MASK_64_U128;
+        let order_index = (value / TWO_POW_64_U128) & MASK_4_U128;
+
+        TimeDcaDurations {
+            order_frequency: order_frequency.try_into().unwrap(),
+            order_duration: DcaDurationTrait::from_index(order_index.try_into().unwrap()),
+        }
+    }
 }
 
 // Packs DcaOrder into a u256 (2 storage slots instead of 4).

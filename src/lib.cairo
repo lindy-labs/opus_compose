@@ -55,6 +55,7 @@ pub mod vicariate {
             }
             pub mod dca {
                 pub mod price_dca_rite;
+                pub mod time_dca_rite;
                 pub mod types;
                 pub mod utils;
             }

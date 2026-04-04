@@ -1,3 +1,5 @@
+use wadray::Wad;
+
 #[starknet::interface]
 pub trait IRite<TContractState> {
     fn get_rite_id(self: @TContractState) -> ByteArray;
@@ -10,6 +12,10 @@ pub trait IRite<TContractState> {
     // Returns whether the rite has ended
     // Always returns true for rites that end within a single call
     fn has_ended(self: @TContractState, trove_id: u64) -> bool;
+    // Returns the incentive the rite proposes for executing it.
+    // Called before perform() so the keeper knows the exact payout.
+    // Prior caps this with the user's max_incentive_amount config.
+    fn get_incentive(self: @TContractState, trove_id: u64) -> Wad;
     // Must include a callback to `prior.on_execute_rite(...)`
     fn perform(ref self: TContractState, trove_id: u64);
     // Ends a rite that runs for longer than the initial `perform` call e.g. DCA orders.

@@ -1,5 +1,5 @@
 #[starknet::contract]
-pub mod price_dca_rite {
+pub mod time_dca_rite {
     use core::num::traits::Zero;
     use ekubo::extensions::oracle::{IOracleDispatcher, IOracleDispatcherTrait};
     use ekubo::interfaces::extensions::twamm::{OrderInfo, OrderKey};
@@ -11,7 +11,7 @@ pub mod price_dca_rite {
     use opus_compose::constants;
     use opus_compose::interfaces::erc20::{IERC20Dispatcher, IERC20DispatcherTrait};
     use opus_compose::vicariate::contracts::rites::dca::types::{
-        ConsolidatedOrderData, DcaDurationTrait, DcaOrder, OrderStatus, OrderType, PriceDcaConfig,
+        ConsolidatedOrderData, DcaDurationTrait, DcaOrder, OrderStatus, OrderType, TimeDcaConfig,
     };
     use opus_compose::vicariate::contracts::rites::dca::utils::dca_utils;
     use opus_compose::vicariate::contracts::rites::types::EkuboPoolParamsTrait;
@@ -24,14 +24,10 @@ pub mod price_dca_rite {
         StoragePointerWriteAccess,
     };
     use starknet::{ContractAddress, get_block_timestamp, get_caller_address};
-    use wadray::{WAD_ONE, Wad};
+    use wadray::Wad;
 
     const CASH_DECIMALS: u8 = 18;
     pub const MINIMUM_TWAP_DURATION: u64 = 5 * 60;
-
-    // Incentive constants denominated in CASH (18 decimals)
-    pub const INCENTIVE_DCA_NEW_ORDER: u128 = WAD_ONE / 100; // 0.01 CASH
-    pub const INCENTIVE_DCA_CLOSE_AND_NEW: u128 = WAD_ONE / 50; // 0.02 CASH
 
     #[storage]
     struct Storage {
@@ -39,7 +35,7 @@ pub mod price_dca_rite {
         prior: IPriorDispatcher,
         ekubo_oracle: IOracleDispatcher,
         ekubo_positions: IPositionsDispatcher,
-        price_dca_configs: Map<u64, PriceDcaConfig>, // PDCA trove ID -> config
+        price_dca_configs: Map<u64, TimeDcaConfig>, // PDCA trove ID -> config
         // Mapping of smart trove ID to Ekubo NFT ID
         twamm_orders: Map<u64, DcaOrder>,
     }
@@ -47,18 +43,18 @@ pub mod price_dca_rite {
     #[event]
     #[derive(Copy, Drop, starknet::Event, PartialEq)]
     pub enum Event {
-        PriceDcaConfigUpdated: PriceDcaConfigUpdated,
+        TimeDcaConfigUpdated: TimeDcaConfigUpdated,
         TwammOrderCreated: TwammOrderCreated,
         TwammOrderClosed: TwammOrderClosed,
     }
 
     #[derive(Copy, Drop, starknet::Event, PartialEq)]
-    pub struct PriceDcaConfigUpdated {
+    pub struct TimeDcaConfigUpdated {
         #[key]
         pub user: ContractAddress,
         #[key]
         pub trove_id: u64,
-        pub config: PriceDcaConfig,
+        pub config: TimeDcaConfig,
     }
 
     #[derive(Copy, Drop, starknet::Event, PartialEq)]
@@ -122,7 +118,7 @@ pub mod price_dca_rite {
             assert!(order_data.order_status == OrderStatus::None, "{}: Ongoing order", RITE_ID());
 
             let mut config = config;
-            let config: PriceDcaConfig = Serde::<PriceDcaConfig>::deserialize(ref config)
+            let config: TimeDcaConfig = Serde::<TimeDcaConfig>::deserialize(ref config)
                 .expect('PRICE_DCA: Invalid config');
             assert!(
                 config.durations.twap_duration >= MINIMUM_TWAP_DURATION,
@@ -160,7 +156,7 @@ pub mod price_dca_rite {
 
             self.price_dca_configs.write(trove_id, config);
 
-            self.emit(PriceDcaConfigUpdated { user, trove_id, config });
+            self.emit(TimeDcaConfigUpdated { user, trove_id, config });
         }
 
         // Returns true if price conditions and no existing ongoing order
@@ -183,22 +179,6 @@ pub mod price_dca_rite {
             match consolidated.order_status {
                 OrderStatus::Ongoing => false,
                 _ => true,
-            }
-        }
-
-        fn get_incentive(self: @ContractState, trove_id: u64) -> Wad {
-            let config = self.price_dca_configs.read(trove_id);
-            let order: DcaOrder = self.twamm_orders.read(trove_id);
-
-            if order.position_id.is_zero() {
-                return INCENTIVE_DCA_NEW_ORDER.into();
-            }
-
-            let consolidated = self.get_consolidated_order_data(order, config.asset);
-            match consolidated.order_status {
-                OrderStatus::Ongoing | OrderStatus::None => Zero::zero(),
-                OrderStatus::CompletedNotWithdrawn => INCENTIVE_DCA_CLOSE_AND_NEW.into(),
-                OrderStatus::CompletedAndWithdrawn => INCENTIVE_DCA_NEW_ORDER.into(),
             }
         }
 
@@ -320,7 +300,7 @@ pub mod price_dca_rite {
         }
 
         // Returns the order type based on the price conditions configured
-        fn get_order_type(self: @ContractState, config: PriceDcaConfig) -> OrderType {
+        fn get_order_type(self: @ContractState, config: TimeDcaConfig) -> OrderType {
             // Zero order amounts are used as a flag for disabling price-DCA
             let buy_is_enabled: bool = config.price_conditions.buy_amount.is_non_zero();
             let sell_is_enabled: bool = config.price_conditions.sell_amount.is_non_zero();
@@ -388,7 +368,7 @@ pub mod price_dca_rite {
             ref self: ContractState,
             trove_id: u64,
             force_closure: bool,
-            config: PriceDcaConfig,
+            config: TimeDcaConfig,
             order: DcaOrder,
         ) {
             let ConsolidatedOrderData {

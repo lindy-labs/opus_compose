@@ -72,7 +72,7 @@ pub mod prior {
         // Counter incremented on each callback from a rite, used to verify
         // that at least one callback was made during execution.
         // Cleared together with transient_trove_id after execution completes.
-        transient_action_nonce: usize,
+        transient_callback_nonce: usize,
     }
 
     //
@@ -126,8 +126,7 @@ pub mod prior {
         pub trove_id: u64,
         #[key]
         pub rite: ContractAddress,
-        actions_count: usize,
-        incentive_amount: Wad,
+        pub incentive_amount: Wad,
     }
 
     #[derive(Copy, Drop, starknet::Event, PartialEq)]
@@ -138,7 +137,6 @@ pub mod prior {
         pub trove_id: u64,
         #[key]
         pub rite: ContractAddress,
-        actions_count: usize
     }
 
     #[derive(Copy, Drop, starknet::Event, PartialEq)]
@@ -311,7 +309,7 @@ pub mod prior {
             config
                 .relative_threshold = min(config.relative_threshold, MAX_RELATIVE_THRESHOLD.into());
             config.max_forge_fee_pct = min(config.max_forge_fee_pct, MAX_FORGE_FEE_PCT.into());
-            config.incentive_amount = min(config.incentive_amount, MAX_INCENTIVE_AMOUNT.into());
+            config.max_incentive_amount = min(config.max_incentive_amount, MAX_INCENTIVE_AMOUNT.into());
 
             self.smart_trove_configs.write(trove_id, config);
 
@@ -361,6 +359,16 @@ pub mod prior {
             self.can_execute_rite_helper(rite, trove_id)
         }
 
+        // Returns the incentive that would be paid for executing the rite on this trove.
+        // Pure pass-through of the rite's proposed incentive, capped by the user's max.
+        // No readiness check — this is independent of can_execute_rite.
+        fn get_incentive(self: @ContractState, trove_id: u64) -> Wad {
+            let rite = self.rites.read(trove_id);
+            let rite_incentive: Wad = rite.get_incentive(trove_id);
+            let config: SmartTroveConfig = self.smart_trove_configs.read(trove_id);
+            min(rite_incentive, config.max_incentive_amount)
+        }
+
         // Can be called by anyone
         fn execute_rite(ref self: ContractState, trove_id: u64) {
             let rite = self.rites.read(trove_id);
@@ -371,15 +379,18 @@ pub mod prior {
 
             rite.perform(trove_id);
 
-            // Mint incentive fee to caller
+            // Settle incentive — sampled after perform() so the rite can reflect
+            // what actually happened during execution, capped by user's max.
             let config: SmartTroveConfig = self.smart_trove_configs.read(trove_id);
+            let rite_incentive: Wad = rite.get_incentive(trove_id);
+            let incentive = min(rite_incentive, config.max_incentive_amount);
             let shrine = self.shrine.read();
 
-            if config.incentive_amount.is_non_zero() {
-                self.abbot.read().forge(trove_id, config.incentive_amount, config.max_forge_fee_pct);
+            if incentive.is_non_zero() {
+                self.abbot.read().forge(trove_id, incentive, config.max_forge_fee_pct);
 
                 IERC20Dispatcher { contract_address: shrine.contract_address }
-                    .transfer(get_caller_address(), config.incentive_amount.into());
+                    .transfer(get_caller_address(), incentive.into());
             }
 
             // Check LTV condition if relative_threshold is set
@@ -387,11 +398,15 @@ pub mod prior {
             let stop_ltv: Ray = trove_health.threshold * config.relative_threshold;
             assert!(trove_health.ltv <= stop_ltv, "PRI: LTV exceeds relative threshold");
 
-            let actions_count: usize = self.transient_action_nonce.read();
             self.assert_callback();
             self.clear_locks();
 
-            self.emit(RiteExecuted { caller: get_caller_address(), trove_id, rite: rite.contract_address, actions_count, incentive_amount: config.incentive_amount });
+            self.emit(RiteExecuted {
+                caller: get_caller_address(),
+                trove_id,
+                rite: rite.contract_address,
+                incentive_amount: incentive,
+            });
         }
 
         // Only owner can end rite
@@ -407,11 +422,10 @@ pub mod prior {
             let rite = self.rites.read(trove_id);
             rite.end(trove_id);
 
-            let actions_count: usize = self.transient_action_nonce.read();
             self.assert_callback();
             self.clear_locks();
 
-            self.emit(RiteExecuted { caller: get_caller_address(), trove_id, rite: rite.contract_address, actions_count });
+            self.emit(RiteEnded { caller: get_caller_address(), trove_id, rite: rite.contract_address });
         }
 
         // Batch callback function to be called by `rite.perform(...)` and `rite.end(...)`
@@ -427,8 +441,8 @@ pub mod prior {
                 self.execute_action(trove_id, rite.contract_address, self.abbot.read(), *action);
             }
 
-            let current_nonce = self.transient_action_nonce.read();
-            self.transient_action_nonce.write(current_nonce + 1);
+            let current_nonce = self.transient_callback_nonce.read();
+            self.transient_callback_nonce.write(current_nonce + 1);
         }
 
         //
@@ -616,7 +630,7 @@ pub mod prior {
 
         fn assert_callback(self: @ContractState) {
             // Guarantee that at least one callback was executed
-            assert!(!self.transient_action_nonce.read().is_zero(), "PRI: Callback not executed");
+            assert!(!self.transient_callback_nonce.read().is_zero(), "PRI: Callback not executed");
         }
 
         //
@@ -645,7 +659,7 @@ pub mod prior {
 
         fn clear_locks(ref self: ContractState) {
             self.transient_trove_id.write(Zero::zero());
-            self.transient_action_nonce.write(Zero::zero());
+            self.transient_callback_nonce.write(Zero::zero());
         }
 
         fn execute_action(
