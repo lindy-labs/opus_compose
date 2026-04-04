@@ -101,38 +101,6 @@ pub impl DcaDurationImpl of DcaDurationTrait {
         target + (step - target % step) % step
     }
 
-    /// Returns the variant index (0-9) for storage packing.
-    fn into_index(self: DcaOrderDuration) -> u8 {
-        match self {
-            DcaOrderDuration::ThreeHours => 0,
-            DcaOrderDuration::SixHours => 1,
-            DcaOrderDuration::TwelveHours => 2,
-            DcaOrderDuration::TwentyFourHours => 3,
-            DcaOrderDuration::ThreeDays => 4,
-            DcaOrderDuration::OneWeek => 5,
-            DcaOrderDuration::TwoWeeks => 6,
-            DcaOrderDuration::OneMonth => 7,
-            DcaOrderDuration::ThreeMonths => 8,
-            DcaOrderDuration::SixMonths => 9,
-        }
-    }
-
-    /// Reconstructs a DcaOrderDuration from its variant index (0-9).
-    fn from_index(index: u8) -> DcaOrderDuration {
-        match index {
-            0 => DcaOrderDuration::ThreeHours,
-            1 => DcaOrderDuration::SixHours,
-            2 => DcaOrderDuration::TwelveHours,
-            3 => DcaOrderDuration::TwentyFourHours,
-            4 => DcaOrderDuration::ThreeDays,
-            5 => DcaOrderDuration::OneWeek,
-            6 => DcaOrderDuration::TwoWeeks,
-            7 => DcaOrderDuration::OneMonth,
-            8 => DcaOrderDuration::ThreeMonths,
-            9 => DcaOrderDuration::SixMonths,
-            _ => panic!("Invalid DcaOrderDuration index"),
-        }
-    }
 }
 
 // Packs twap_duration (u64) and order_duration (DcaOrderDuration, 4 bits) into a single u128.
@@ -154,7 +122,7 @@ impl PriceDcaDurationsPacking of StorePacking<PriceDcaDurations, u128> {
 
         PriceDcaDurations {
             twap_duration: twap_duration.try_into().unwrap(),
-            order_duration: DcaDurationTrait::from_index(order_index.try_into().unwrap()),
+            order_duration: IndexedEnum::<DcaOrderDuration>::from_index(order_index.try_into().unwrap()),
         }
     }
 }
@@ -258,7 +226,7 @@ impl TimeDcaDurationsPacking of StorePacking<TimeDcaDurations, u128> {
 
         TimeDcaDurations {
             order_frequency: order_frequency.try_into().unwrap(),
-            order_duration: DcaDurationTrait::from_index(order_index.try_into().unwrap()),
+            order_duration: IndexedEnum::<DcaOrderDuration>::from_index(order_index.try_into().unwrap()),
         }
     }
 }
@@ -277,27 +245,67 @@ pub struct DcaOrder {
     pub order_type: OrderType,
 }
 
-fn order_type_into_index(order_type: OrderType) -> u64 {
-    match order_type {
-        OrderType::None => 0,
-        OrderType::BuyAsset => 1,
-        OrderType::SellAsset => 2,
+pub trait IndexedEnum<T> {
+    fn into_index(self: T) -> u64;
+    fn from_index(index: u64) -> T;
+}
+
+pub impl DcaDurationIndexedImpl of IndexedEnum<DcaOrderDuration> {
+    fn into_index(self: DcaOrderDuration) -> u64 {
+        match self {
+            DcaOrderDuration::ThreeHours => 0,
+            DcaOrderDuration::SixHours => 1,
+            DcaOrderDuration::TwelveHours => 2,
+            DcaOrderDuration::TwentyFourHours => 3,
+            DcaOrderDuration::ThreeDays => 4,
+            DcaOrderDuration::OneWeek => 5,
+            DcaOrderDuration::TwoWeeks => 6,
+            DcaOrderDuration::OneMonth => 7,
+            DcaOrderDuration::ThreeMonths => 8,
+            DcaOrderDuration::SixMonths => 9,
+        }
+    }
+
+    fn from_index(index: u64) -> DcaOrderDuration {
+        match index {
+            0 => DcaOrderDuration::ThreeHours,
+            1 => DcaOrderDuration::SixHours,
+            2 => DcaOrderDuration::TwelveHours,
+            3 => DcaOrderDuration::TwentyFourHours,
+            4 => DcaOrderDuration::ThreeDays,
+            5 => DcaOrderDuration::OneWeek,
+            6 => DcaOrderDuration::TwoWeeks,
+            7 => DcaOrderDuration::OneMonth,
+            8 => DcaOrderDuration::ThreeMonths,
+            9 => DcaOrderDuration::SixMonths,
+            _ => panic!("Invalid DcaOrderDuration index"),
+        }
     }
 }
 
-fn order_type_from_index(index: u64) -> OrderType {
-    match index {
-        0 => OrderType::None,
-        1 => OrderType::BuyAsset,
-        2 => OrderType::SellAsset,
-        _ => panic!("Invalid OrderType index"),
+pub impl OrderTypeIndexedImpl of IndexedEnum<OrderType> {
+    fn into_index(self: OrderType) -> u64 {
+        match self {
+            OrderType::None => 0,
+            OrderType::BuyAsset => 1,
+            OrderType::SellAsset => 2,
+        }
+    }
+
+    fn from_index(index: u64) -> OrderType {
+        match index {
+            0 => OrderType::None,
+            1 => OrderType::BuyAsset,
+            2 => OrderType::SellAsset,
+            _ => panic!("Invalid OrderType index"),
+        }
     }
 }
 
 impl DcaOrderPacking of StorePacking<DcaOrder, u256> {
     fn pack(value: DcaOrder) -> u256 {
         let end_time_and_type: u256 = value.end_time.into()
-            + (order_type_into_index(value.order_type).into() * TWO_POW_62_U256);
+            + (value.order_type.into_index().into() * TWO_POW_62_U256);
         value.fee.into()
             + (value.position_id.into() * TWO_POW_128_U256)
             + (end_time_and_type * TWO_POW_192_U256)
@@ -309,7 +317,7 @@ impl DcaOrderPacking of StorePacking<DcaOrder, u256> {
             fee: (value & MASK_128_U256).try_into().unwrap(),
             position_id: ((value / TWO_POW_128_U256) & MASK_64_U256).try_into().unwrap(),
             end_time: (end_time_and_type & MASK_62_U256).try_into().unwrap(),
-            order_type: order_type_from_index(
+            order_type: IndexedEnum::<OrderType>::from_index(
                 (end_time_and_type / TWO_POW_62_U256).try_into().unwrap(),
             ),
         }
