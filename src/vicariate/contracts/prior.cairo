@@ -40,6 +40,7 @@ pub mod prior {
     // Extracted from Shrine
     pub const MAX_RELATIVE_THRESHOLD: u128 = RAY_ONE;
     pub const MAX_FORGE_FEE_PCT: u128 = 4 * WAD_ONE;
+    pub const MAX_INCENTIVE_AMOUNT: u128 = 0x7FFFFFFFFFFFFFFFFFFFFFFFFFFF;
 
     //
     // Storage
@@ -125,7 +126,8 @@ pub mod prior {
         pub trove_id: u64,
         #[key]
         pub rite: ContractAddress,
-        actions_count: usize
+        actions_count: usize,
+        incentive_amount: Wad,
     }
 
     #[derive(Copy, Drop, starknet::Event, PartialEq)]
@@ -309,6 +311,7 @@ pub mod prior {
             config
                 .relative_threshold = min(config.relative_threshold, MAX_RELATIVE_THRESHOLD.into());
             config.max_forge_fee_pct = min(config.max_forge_fee_pct, MAX_FORGE_FEE_PCT.into());
+            config.incentive_amount = min(config.incentive_amount, MAX_INCENTIVE_AMOUNT.into());
 
             self.smart_trove_configs.write(trove_id, config);
 
@@ -368,9 +371,19 @@ pub mod prior {
 
             rite.perform(trove_id);
 
-            // Check LTV condition if relative_threshold is set
+            // Mint incentive fee to caller
             let config: SmartTroveConfig = self.smart_trove_configs.read(trove_id);
-            let trove_health: Health = self.shrine.read().get_trove_health(trove_id);
+            let shrine = self.shrine.read();
+
+            if config.incentive_amount.is_non_zero() {
+                self.abbot.read().forge(trove_id, config.incentive_amount, config.max_forge_fee_pct);
+
+                IERC20Dispatcher { contract_address: shrine.contract_address }
+                    .transfer(get_caller_address(), config.incentive_amount.into());
+            }
+
+            // Check LTV condition if relative_threshold is set
+            let trove_health: Health = shrine.get_trove_health(trove_id);
             let stop_ltv: Ray = trove_health.threshold * config.relative_threshold;
             assert!(trove_health.ltv <= stop_ltv, "PRI: LTV exceeds relative threshold");
 
@@ -378,7 +391,7 @@ pub mod prior {
             self.assert_callback();
             self.clear_locks();
 
-            self.emit(RiteExecuted { caller: get_caller_address(), trove_id, rite: rite.contract_address, actions_count });
+            self.emit(RiteExecuted { caller: get_caller_address(), trove_id, rite: rite.contract_address, actions_count, incentive_amount: config.incentive_amount });
         }
 
         // Only owner can end rite
