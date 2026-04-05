@@ -1,7 +1,6 @@
 use opus::types::AssetBalance;
 use opus_compose::vicariate::types::{Action, SmartTroveConfig};
 use starknet::ContractAddress;
-use wadray::Wad;
 
 #[starknet::interface]
 pub trait IPrior<TContractState> {

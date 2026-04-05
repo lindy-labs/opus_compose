@@ -25,37 +25,38 @@ pub enum Action {
     Withdraw: AssetBalance,
 }
 
-// Packs relative_threshold, max_forge_fee_pct, and incentive_amount into a single felt252.
+// Packs relative_threshold, max_forge_fee_pct, and incentive into a single felt252.
 // Layout: [incentive_amount (bits 152–250, 99 bits) | max_forge_fee_pct (bits 90–151, 62 bits) | relative_threshold (bits 0–89, 90 bits)]
 // `relative_threshold` is capped at RAY_ONE (10^27)
 // `max_forge_fee_pct` is capped at 4 * WAD_ONE (4 * 10^18)
-// `incentive_amount` is capped at 2^99 - 1
+// `incentive` is capped at 2^99 - 1
 #[derive(Copy, Drop, Default, PartialEq, Serde)]
 pub struct SmartTroveConfig {
     // Maximum LTV = relative threshold * threshold
     pub relative_threshold: Ray,
     pub max_forge_fee_pct: Wad,
-    pub incentive_amount: Wad,
+    // Amount of CASH to be minted to keeper
+    pub incentive: Wad,
 }
 
 impl SmartTroveConfigPacking of StorePacking<SmartTroveConfig, felt252> {
     fn pack(value: SmartTroveConfig) -> felt252 {
         let relative_threshold: u256 = value.relative_threshold.into();
         let max_forge_fee_pct: u256 = value.max_forge_fee_pct.into();
-        let incentive_amount: u256 = value.incentive_amount.into();
+        let incentive: u256 = value.incentive.into();
         (relative_threshold + (max_forge_fee_pct * TWO_POW_90)
-            + (incentive_amount * TWO_POW_152)).try_into().unwrap()
+            + (incentive* TWO_POW_152)).try_into().unwrap()
     }
 
     fn unpack(value: felt252) -> SmartTroveConfig {
         let value: u256 = value.into();
         let relative_threshold: u128 = (value & MASK_90).try_into().unwrap();
         let max_forge_fee_pct: u128 = ((value / TWO_POW_90) & MASK_62).try_into().unwrap();
-        let incentive_amount: u128 = ((value / TWO_POW_152) & MASK_99).try_into().unwrap();
+        let incentive: u128 = ((value / TWO_POW_152) & MASK_99).try_into().unwrap();
         SmartTroveConfig {
             relative_threshold: relative_threshold.into(),
             max_forge_fee_pct: max_forge_fee_pct.into(),
-            incentive_amount: incentive_amount.into(),
+            incentive: incentive.into(),
         }
     }
 }

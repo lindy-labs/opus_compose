@@ -40,7 +40,7 @@ pub mod prior {
     // Extracted from Shrine
     pub const MAX_RELATIVE_THRESHOLD: u128 = RAY_ONE;
     pub const MAX_FORGE_FEE_PCT: u128 = 4 * WAD_ONE;
-    pub const MAX_INCENTIVE_AMOUNT: u128 = 0x7FFFFFFFFFFFFFFFFFFFFFFFFFFF;
+    pub const MAX_INCENTIVE: u128 = 0x7FFFFFFFFFFFFFFFFFFFFFFFFFFF;
 
     //
     // Storage
@@ -126,7 +126,7 @@ pub mod prior {
         pub trove_id: u64,
         #[key]
         pub rite: ContractAddress,
-        pub incentive_amount: Wad,
+        pub incentive: Wad,
     }
 
     #[derive(Copy, Drop, starknet::Event, PartialEq)]
@@ -309,7 +309,7 @@ pub mod prior {
             config
                 .relative_threshold = min(config.relative_threshold, MAX_RELATIVE_THRESHOLD.into());
             config.max_forge_fee_pct = min(config.max_forge_fee_pct, MAX_FORGE_FEE_PCT.into());
-            config.incentive_amount = min(config.incentive_amount, MAX_INCENTIVE_AMOUNT.into());
+            config.incentive = min(config.incentive, MAX_INCENTIVE.into());
 
             self.smart_trove_configs.write(trove_id, config);
 
@@ -369,22 +369,22 @@ pub mod prior {
 
             rite.perform(trove_id);
 
-            // Settle incentive — user-configured amount from SmartTroveConfig.
+            // Settle incentive
             let config: SmartTroveConfig = self.smart_trove_configs.read(trove_id);
-            let incentive = config.incentive_amount;
             let shrine = self.shrine.read();
-
-            if incentive.is_non_zero() {
-                self.abbot.read().forge(trove_id, incentive, config.max_forge_fee_pct);
+            if config.incentive.is_non_zero() {
+                self.abbot.read().forge(trove_id, config.incentive, config.max_forge_fee_pct);
 
                 IERC20Dispatcher { contract_address: shrine.contract_address }
-                    .transfer(get_caller_address(), incentive.into());
+                    .transfer(get_caller_address(), config.incentive.into());
             }
 
-            // Check LTV condition if relative_threshold is set
-            let trove_health: Health = shrine.get_trove_health(trove_id);
-            let stop_ltv: Ray = trove_health.threshold * config.relative_threshold;
-            assert!(trove_health.ltv <= stop_ltv, "PRI: LTV exceeds relative threshold");
+            // Check LTV condition if relative threshold is set
+            if config.relative_threshold == RAY_ONE.into() {
+                let trove_health: Health = shrine.get_trove_health(trove_id);
+                let stop_ltv: Ray = trove_health.threshold * config.relative_threshold;
+                assert!(trove_health.ltv <= stop_ltv, "PRI: LTV exceeds relative threshold");
+            }
 
             self.assert_callback();
             self.clear_locks();
@@ -393,7 +393,7 @@ pub mod prior {
                 caller: get_caller_address(),
                 trove_id,
                 rite: rite.contract_address,
-                incentive_amount: incentive,
+                incentive: config.incentive,
             });
         }
 
