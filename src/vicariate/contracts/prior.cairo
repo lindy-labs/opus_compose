@@ -309,7 +309,7 @@ pub mod prior {
             config
                 .relative_threshold = min(config.relative_threshold, MAX_RELATIVE_THRESHOLD.into());
             config.max_forge_fee_pct = min(config.max_forge_fee_pct, MAX_FORGE_FEE_PCT.into());
-            config.max_incentive_amount = min(config.max_incentive_amount, MAX_INCENTIVE_AMOUNT.into());
+            config.incentive_amount = min(config.incentive_amount, MAX_INCENTIVE_AMOUNT.into());
 
             self.smart_trove_configs.write(trove_id, config);
 
@@ -359,16 +359,6 @@ pub mod prior {
             self.can_execute_rite_helper(rite, trove_id)
         }
 
-        // Returns the incentive that would be paid for executing the rite on this trove.
-        // Pure pass-through of the rite's proposed incentive, capped by the user's max.
-        // No readiness check — this is independent of can_execute_rite.
-        fn get_incentive(self: @ContractState, trove_id: u64) -> Wad {
-            let rite = self.rites.read(trove_id);
-            let rite_incentive: Wad = rite.get_incentive(trove_id);
-            let config: SmartTroveConfig = self.smart_trove_configs.read(trove_id);
-            min(rite_incentive, config.max_incentive_amount)
-        }
-
         // Can be called by anyone
         fn execute_rite(ref self: ContractState, trove_id: u64) {
             let rite = self.rites.read(trove_id);
@@ -379,11 +369,9 @@ pub mod prior {
 
             rite.perform(trove_id);
 
-            // Settle incentive — sampled after perform() so the rite can reflect
-            // what actually happened during execution, capped by user's max.
+            // Settle incentive — user-configured amount from SmartTroveConfig.
             let config: SmartTroveConfig = self.smart_trove_configs.read(trove_id);
-            let rite_incentive: Wad = rite.get_incentive(trove_id);
-            let incentive = min(rite_incentive, config.max_incentive_amount);
+            let incentive = config.incentive_amount;
             let shrine = self.shrine.read();
 
             if incentive.is_non_zero() {

@@ -16,9 +16,6 @@ pub trait IPrior<TContractState> {
     fn execute_rite(ref self: TContractState, trove_id: u64);
     fn end_rite(ref self: TContractState, trove_id: u64);
     fn on_rite_actions(ref self: TContractState, trove_id: u64, actions: Span<Action>);
-    // Returns the incentive that would be paid for executing the rite.
-    // Capped by the user's max_incentive_amount config.
-    fn get_incentive(self: @TContractState, trove_id: u64) -> Wad;
     // Flashmint functions
     // Mirror Caretaker's release
     fn release(ref self: TContractState, trove_id: u64) -> Span<AssetBalance>;

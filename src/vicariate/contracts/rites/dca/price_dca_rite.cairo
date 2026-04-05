@@ -24,14 +24,10 @@ pub mod price_dca_rite {
         StoragePointerWriteAccess,
     };
     use starknet::{ContractAddress, get_block_timestamp, get_caller_address};
-    use wadray::{WAD_ONE, Wad};
+    use wadray::Wad;
 
     const CASH_DECIMALS: u8 = 18;
     pub const MINIMUM_TWAP_DURATION: u64 = 5 * 60;
-
-    // Incentive constants denominated in CASH (18 decimals)
-    pub const INCENTIVE_DCA_NEW_ORDER: u128 = WAD_ONE / 100; // 0.01 CASH
-    pub const INCENTIVE_DCA_CLOSE_AND_NEW: u128 = WAD_ONE / 50; // 0.02 CASH
 
     #[storage]
     struct Storage {
@@ -183,22 +179,6 @@ pub mod price_dca_rite {
             match consolidated.order_status {
                 OrderStatus::Ongoing => false,
                 _ => true,
-            }
-        }
-
-        fn get_incentive(self: @ContractState, trove_id: u64) -> Wad {
-            let config = self.price_dca_configs.read(trove_id);
-            let order: DcaOrder = self.twamm_orders.read(trove_id);
-
-            if order.position_id.is_zero() {
-                return INCENTIVE_DCA_NEW_ORDER.into();
-            }
-
-            let consolidated = self.get_consolidated_order_data(order, config.asset);
-            match consolidated.order_status {
-                OrderStatus::Ongoing | OrderStatus::None => Zero::zero(),
-                OrderStatus::CompletedNotWithdrawn => INCENTIVE_DCA_CLOSE_AND_NEW.into(),
-                OrderStatus::CompletedAndWithdrawn => INCENTIVE_DCA_NEW_ORDER.into(),
             }
         }
 

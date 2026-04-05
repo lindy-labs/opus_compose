@@ -31,14 +31,10 @@ pub mod topup_rite {
         StoragePointerWriteAccess,
     };
     use starknet::{ContractAddress, get_caller_address};
-    use wadray::{RAY_PERCENT, Ray, WAD_ONE, Wad};
+    use wadray::{RAY_PERCENT, Ray, Wad};
     use super::ITopupRite;
 
     pub const MAX_SLIPPAGE: u128 = RAY_PERCENT * 20;
-
-    // Incentive constants denominated in CASH (18 decimals)
-    pub const INCENTIVE_TOPUP_DIRECT: u128 = WAD_ONE / 200; // 0.005 CASH
-    pub const INCENTIVE_TOPUP_SWAP: u128 = WAD_ONE / 100; // 0.01 CASH
 
     #[storage]
     struct Storage {
@@ -165,17 +161,6 @@ pub mod topup_rite {
 
         fn has_ended(self: @ContractState, trove_id: u64) -> bool {
             true
-        }
-
-        fn get_incentive(self: @ContractState, trove_id: u64) -> Wad {
-            let config = self.topup_configs.read(trove_id);
-            let cash = self.yin.read().contract_address;
-
-            if config.asset == cash {
-                INCENTIVE_TOPUP_DIRECT.into()
-            } else {
-                INCENTIVE_TOPUP_SWAP.into()
-            }
         }
 
         fn perform(ref self: ContractState, trove_id: u64) {
