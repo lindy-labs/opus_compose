@@ -1,3 +1,5 @@
+pub const IRITE_ID: felt252 = 0x2fdb21d0b67fac4101b0c452fbb4164ada08cf00bbb51432b66a323698d2c6a;
+
 #[starknet::interface]
 pub trait IRite<TContractState> {
     fn get_rite_id(self: @TContractState) -> ByteArray;

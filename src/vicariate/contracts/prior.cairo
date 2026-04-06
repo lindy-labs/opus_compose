@@ -14,9 +14,10 @@ pub mod prior {
     };
     use opus::types::{AssetBalance, Health};
     use opus_compose::interfaces::erc20::{IERC20Dispatcher, IERC20DispatcherTrait};
+    use opus_compose::shared::components::src5::{ISRC5Dispatcher, ISRC5DispatcherTrait};
     use opus_compose::vicariate::interfaces::lever::ILever;
     use opus_compose::vicariate::interfaces::prior::IPrior;
-    use opus_compose::vicariate::interfaces::rite::{IRiteDispatcher, IRiteDispatcherTrait};
+    use opus_compose::vicariate::interfaces::rite::{IRITE_ID, IRiteDispatcher, IRiteDispatcherTrait};
     use opus_compose::vicariate::types::{
         Action, LeverDownParams, LeverUpParams, ModifyLeverAction, ModifyLeverParams,
         SmartTroveConfig,
@@ -344,12 +345,12 @@ pub mod prior {
             // Otherwise, the owner would be zero address.
             self.assert_smart_trove_owner(caller, trove_id);
 
-            let rite = IRiteDispatcher { contract_address: rite };
-            self.can_execute_rite_helper(rite, trove_id);
+            let rite_src5 = ISRC5Dispatcher { contract_address: rite };
+            assert!(rite_src5.supports_interface(IRITE_ID), "PRI: Rite interface not supported");
 
-            self.rites.write(trove_id, rite);
+            self.rites.write(trove_id, IRiteDispatcher { contract_address: rite });
 
-            self.emit(RiteSet { user: caller, trove_id, rite: rite.contract_address });
+            self.emit(RiteSet { user: caller, trove_id, rite });
         }
 
         // Note that this does not check that the LTV does not exceed the relative threhsold

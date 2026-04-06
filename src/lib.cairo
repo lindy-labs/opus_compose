@@ -1,5 +1,10 @@
 pub mod addresses;
 pub mod constants;
+pub mod shared {
+    pub mod components {
+        pub mod src5;
+    }
+}
 pub mod interfaces {
     pub mod erc20;
 }
@@ -50,6 +55,7 @@ pub mod vicariate {
             pub mod types;
             pub mod utils;
             pub mod topup {
+                pub mod constants;
                 pub mod topup_rite;
                 pub mod types;
             }

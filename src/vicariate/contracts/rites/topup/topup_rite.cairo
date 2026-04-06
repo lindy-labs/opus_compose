@@ -20,6 +20,7 @@ pub mod topup_rite {
     use opus::interfaces::{IAbbotDispatcher, IAbbotDispatcherTrait};
     use opus_compose::interfaces::erc20::{IERC20Dispatcher, IERC20DispatcherTrait};
     use opus_compose::vicariate::contracts::rites::topup::types::{SwapParams, TopupConfig};
+    use opus_compose::vicariate::contracts::rites::topup::constants::MAX_SLIPPAGE;
     use opus_compose::vicariate::contracts::rites::types::{EkuboPoolParams, EkuboPoolParamsTrait};
     use opus_compose::vicariate::contracts::rites::utils::rites_utils;
     use opus_compose::vicariate::interfaces::prior::{IPriorDispatcher, IPriorDispatcherTrait};
@@ -31,10 +32,8 @@ pub mod topup_rite {
         StoragePointerWriteAccess,
     };
     use starknet::{ContractAddress, get_caller_address};
-    use wadray::{RAY_PERCENT, Ray, Wad};
+    use wadray::{Ray, Wad};
     use super::ITopupRite;
-
-    pub const MAX_SLIPPAGE: u128 = RAY_PERCENT * 20;
 
     #[storage]
     struct Storage {
@@ -115,7 +114,7 @@ pub mod topup_rite {
             );
 
             assert!(config.asset.is_non_zero(), "{}: Invalid asset", RITE_ID());
-            if config.amounts.topup_amount.is_non_zero() {
+            if config.topup_amount.is_non_zero() {
                 let cash = self.yin.read().contract_address;
 
                 assert!(
@@ -125,9 +124,8 @@ pub mod topup_rite {
                 );
                 assert!(
                     config
-                        .amounts
                         .topup_amount >= config
-                        .amounts
+                        .conditions
                         .min_asset_balance // Prevent multiple topups
                         ,
                     "{}: Invalid topup amount",
@@ -135,7 +133,7 @@ pub mod topup_rite {
                 );
                 assert!(config.destination.is_non_zero(), "{}: Invalid destination", RITE_ID());
                 assert!(
-                    config.slippage.is_non_zero() && config.slippage <= MAX_SLIPPAGE.into(),
+                    config.conditions.slippage.is_non_zero() && config.conditions.slippage <= MAX_SLIPPAGE.into(),
                     "{}: Slippage out of acceptable range",
                     RITE_ID(),
                 );
@@ -150,13 +148,13 @@ pub mod topup_rite {
         fn is_ready(self: @ContractState, trove_id: u64) -> bool {
             let config = self.topup_configs.read(trove_id);
             // Zero topup amount is used as a flag for disabling auto-topup
-            if config.amounts.topup_amount.is_zero() {
+            if config.topup_amount.is_zero() {
                 return false;
             }
 
             let tracked_balance = IERC20Dispatcher { contract_address: config.asset }
                 .balance_of(config.destination);
-            tracked_balance < config.amounts.min_asset_balance.into()
+            tracked_balance < config.conditions.min_asset_balance.into()
         }
 
         fn has_ended(self: @ContractState, trove_id: u64) -> bool {
@@ -175,8 +173,8 @@ pub mod topup_rite {
                 .get_swap_params_helper(
                     config.pool_params,
                     config.asset,
-                    config.amounts.topup_amount,
-                    config.slippage,
+                    config.topup_amount,
+                    config.conditions.slippage,
                     yin.contract_address,
                 );
 
@@ -218,7 +216,7 @@ pub mod topup_rite {
                         trove_id,
                         forge_amount: swap_params.forge_amount,
                         asset: config.asset,
-                        topup_amount: config.amounts.topup_amount,
+                        topup_amount: config.topup_amount,
                         destination: config.destination,
                     },
                 );
@@ -242,8 +240,8 @@ pub mod topup_rite {
                 .get_swap_params_helper(
                     config.pool_params,
                     config.asset,
-                    config.amounts.topup_amount,
-                    config.slippage,
+                    config.topup_amount,
+                    config.conditions.slippage,
                     cash,
                 )
         }
