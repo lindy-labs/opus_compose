@@ -17,7 +17,15 @@ pub mod time_dca_rite {
     use opus_compose::vicariate::contracts::rites::types::EkuboPoolParamsTrait;
     use opus_compose::vicariate::contracts::rites::utils::rites_utils;
     use opus_compose::vicariate::interfaces::prior::{IPriorDispatcher, IPriorDispatcherTrait};
-    use opus_compose::vicariate::interfaces::rite::IRite;
+    use opus_compose::shared::components::src5::SRC5Component;
+use opus_compose::vicariate::interfaces::rite::{IRite, IRITE_ID};
+
+component!(path: SRC5Component, storage: src5, event: SRC5Event);
+
+#[abi(embed_v0)]
+impl SRC5Impl = SRC5Component::SRC5Impl<ContractState>;
+
+impl SRC5InternalImpl = SRC5Component::InternalImpl<ContractState>;
     use opus_compose::vicariate::types::Action;
     use starknet::storage::{
         Map, StorageMapReadAccess, StorageMapWriteAccess, StoragePointerReadAccess,
@@ -38,6 +46,8 @@ pub mod time_dca_rite {
         price_dca_configs: Map<u64, TimeDcaConfig>, // PDCA trove ID -> config
         // Mapping of smart trove ID to Ekubo NFT ID
         twamm_orders: Map<u64, DcaOrder>,
+        #[substorage(v0)]
+        src5: SRC5Component::Storage,
     }
 
     #[event]
@@ -46,6 +56,7 @@ pub mod time_dca_rite {
         TimeDcaConfigUpdated: TimeDcaConfigUpdated,
         TwammOrderCreated: TwammOrderCreated,
         TwammOrderClosed: TwammOrderClosed,
+        SRC5Event: SRC5Component::Event,
     }
 
     #[derive(Copy, Drop, starknet::Event, PartialEq)]
@@ -96,6 +107,8 @@ pub mod time_dca_rite {
 
         self.ekubo_oracle.write(IOracleDispatcher { contract_address: ekubo_oracle });
         self.ekubo_positions.write(IPositionsDispatcher { contract_address: ekubo_positions });
+
+        self.src5.register_interface(IRITE_ID);
     }
 
     #[abi(embed_v0)]

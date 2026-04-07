@@ -24,6 +24,10 @@ pub mod SRC5Component {
         pub SRC5_supported_interfaces: Map<felt252, bool>,
     }
 
+    #[event]
+    #[derive(Copy, Drop, starknet::Event, PartialEq)]
+    pub enum Event {}
+
     pub mod Errors {
         pub const INVALID_ID: felt252 = 'SRC5: invalid id';
     }
