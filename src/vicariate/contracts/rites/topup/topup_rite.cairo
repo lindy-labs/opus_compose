@@ -32,7 +32,7 @@ pub mod topup_rite {
         StoragePointerWriteAccess,
     };
     use starknet::{ContractAddress, get_caller_address};
-    use wadray::{Ray, Wad};
+    use wadray::{RAY_ONE, Ray, rmul_wr, Wad};
     use super::ITopupRite;
 
     #[storage]
@@ -186,10 +186,11 @@ pub mod topup_rite {
                 yin.transfer(ekubo_router.contract_address, swap_params.forge_amount.into());
                 ekubo_router.swap(route_node, token_amount);
 
+                let min_asset_out: u256 = rmul_wr(config.topup_amount.into(), RAY_ONE.into() - config.conditions.slippage).into();
                 IClearDispatcher { contract_address: ekubo_router.contract_address }
                     .clear_minimum_to_recipient(
                         EkuboERC20Dispatcher { contract_address: config.asset },
-                        0,
+                        min_asset_out,
                         config.destination,
                     );
                 excess_yin = IClearDispatcher { contract_address: ekubo_router.contract_address }
