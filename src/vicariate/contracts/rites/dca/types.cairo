@@ -84,10 +84,12 @@ pub impl DcaDurationImpl of DcaDurationTrait {
     // that depends on the duration from now.
     fn get_step_size(self: DcaOrderDuration) -> u64 {
         match self {
-            DcaOrderDuration::ThreeHours | DcaOrderDuration::SixHours | DcaOrderDuration::TwelveHours => 4096,
-            DcaOrderDuration::TwentyFourHours | DcaOrderDuration::ThreeDays | DcaOrderDuration::OneWeek => 65536,
-            DcaOrderDuration::TwoWeeks | DcaOrderDuration::OneMonth | DcaOrderDuration::ThreeMonths |
-            DcaOrderDuration::SixMonths => 1048576,
+            DcaOrderDuration::ThreeHours | DcaOrderDuration::SixHours |
+            DcaOrderDuration::TwelveHours => 4096,
+            DcaOrderDuration::TwentyFourHours | DcaOrderDuration::ThreeDays |
+            DcaOrderDuration::OneWeek => 65536,
+            DcaOrderDuration::TwoWeeks | DcaOrderDuration::OneMonth |
+            DcaOrderDuration::ThreeMonths | DcaOrderDuration::SixMonths => 1048576,
         }
     }
 
@@ -100,7 +102,6 @@ pub impl DcaDurationImpl of DcaDurationTrait {
         let target = now + period;
         target + (step - target % step) % step
     }
-
 }
 
 // Packs twap_duration (u64) and order_duration (DcaOrderDuration, 4 bits) into a single u128.
@@ -122,7 +123,9 @@ impl PriceDcaDurationsPacking of StorePacking<PriceDcaDurations, u128> {
 
         PriceDcaDurations {
             twap_duration: twap_duration.try_into().unwrap(),
-            order_duration: IndexedEnum::<DcaOrderDuration>::from_index(order_index.try_into().unwrap()),
+            order_duration: IndexedEnum::<
+                DcaOrderDuration,
+            >::from_index(order_index.try_into().unwrap()),
         }
     }
 }
@@ -226,7 +229,9 @@ impl TimeDcaDurationsPacking of StorePacking<TimeDcaDurations, u128> {
 
         TimeDcaDurations {
             order_frequency: order_frequency.try_into().unwrap(),
-            order_duration: IndexedEnum::<DcaOrderDuration>::from_index(order_index.try_into().unwrap()),
+            order_duration: IndexedEnum::<
+                DcaOrderDuration,
+            >::from_index(order_index.try_into().unwrap()),
         }
     }
 }
@@ -317,9 +322,9 @@ impl DcaOrderPacking of StorePacking<DcaOrder, u256> {
             fee: (value & MASK_128_U256).try_into().unwrap(),
             position_id: ((value / TWO_POW_128_U256) & MASK_64_U256).try_into().unwrap(),
             end_time: (end_time_and_type & MASK_62_U256).try_into().unwrap(),
-            order_type: IndexedEnum::<OrderType>::from_index(
-                (end_time_and_type / TWO_POW_62_U256).try_into().unwrap(),
-            ),
+            order_type: IndexedEnum::<
+                OrderType,
+            >::from_index((end_time_and_type / TWO_POW_62_U256).try_into().unwrap()),
         }
     }
 }

@@ -17,7 +17,9 @@ pub mod prior {
     use opus_compose::shared::components::src5::{ISRC5Dispatcher, ISRC5DispatcherTrait};
     use opus_compose::vicariate::interfaces::lever::ILever;
     use opus_compose::vicariate::interfaces::prior::IPrior;
-    use opus_compose::vicariate::interfaces::rite::{IRITE_ID, IRiteDispatcher, IRiteDispatcherTrait};
+    use opus_compose::vicariate::interfaces::rite::{
+        IRITE_ID, IRiteDispatcher, IRiteDispatcherTrait,
+    };
     use opus_compose::vicariate::types::{
         Action, LeverDownParams, LeverUpParams, ModifyLeverAction, ModifyLeverParams,
         SmartTroveConfig,
@@ -89,7 +91,7 @@ pub mod prior {
         RiteExecuted: RiteExecuted,
         RiteEnded: RiteEnded,
         LeverUp: LeverUp,
-        LeverDown: LeverDown
+        LeverDown: LeverDown,
     }
 
     #[derive(Copy, Drop, starknet::Event, PartialEq)]
@@ -106,7 +108,7 @@ pub mod prior {
         pub user: ContractAddress,
         #[key]
         pub trove_id: u64,
-        pub config: SmartTroveConfig
+        pub config: SmartTroveConfig,
     }
 
     #[derive(Copy, Drop, starknet::Event, PartialEq)]
@@ -160,7 +162,7 @@ pub mod prior {
         #[key]
         pub yang: ContractAddress,
         pub amount: Wad,
-        pub yang_asset_amount: u128
+        pub yang_asset_amount: u128,
     }
 
     //
@@ -314,11 +316,7 @@ pub mod prior {
 
             self.smart_trove_configs.write(trove_id, config);
 
-            self.emit(ConfigUpdated {
-                user,
-                trove_id,
-                config
-            });
+            self.emit(ConfigUpdated { user, trove_id, config });
         }
 
         fn get_trove_config(self: @ContractState, trove_id: u64) -> SmartTroveConfig {
@@ -390,12 +388,15 @@ pub mod prior {
             self.assert_callback();
             self.clear_locks();
 
-            self.emit(RiteExecuted {
-                caller: get_caller_address(),
-                trove_id,
-                rite: rite.contract_address,
-                incentive: config.incentive,
-            });
+            self
+                .emit(
+                    RiteExecuted {
+                        caller: get_caller_address(),
+                        trove_id,
+                        rite: rite.contract_address,
+                        incentive: config.incentive,
+                    },
+                );
         }
 
         // Only owner can end rite
@@ -414,7 +415,12 @@ pub mod prior {
             self.assert_callback();
             self.clear_locks();
 
-            self.emit(RiteEnded { caller: get_caller_address(), trove_id, rite: rite.contract_address });
+            self
+                .emit(
+                    RiteEnded {
+                        caller: get_caller_address(), trove_id, rite: rite.contract_address,
+                    },
+                );
         }
 
         // Batch callback function to be called by `rite.perform(...)` and `rite.end(...)`

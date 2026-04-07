@@ -14,8 +14,8 @@ pub trait ISRC5<TState> {
 /// The SRC5 component allows contracts to expose the interfaces they implement.
 #[starknet::component]
 pub mod SRC5Component {
-    use super::ISRC5;
     use starknet::storage::{Map, StorageMapReadAccess, StorageMapWriteAccess};
+    use super::ISRC5;
 
     pub const ISRC5_ID: felt252 = 0x3f918d17e5ee77373b56385708f855659a07f75997f365cf87748628532a055;
 

@@ -33,8 +33,7 @@ impl TopupConditionsPacking of StorePacking<TopupConditions, felt252> {
         let value: u256 = value.into();
         let slippage: u128 = (value / TWO_POW_128.into()).try_into().unwrap();
         TopupConditions {
-            min_asset_balance: (value & MASK_128).try_into().unwrap(),
-            slippage: slippage.into()
+            min_asset_balance: (value & MASK_128).try_into().unwrap(), slippage: slippage.into(),
         }
     }
 }

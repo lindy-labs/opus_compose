@@ -19,8 +19,8 @@ pub mod topup_rite {
     use ekubo::types::pool_price::PoolPrice;
     use opus::interfaces::{IAbbotDispatcher, IAbbotDispatcherTrait};
     use opus_compose::interfaces::erc20::{IERC20Dispatcher, IERC20DispatcherTrait};
-    use opus_compose::vicariate::contracts::rites::topup::types::{SwapParams, TopupConfig};
     use opus_compose::vicariate::contracts::rites::topup::constants::MAX_SLIPPAGE;
+    use opus_compose::vicariate::contracts::rites::topup::types::{SwapParams, TopupConfig};
     use opus_compose::vicariate::contracts::rites::types::{EkuboPoolParams, EkuboPoolParamsTrait};
     use opus_compose::vicariate::contracts::rites::utils::rites_utils;
     use opus_compose::vicariate::interfaces::prior::{IPriorDispatcher, IPriorDispatcherTrait};
@@ -32,7 +32,7 @@ pub mod topup_rite {
         StoragePointerWriteAccess,
     };
     use starknet::{ContractAddress, get_caller_address};
-    use wadray::{RAY_ONE, Ray, rmul_wr, Wad};
+    use wadray::{RAY_ONE, Ray, Wad, rmul_wr};
     use super::ITopupRite;
 
     #[storage]
@@ -133,7 +133,8 @@ pub mod topup_rite {
                 );
                 assert!(config.destination.is_non_zero(), "{}: Invalid destination", RITE_ID());
                 assert!(
-                    config.conditions.slippage.is_non_zero() && config.conditions.slippage <= MAX_SLIPPAGE.into(),
+                    config.conditions.slippage.is_non_zero()
+                        && config.conditions.slippage <= MAX_SLIPPAGE.into(),
                     "{}: Slippage out of acceptable range",
                     RITE_ID(),
                 );
@@ -186,7 +187,10 @@ pub mod topup_rite {
                 yin.transfer(ekubo_router.contract_address, swap_params.forge_amount.into());
                 ekubo_router.swap(route_node, token_amount);
 
-                let min_asset_out: u256 = rmul_wr(config.topup_amount.into(), RAY_ONE.into() - config.conditions.slippage).into();
+                let min_asset_out: u256 = rmul_wr(
+                    config.topup_amount.into(), RAY_ONE.into() - config.conditions.slippage,
+                )
+                    .into();
                 IClearDispatcher { contract_address: ekubo_router.contract_address }
                     .clear_minimum_to_recipient(
                         EkuboERC20Dispatcher { contract_address: config.asset },

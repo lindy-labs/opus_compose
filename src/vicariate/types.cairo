@@ -5,7 +5,8 @@ use starknet::storage_access::StorePacking;
 use wadray::{Ray, Wad};
 
 // Packing constants for SmartTroveConfig
-// Layout: [incentive_amount (bits 152–250, 99 bits) | max_forge_fee_pct (bits 90–151, 62 bits) | relative_threshold (bits 0–89, 90 bits)]
+// Layout: [incentive_amount (bits 152–250, 99 bits) | max_forge_fee_pct (bits 90–151, 62 bits)
+// | relative_threshold (bits 0–89, 90 bits)]
 // `relative_threshold` is capped at RAY_ONE (10^27, requires 90 bits)
 // `max_forge_fee_pct` is capped at 4 * WAD_ONE (4 * 10^18, requires 62 bits)
 // `incentive_amount` is capped at 2^99 - 1 (99 bits)
@@ -26,7 +27,8 @@ pub enum Action {
 }
 
 // Packs relative_threshold, max_forge_fee_pct, and incentive into a single felt252.
-// Layout: [incentive_amount (bits 152–250, 99 bits) | max_forge_fee_pct (bits 90–151, 62 bits) | relative_threshold (bits 0–89, 90 bits)]
+// Layout: [incentive_amount (bits 152–250, 99 bits) | max_forge_fee_pct (bits 90–151, 62 bits)
+// | relative_threshold (bits 0–89, 90 bits)]
 // `relative_threshold` is capped at RAY_ONE (10^27)
 // `max_forge_fee_pct` is capped at 4 * WAD_ONE (4 * 10^18)
 // `incentive` is capped at 2^99 - 1
@@ -44,8 +46,9 @@ impl SmartTroveConfigPacking of StorePacking<SmartTroveConfig, felt252> {
         let relative_threshold: u256 = value.relative_threshold.into();
         let max_forge_fee_pct: u256 = value.max_forge_fee_pct.into();
         let incentive: u256 = value.incentive.into();
-        (relative_threshold + (max_forge_fee_pct * TWO_POW_90)
-            + (incentive* TWO_POW_152)).try_into().unwrap()
+        (relative_threshold + (max_forge_fee_pct * TWO_POW_90) + (incentive * TWO_POW_152))
+            .try_into()
+            .unwrap()
     }
 
     fn unpack(value: felt252) -> SmartTroveConfig {
