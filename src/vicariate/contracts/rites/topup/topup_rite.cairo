@@ -199,16 +199,15 @@ pub mod topup_rite {
                         0,
                         prior.contract_address,
                     );
+                // Repay excess yin
+                if excess_yin.is_non_zero() {
+                    prior
+                        .on_rite_actions(
+                            trove_id, array![Action::Melt(excess_yin.try_into().unwrap())].span(),
+                        );
+                }
             } else {
                 yin.transfer(config.destination, swap_params.forge_amount.into());
-            }
-
-            // Repay excess yin
-            if excess_yin.is_non_zero() {
-                prior
-                    .on_rite_actions(
-                        trove_id, array![Action::Melt(excess_yin.try_into().unwrap())].span(),
-                    );
             }
 
             self
