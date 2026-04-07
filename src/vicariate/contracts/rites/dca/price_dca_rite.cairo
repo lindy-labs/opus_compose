@@ -10,6 +10,7 @@ pub mod price_dca_rite {
     use opus::utils::math::convert_ekubo_oracle_price_to_wad;
     use opus_compose::constants;
     use opus_compose::interfaces::erc20::{IERC20Dispatcher, IERC20DispatcherTrait};
+    use opus_compose::shared::components::src5::SRC5Component;
     use opus_compose::vicariate::contracts::rites::dca::types::{
         ConsolidatedOrderData, DcaDurationTrait, DcaOrder, OrderStatus, OrderType, PriceDcaConfig,
     };
@@ -17,15 +18,14 @@ pub mod price_dca_rite {
     use opus_compose::vicariate::contracts::rites::types::EkuboPoolParamsTrait;
     use opus_compose::vicariate::contracts::rites::utils::rites_utils;
     use opus_compose::vicariate::interfaces::prior::{IPriorDispatcher, IPriorDispatcherTrait};
-    use opus_compose::shared::components::src5::SRC5Component;
-use opus_compose::vicariate::interfaces::rite::{IRite, IRITE_ID};
+    use opus_compose::vicariate::interfaces::rite::{IRITE_ID, IRite};
 
-component!(path: SRC5Component, storage: src5, event: SRC5Event);
+    component!(path: SRC5Component, storage: src5, event: SRC5Event);
 
-#[abi(embed_v0)]
-impl SRC5Impl = SRC5Component::SRC5Impl<ContractState>;
+    #[abi(embed_v0)]
+    impl SRC5Impl = SRC5Component::SRC5Impl<ContractState>;
 
-impl SRC5InternalImpl = SRC5Component::InternalImpl<ContractState>;
+    impl SRC5InternalImpl = SRC5Component::InternalImpl<ContractState>;
     use opus_compose::vicariate::types::Action;
     use starknet::storage::{
         Map, StorageMapReadAccess, StorageMapWriteAccess, StoragePointerReadAccess,

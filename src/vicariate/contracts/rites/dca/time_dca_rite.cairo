@@ -8,8 +8,8 @@ pub mod time_dca_rite {
     use opus::interfaces::{IAbbotDispatcher, IAbbotDispatcherTrait};
     use opus::types::AssetBalance;
     use opus::utils::math::convert_ekubo_oracle_price_to_wad;
-    use opus_compose::constants;
     use opus_compose::interfaces::erc20::{IERC20Dispatcher, IERC20DispatcherTrait};
+    use opus_compose::shared::components::src5::SRC5Component;
     use opus_compose::vicariate::contracts::rites::dca::types::{
         ConsolidatedOrderData, DcaDurationTrait, DcaOrder, OrderStatus, OrderType, TimeDcaConfig,
     };
@@ -17,15 +17,14 @@ pub mod time_dca_rite {
     use opus_compose::vicariate::contracts::rites::types::EkuboPoolParamsTrait;
     use opus_compose::vicariate::contracts::rites::utils::rites_utils;
     use opus_compose::vicariate::interfaces::prior::{IPriorDispatcher, IPriorDispatcherTrait};
-    use opus_compose::shared::components::src5::SRC5Component;
-use opus_compose::vicariate::interfaces::rite::{IRite, IRITE_ID};
+    use opus_compose::vicariate::interfaces::rite::{IRITE_ID, IRite};
 
-component!(path: SRC5Component, storage: src5, event: SRC5Event);
+    component!(path: SRC5Component, storage: src5, event: SRC5Event);
 
-#[abi(embed_v0)]
-impl SRC5Impl = SRC5Component::SRC5Impl<ContractState>;
+    #[abi(embed_v0)]
+    impl SRC5Impl = SRC5Component::SRC5Impl<ContractState>;
 
-impl SRC5InternalImpl = SRC5Component::InternalImpl<ContractState>;
+    impl SRC5InternalImpl = SRC5Component::InternalImpl<ContractState>;
     use opus_compose::vicariate::types::Action;
     use starknet::storage::{
         Map, StorageMapReadAccess, StorageMapWriteAccess, StoragePointerReadAccess,
@@ -43,9 +42,11 @@ impl SRC5InternalImpl = SRC5Component::InternalImpl<ContractState>;
         prior: IPriorDispatcher,
         ekubo_oracle: IOracleDispatcher,
         ekubo_positions: IPositionsDispatcher,
-        price_dca_configs: Map<u64, TimeDcaConfig>, // PDCA trove ID -> config
+        time_dca_configs: Map<u64, TimeDcaConfig>,
         // Mapping of smart trove ID to Ekubo NFT ID
         twamm_orders: Map<u64, DcaOrder>,
+        // Mapping of smart trove ID to the latest order's timestamp
+        latest_order_ts: Map<u64, u64>,
         #[substorage(v0)]
         src5: SRC5Component::Storage,
     }
@@ -118,26 +119,21 @@ impl SRC5InternalImpl = SRC5Component::InternalImpl<ContractState>;
         }
 
         fn get_trove_config(self: @ContractState, trove_id: u64) -> Span<felt252> {
-            let config = self.price_dca_configs.read(trove_id);
+            let config = self.time_dca_configs.read(trove_id);
             let mut serialized_config: Array<felt252> = Default::default();
             config.serialize(ref serialized_config);
             serialized_config.span()
         }
 
         fn set_trove_config(ref self: ContractState, trove_id: u64, config: Span<felt252>) {
-            let current_config = self.price_dca_configs.read(trove_id);
+            let current_config = self.time_dca_configs.read(trove_id);
             let order: DcaOrder = self.twamm_orders.read(trove_id);
             let order_data = self.get_consolidated_order_data(order, current_config.asset);
             assert!(order_data.order_status == OrderStatus::None, "{}: Ongoing order", RITE_ID());
 
             let mut config = config;
             let config: TimeDcaConfig = Serde::<TimeDcaConfig>::deserialize(ref config)
-                .expect('PRICE_DCA: Invalid config');
-            assert!(
-                config.durations.twap_duration >= MINIMUM_TWAP_DURATION,
-                "{}: TWAP duration too short",
-                RITE_ID(),
-            );
+                .expect('TIME_DCA: Invalid config');
 
             let user = get_caller_address();
             let prior_abbot = IAbbotDispatcher {
@@ -150,34 +146,30 @@ impl SRC5InternalImpl = SRC5Component::InternalImpl<ContractState>;
             );
 
             assert!(config.asset.is_non_zero(), "{}: Invalid asset", RITE_ID());
-            let activated_buy: bool = config.price_conditions.buy_price.is_non_zero();
-            let activated_sell: bool = config.price_conditions.sell_price.is_non_zero();
-            if activated_buy || activated_sell {
-                assert!(
-                    config.pool_params.tick_spacing == constants::EKUBO_TWAMM_TICK_SPACING,
-                    "{}: Wrong tick spacing",
-                    RITE_ID(),
-                );
-            }
-            if activated_buy && activated_sell {
-                assert!(
-                    config.price_conditions.sell_price > config.price_conditions.buy_price,
-                    "{}: Invalid sell price",
-                    RITE_ID(),
-                );
-            }
+            assert!(config.order_type != OrderType::None, "{}: Invalid order type", RITE_ID());
 
-            self.price_dca_configs.write(trove_id, config);
+            self.time_dca_configs.write(trove_id, config);
 
             self.emit(TimeDcaConfigUpdated { user, trove_id, config });
         }
 
-        // Returns true if price conditions and no existing ongoing order
+        // Returns true if
+        // 1. the configured frequency period has elapsed since the last order; and
+        // 2. the last order has completed (whether withdrawn or not).
         fn is_ready(self: @ContractState, trove_id: u64) -> bool {
-            let config = self.price_dca_configs.read(trove_id);
-            match self.get_order_type(config) {
-                OrderType::BuyAsset | OrderType::SellAsset => { self.has_ended(trove_id) },
-                OrderType::None => false,
+            let config = self.time_dca_configs.read(trove_id);
+            // Zero frequency is used as a flag for disabling time-DCA
+            if config.durations.order_frequency.is_zero() {
+                return false;
+            }
+
+            let current_ts: u64 = get_block_timestamp();
+            let latest_order_ts: u64 = self.latest_order_ts.read(trove_id);
+            let earliest_next_order_ts: u64 = latest_order_ts + config.durations.order_frequency;
+            if earliest_next_order_ts >= current_ts {
+                self.has_ended(trove_id)
+            } else {
+                false
             }
         }
 
@@ -187,7 +179,7 @@ impl SRC5InternalImpl = SRC5Component::InternalImpl<ContractState>;
                 return true;
             }
 
-            let config = self.price_dca_configs.read(trove_id);
+            let config = self.time_dca_configs.read(trove_id);
             let consolidated = self.get_consolidated_order_data(order, config.asset);
             match consolidated.order_status {
                 OrderStatus::Ongoing => false,
@@ -203,7 +195,7 @@ impl SRC5InternalImpl = SRC5Component::InternalImpl<ContractState>;
 
             // Close existing + complete order if any
             // Reverts if existing + ongoing order
-            let config = self.price_dca_configs.read(trove_id);
+            let config = self.time_dca_configs.read(trove_id);
             let order: DcaOrder = self.twamm_orders.read(trove_id);
             self.close_order(trove_id, false, config, order);
 
@@ -217,41 +209,32 @@ impl SRC5InternalImpl = SRC5Component::InternalImpl<ContractState>;
             let mut sell_token: ContractAddress = Zero::zero();
             let mut buy_token: ContractAddress = Zero::zero();
             let mut dca_amount: u128 = Zero::zero();
-            let order_type = self.get_order_type(config);
-            match order_type {
+            match config.order_type {
                 OrderType::BuyAsset => {
-                    let action = Action::Forge(config.price_conditions.buy_amount);
+                    let forge_amt: Wad = config.amount.into();
+                    let action = Action::Forge(forge_amt);
                     prior.on_rite_actions(trove_id, array![action].span());
-                    yin
-                        .transfer(
-                            ekubo_positions.contract_address,
-                            config.price_conditions.buy_amount.into(),
-                        );
+                    yin.transfer(ekubo_positions.contract_address, forge_amt.into());
 
                     sell_token = yin.contract_address;
                     buy_token = config.asset;
-                    dca_amount = config.price_conditions.buy_amount.into();
+                    dca_amount = forge_amt.into();
                 },
                 OrderType::SellAsset => {
+                    let withdraw_amt: u128 = config.amount;
                     let action = Action::Withdraw(
-                        AssetBalance {
-                            address: config.asset, amount: config.price_conditions.sell_amount,
-                        },
+                        AssetBalance { address: config.asset, amount: withdraw_amt },
                     );
                     prior.on_rite_actions(trove_id, array![action].span());
                     IERC20Dispatcher { contract_address: config.asset }
-                        .transfer(
-                            ekubo_positions.contract_address,
-                            config.price_conditions.sell_amount.into(),
-                        );
+                        .transfer(ekubo_positions.contract_address, withdraw_amt.into());
 
                     sell_token = config.asset;
                     buy_token = yin.contract_address;
-                    dca_amount = config.price_conditions.sell_amount;
+                    dca_amount = withdraw_amt;
                 },
                 OrderType::None => {
-                    // Should be unreachable because Prior already checked if
-                    // rite is ready for execution
+                    // Should be unreachable because it cannot be set in the config
                     return;
                 },
             }
@@ -271,7 +254,13 @@ impl SRC5InternalImpl = SRC5Component::InternalImpl<ContractState>;
 
             self
                 .twamm_orders
-                .write(trove_id, DcaOrder { position_id, fee: pool_key.fee, end_time, order_type });
+                .write(
+                    trove_id,
+                    DcaOrder {
+                        position_id, fee: pool_key.fee, end_time, order_type: config.order_type,
+                    },
+                );
+            self.latest_order_ts.write(trove_id, get_block_timestamp());
 
             self
                 .emit(
@@ -279,7 +268,7 @@ impl SRC5InternalImpl = SRC5Component::InternalImpl<ContractState>;
                         trove_id,
                         asset: config.asset,
                         order_id: position_id,
-                        order_type,
+                        order_type: config.order_type,
                         fee: pool_key.fee,
                         order_duration: config.durations.order_duration.to_seconds(),
                     },
@@ -291,7 +280,7 @@ impl SRC5InternalImpl = SRC5Component::InternalImpl<ContractState>;
             let caller: ContractAddress = get_caller_address();
             rites_utils::assert_caller_is_prior(caller, prior.contract_address, RITE_ID());
 
-            let config = self.price_dca_configs.read(trove_id);
+            let config = self.time_dca_configs.read(trove_id);
             let order: DcaOrder = self.twamm_orders.read(trove_id);
             self.close_order(trove_id, true, config, order);
         }
@@ -312,25 +301,21 @@ impl SRC5InternalImpl = SRC5Component::InternalImpl<ContractState>;
             )
         }
 
-        // Returns the order type based on the price conditions configured
-        fn get_order_type(self: @ContractState, config: TimeDcaConfig) -> OrderType {
-            // Zero order amounts are used as a flag for disabling price-DCA
-            let buy_is_enabled: bool = config.price_conditions.buy_amount.is_non_zero();
-            let sell_is_enabled: bool = config.price_conditions.sell_amount.is_non_zero();
-            if !buy_is_enabled && !sell_is_enabled {
+        // Returns the order type based on
+        // 1. the configured frequency period has elapsed since the last order; and
+        // 2. the last order has completed (whether withdrawn or not).
+        fn get_order_type(self: @ContractState, trove_id: u64, config: TimeDcaConfig) -> OrderType {
+            // Zero frequency is used as a flag for disabling time-DCA
+            if config.durations.order_frequency.is_zero() {
                 return OrderType::None;
             }
 
-            let asset_price: Wad = self
-                .get_asset_price(config.asset, config.durations.twap_duration);
-            let should_buy: bool = buy_is_enabled
-                && asset_price <= config.price_conditions.buy_price;
-            let should_sell: bool = sell_is_enabled
-                && asset_price >= config.price_conditions.sell_price;
-            if should_buy {
-                OrderType::BuyAsset
-            } else if should_sell {
-                OrderType::SellAsset
+            let current_ts: u64 = get_block_timestamp();
+            let latest_order_ts: u64 = self.latest_order_ts.read(trove_id);
+            let earliest_next_order_ts: u64 = latest_order_ts + config.durations.order_frequency;
+            // TODO
+            if earliest_next_order_ts >= current_ts {
+                config.order_type
             } else {
                 OrderType::None
             }
@@ -485,6 +470,6 @@ impl SRC5InternalImpl = SRC5Component::InternalImpl<ContractState>;
     }
 
     fn RITE_ID() -> ByteArray {
-        "PRICE_DCA"
+        "TIME_DCA"
     }
 }

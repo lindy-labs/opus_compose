@@ -206,8 +206,11 @@ pub struct PriceDcaConfig {
 pub struct TimeDcaConfig {
     pub asset: ContractAddress,
     pub pool_params: EkuboPoolParams,
-    pub frequency: u64,
     pub durations: TimeDcaDurations,
+    pub order_type: OrderType,
+    // If order type is to buy asset, then amount of CASH to forge.
+    // If order type is to sell asset, then amount of asset to withdraw.
+    pub amount: u128,
 }
 
 // Packs twap_duration (u64) and order_duration (DcaOrderDuration, 4 bits) into a single u128.

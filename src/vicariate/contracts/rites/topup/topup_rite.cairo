@@ -19,20 +19,20 @@ pub mod topup_rite {
     use ekubo::types::pool_price::PoolPrice;
     use opus::interfaces::{IAbbotDispatcher, IAbbotDispatcherTrait};
     use opus_compose::interfaces::erc20::{IERC20Dispatcher, IERC20DispatcherTrait};
+    use opus_compose::shared::components::src5::SRC5Component;
     use opus_compose::vicariate::contracts::rites::topup::constants::MAX_SLIPPAGE;
     use opus_compose::vicariate::contracts::rites::topup::types::{SwapParams, TopupConfig};
     use opus_compose::vicariate::contracts::rites::types::{EkuboPoolParams, EkuboPoolParamsTrait};
     use opus_compose::vicariate::contracts::rites::utils::rites_utils;
     use opus_compose::vicariate::interfaces::prior::{IPriorDispatcher, IPriorDispatcherTrait};
-    use opus_compose::shared::components::src5::SRC5Component;
-use opus_compose::vicariate::interfaces::rite::{IRite, IRITE_ID};
+    use opus_compose::vicariate::interfaces::rite::{IRITE_ID, IRite};
 
-component!(path: SRC5Component, storage: src5, event: SRC5Event);
+    component!(path: SRC5Component, storage: src5, event: SRC5Event);
 
-#[abi(embed_v0)]
-impl SRC5Impl = SRC5Component::SRC5Impl<ContractState>;
+    #[abi(embed_v0)]
+    impl SRC5Impl = SRC5Component::SRC5Impl<ContractState>;
 
-impl SRC5InternalImpl = SRC5Component::InternalImpl<ContractState>;
+    impl SRC5InternalImpl = SRC5Component::InternalImpl<ContractState>;
     use opus_compose::vicariate::types::Action;
     use opus_compose::vicariate::utils::sqrt_ratio_limit::calculate_sqrt_ratio_limit;
     use starknet::storage::{
