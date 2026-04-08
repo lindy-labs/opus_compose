@@ -60,6 +60,8 @@ pub mod vicariate {
                 pub mod types;
             }
             pub mod dca {
+                pub mod ekubo_dca_component;
+                pub mod ekubo_oracle_component;
                 pub mod price_dca_rite;
                 pub mod time_dca_rite;
                 pub mod types;
