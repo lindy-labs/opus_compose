@@ -11,11 +11,11 @@ use wadray::{Ray, Wad};
 // `max_forge_fee_pct` is capped at 4 * WAD_ONE (4 * 10^18, requires 62 bits)
 // `incentive_amount` is capped at 2^99 - 1 (99 bits)
 // Total: 90 + 62 + 99 = 251 bits ≤ felt252
-const TWO_POW_90: u256 = 0x4000000000000000000000000000;
-const TWO_POW_152: u256 = 0x100000000000000000000000000000000;
-const MASK_90: u256 = 0x3FFFFFFFFFFFFFFFFFFFFFFFFF;
+const TWO_POW_90: u256 = 0x40000000000000000000000;
+const TWO_POW_152: u256 = 0x100000000000000000000000000000000000000;
+const MASK_90: u256 = 0x3FFFFFFFFFFFFFFFFFFFFFF;
 const MASK_62: u256 = 0x3FFFFFFFFFFFFFFF;
-const MASK_99: u256 = 0x7FFFFFFFFFFFFFFFFFFFFFFFFFFF;
+const MASK_99: u256 = 0x7FFFFFFFFFFFFFFFFFFFFFFFF;
 
 #[derive(Copy, Drop, Serde)]
 pub enum Action {
@@ -32,7 +32,7 @@ pub enum Action {
 // `relative_threshold` is capped at RAY_ONE (10^27)
 // `max_forge_fee_pct` is capped at 4 * WAD_ONE (4 * 10^18)
 // `incentive` is capped at 2^99 - 1
-#[derive(Copy, Drop, Default, PartialEq, Serde)]
+#[derive(Copy, Drop, Debug, Default, PartialEq, Serde)]
 pub struct SmartTroveConfig {
     // Maximum LTV = relative threshold * threshold
     pub relative_threshold: Ray,

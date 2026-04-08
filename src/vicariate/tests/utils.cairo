@@ -47,8 +47,8 @@ pub mod prior_utils {
             mainnet::SENTINEL.into(),
             mainnet::ABBOT.into(),
             mainnet::CARETAKER.into(),
+            mainnet::FLASH_MINT.into(),
             mainnet::EKUBO_ROUTER.into(),
-            mainnet::EKUBO_CORE.into(),
         ];
         let (prior_addr, _) = classes.prior.unwrap().deploy(@calldata).expect('prior deploy fail');
         let prior_dispatcher = IPriorDispatcher { contract_address: prior_addr };

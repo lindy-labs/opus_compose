@@ -180,7 +180,7 @@ fn test_close_trove_success() {
 
 #[test]
 #[fork("MAINNET_VICARIATE")]
-#[should_panic(expected: "ATY: Not owner")]
+#[should_panic(expected: "PRI: Not owner")]
 fn test_close_trove_not_owner_reverts() {
     let test_config = prior_utils::prior_deploy(None);
     let user: ContractAddress = 'test user'.try_into().unwrap();
@@ -248,12 +248,13 @@ fn test_get_trove_config_no_config() {
 
 #[test]
 #[fork("MAINNET_VICARIATE")]
-fn test_should_topup_returns_false_no_trove() {
+fn test_can_execute_rite_returns_false_no_trove() {
     let test_config = prior_utils::prior_deploy(None);
 
-    // No trove created - should return false
-    let should = test_config.prior.should_topup(999);
-    assert(!should, 'should_topup should be false');
+    // No trove created - can_execute_rite should return false
+    // (no rite attached, so is_ready would revert or return false)
+    let can_execute = test_config.prior.can_execute_rite(999);
+    assert(!can_execute, 'can_execute should be false');
 }
 
 //
@@ -296,7 +297,7 @@ fn test_deposit_success() {
 
 #[test]
 #[fork("MAINNET_VICARIATE")]
-#[should_panic(expected: "ATY: Not owner")]
+#[should_panic(expected: "PRI: Not owner")]
 fn test_deposit_not_owner_reverts() {
     let test_config = prior_utils::prior_deploy(None);
     let user: ContractAddress = 'test user'.try_into().unwrap();
@@ -333,7 +334,7 @@ fn test_deposit_not_owner_reverts() {
 
 #[test]
 #[fork("MAINNET_VICARIATE")]
-#[should_panic(expected: "ATY: Not owner")]
+#[should_panic(expected: "PRI: Not owner")]
 fn test_withdraw_not_owner_reverts() {
     let test_config = prior_utils::prior_deploy(None);
     let user: ContractAddress = 'test user'.try_into().unwrap();
