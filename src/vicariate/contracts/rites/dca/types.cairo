@@ -10,12 +10,19 @@ const MASK_64_U128: u128 = 0xFFFFFFFFFFFFFFFF;
 const MASK_4_U128: u128 = 0xF;
 
 // DcaOrder packing shifts and masks (packed into u256)
-const MASK_128_U256: u256 = 0xFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFF;
-const TWO_POW_128_U256: u256 = 0x100000000000000000000000000000000;
-const MASK_64_U256: u256 = 0xFFFFFFFFFFFFFFFF;
-const TWO_POW_192_U256: u256 = 0x1000000000000000000000000000000000000000000000000;
-const MASK_62_U256: u256 = 0x3FFFFFFFFFFFFFFF;
-const TWO_POW_62_U256: u256 = 0x4000000000000000;
+const MASK_128: u256 = 0xFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFF;
+const TWO_POW_128: u256 = 0x100000000000000000000000000000000;
+const MASK_64: u256 = 0xFFFFFFFFFFFFFFFF;
+const TWO_POW_192: u256 = 0x1000000000000000000000000000000000000000000000000;
+const MASK_62: u256 = 0x3FFFFFFFFFFFFFFF;
+const TWO_POW_62: u256 = 0x4000000000000000;
+
+// TimeDcaConditions packing shifts and masks (packed into felt252)
+// Layout: amount (128 bits) | order_frequency (64 bits) | order_duration (4 bits) | order_type (2 bits) = 198 bits
+const TWO_POW_196: u256 = 0x10000000000000000000000000000000000000000000000000;
+const TWO_POW_4: u256 = 0x10;
+const MASK_4: u256 = 0xF;
+const MASK_2: u256 = 0x3;
 
 // PriceConditions packing shifts and masks (each side packed into felt252)
 // Layout per felt252: amount (lower 128 bits) | price (upper 123 bits) = 251 bits
@@ -159,12 +166,12 @@ impl PriceConditionsPacking of StorePacking<PriceConditions, PackedPriceConditio
         let buy_price_masked: u128 = buy_price_u128 & MASK_123_U128;
         let buy_amount_u128: u128 = value.buy_amount.into();
         let buy_packed: u256 = buy_amount_u128.into()
-            + (buy_price_masked.into() * TWO_POW_128_U256);
+            + (buy_price_masked.into() * TWO_POW_128);
 
         let sell_price_u128: u128 = value.sell_price.into();
         let sell_price_masked: u128 = sell_price_u128 & MASK_123_U128;
         let sell_packed: u256 = value.sell_amount.into()
-            + (sell_price_masked.into() * TWO_POW_128_U256);
+            + (sell_price_masked.into() * TWO_POW_128);
 
         PackedPriceConditions {
             buy: buy_packed.try_into().unwrap(), sell: sell_packed.try_into().unwrap(),
@@ -175,12 +182,12 @@ impl PriceConditionsPacking of StorePacking<PriceConditions, PackedPriceConditio
         let buy_u256: u256 = value.buy.into();
         let sell_u256: u256 = value.sell.into();
 
-        let buy_amount: u128 = (buy_u256 & MASK_128_U256).try_into().unwrap();
-        let buy_price: u128 = ((buy_u256 / TWO_POW_128_U256) & MASK_123_U128.into())
+        let buy_amount: u128 = (buy_u256 & MASK_128).try_into().unwrap();
+        let buy_price: u128 = ((buy_u256 / TWO_POW_128) & MASK_123_U128.into())
             .try_into()
             .unwrap();
-        let sell_amount: u128 = (sell_u256 & MASK_128_U256).try_into().unwrap();
-        let sell_price: u128 = ((sell_u256 / TWO_POW_128_U256) & MASK_123_U128.into())
+        let sell_amount: u128 = (sell_u256 & MASK_128).try_into().unwrap();
+        let sell_price: u128 = ((sell_u256 / TWO_POW_128) & MASK_123_U128.into())
             .try_into()
             .unwrap();
 
@@ -202,41 +209,50 @@ pub struct PriceDcaConfig {
     pub durations: PriceDcaDurations,
 }
 
+// Packs time-DCA conditions into a single felt252 (1 storage slot).
+// Layout (as u256, then truncated to felt252):
+//   low  128 bits : amount
+//   next 64 bits  : order_frequency
+//   next  4 bits  : order_duration (DcaOrderDuration index)
+//   top   2 bits  : order_type (OrderType index)
+#[derive(Copy, Drop, Debug, PartialEq, Serde)]
+pub struct TimeDcaConditions {
+    pub amount: u128,
+    pub order_frequency: u64,
+    pub order_duration: DcaOrderDuration,
+    pub order_type: OrderType,
+}
+
+impl TimeDcaConditionsPacking of StorePacking<TimeDcaConditions, felt252> {
+    fn pack(value: TimeDcaConditions) -> felt252 {
+        let packed: u256 = value.amount.into()
+            + (value.order_frequency.into() * TWO_POW_128)
+            + (value.order_duration.into_index().into() * TWO_POW_192)
+            + (value.order_type.into_index().into() * TWO_POW_196);
+        packed.try_into().unwrap()
+    }
+
+    fn unpack(value: felt252) -> TimeDcaConditions {
+        let v: u256 = value.into();
+        let duration_and_type = v / TWO_POW_192;
+        TimeDcaConditions {
+            amount: (v & MASK_128).try_into().unwrap(),
+            order_frequency: ((v / TWO_POW_128) & MASK_64).try_into().unwrap(),
+            order_duration: IndexedEnum::<DcaOrderDuration>::from_index(
+                (duration_and_type & MASK_4).try_into().unwrap(),
+            ),
+            order_type: IndexedEnum::<OrderType>::from_index(
+                ((duration_and_type / TWO_POW_4) & MASK_2).try_into().unwrap(),
+            ),
+        }
+    }
+}
+
 #[derive(Copy, Drop, PartialEq, Serde, starknet::Store)]
 pub struct TimeDcaConfig {
     pub asset: ContractAddress,
     pub pool_params: EkuboPoolParams,
-    pub durations: TimeDcaDurations,
-    pub order_type: OrderType,
-    // If order type is to buy asset, then amount of CASH to forge.
-    // If order type is to sell asset, then amount of asset to withdraw.
-    pub amount: u128,
-}
-
-// Packs twap_duration (u64) and order_duration (DcaOrderDuration, 4 bits) into a single u128.
-// Layout: [order_duration (4 bits) | twap_duration (64 bits)] = 68 bits
-#[derive(Copy, Drop, Debug, PartialEq, Serde)]
-pub struct TimeDcaDurations {
-    pub order_frequency: u64,
-    pub order_duration: DcaOrderDuration,
-}
-
-impl TimeDcaDurationsPacking of StorePacking<TimeDcaDurations, u128> {
-    fn pack(value: TimeDcaDurations) -> u128 {
-        value.order_frequency.into() + (value.order_duration.into_index().into() * TWO_POW_64_U128)
-    }
-
-    fn unpack(value: u128) -> TimeDcaDurations {
-        let order_frequency = value & MASK_64_U128;
-        let order_index = (value / TWO_POW_64_U128) & MASK_4_U128;
-
-        TimeDcaDurations {
-            order_frequency: order_frequency.try_into().unwrap(),
-            order_duration: IndexedEnum::<
-                DcaOrderDuration,
-            >::from_index(order_index.try_into().unwrap()),
-        }
-    }
+    pub conditions: TimeDcaConditions,
 }
 
 // Packs DcaOrder into a u256 (2 storage slots instead of 4).
@@ -313,21 +329,21 @@ pub impl OrderTypeIndexedImpl of IndexedEnum<OrderType> {
 impl DcaOrderPacking of StorePacking<DcaOrder, u256> {
     fn pack(value: DcaOrder) -> u256 {
         let end_time_and_type: u256 = value.end_time.into()
-            + (value.order_type.into_index().into() * TWO_POW_62_U256);
+            + (value.order_type.into_index().into() * TWO_POW_62);
         value.fee.into()
-            + (value.position_id.into() * TWO_POW_128_U256)
-            + (end_time_and_type * TWO_POW_192_U256)
+            + (value.position_id.into() * TWO_POW_128)
+            + (end_time_and_type * TWO_POW_192)
     }
 
     fn unpack(value: u256) -> DcaOrder {
-        let end_time_and_type = value / TWO_POW_192_U256;
+        let end_time_and_type = value / TWO_POW_192;
         DcaOrder {
-            fee: (value & MASK_128_U256).try_into().unwrap(),
-            position_id: ((value / TWO_POW_128_U256) & MASK_64_U256).try_into().unwrap(),
-            end_time: (end_time_and_type & MASK_62_U256).try_into().unwrap(),
+            fee: (value & MASK_128).try_into().unwrap(),
+            position_id: ((value / TWO_POW_128) & MASK_64).try_into().unwrap(),
+            end_time: (end_time_and_type & MASK_62).try_into().unwrap(),
             order_type: IndexedEnum::<
                 OrderType,
-            >::from_index((end_time_and_type / TWO_POW_62_U256).try_into().unwrap()),
+            >::from_index((end_time_and_type / TWO_POW_62).try_into().unwrap()),
         }
     }
 }

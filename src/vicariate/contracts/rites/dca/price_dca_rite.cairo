@@ -53,10 +53,11 @@ pub mod price_dca_rite {
     #[event]
     #[derive(Copy, Drop, starknet::Event, PartialEq)]
     pub enum Event {
+        #[flat]
+        SRC5Event: SRC5Component::Event,
         PriceDcaConfigUpdated: PriceDcaConfigUpdated,
         TwammOrderCreated: TwammOrderCreated,
         TwammOrderClosed: TwammOrderClosed,
-        SRC5Event: SRC5Component::Event,
     }
 
     #[derive(Copy, Drop, starknet::Event, PartialEq)]

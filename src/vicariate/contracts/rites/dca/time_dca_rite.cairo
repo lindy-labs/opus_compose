@@ -38,6 +38,8 @@ pub mod time_dca_rite {
 
     #[storage]
     struct Storage {
+        #[substorage(v0)]
+        src5: SRC5Component::Storage,
         yin: IERC20Dispatcher,
         prior: IPriorDispatcher,
         ekubo_oracle: IOracleDispatcher,
@@ -47,17 +49,16 @@ pub mod time_dca_rite {
         twamm_orders: Map<u64, DcaOrder>,
         // Mapping of smart trove ID to the latest order's timestamp
         latest_order_ts: Map<u64, u64>,
-        #[substorage(v0)]
-        src5: SRC5Component::Storage,
     }
 
     #[event]
     #[derive(Copy, Drop, starknet::Event, PartialEq)]
     pub enum Event {
+        #[flat]
+        SRC5Event: SRC5Component::Event,
         TimeDcaConfigUpdated: TimeDcaConfigUpdated,
         TwammOrderCreated: TwammOrderCreated,
         TwammOrderClosed: TwammOrderClosed,
-        SRC5Event: SRC5Component::Event,
     }
 
     #[derive(Copy, Drop, starknet::Event, PartialEq)]
@@ -146,7 +147,7 @@ pub mod time_dca_rite {
             );
 
             assert!(config.asset.is_non_zero(), "{}: Invalid asset", RITE_ID());
-            assert!(config.order_type != OrderType::None, "{}: Invalid order type", RITE_ID());
+            assert!(config.conditions.order_type != OrderType::None, "{}: Invalid order type", RITE_ID());
 
             self.time_dca_configs.write(trove_id, config);
 
@@ -159,13 +160,13 @@ pub mod time_dca_rite {
         fn is_ready(self: @ContractState, trove_id: u64) -> bool {
             let config = self.time_dca_configs.read(trove_id);
             // Zero frequency is used as a flag for disabling time-DCA
-            if config.durations.order_frequency.is_zero() {
+            if config.conditions.order_frequency.is_zero() {
                 return false;
             }
 
             let current_ts: u64 = get_block_timestamp();
             let latest_order_ts: u64 = self.latest_order_ts.read(trove_id);
-            let earliest_next_order_ts: u64 = latest_order_ts + config.durations.order_frequency;
+            let earliest_next_order_ts: u64 = latest_order_ts + config.conditions.order_frequency;
             if earliest_next_order_ts >= current_ts {
                 self.has_ended(trove_id)
             } else {
@@ -209,9 +210,9 @@ pub mod time_dca_rite {
             let mut sell_token: ContractAddress = Zero::zero();
             let mut buy_token: ContractAddress = Zero::zero();
             let mut dca_amount: u128 = Zero::zero();
-            match config.order_type {
+            match config.conditions.order_type {
                 OrderType::BuyAsset => {
-                    let forge_amt: Wad = config.amount.into();
+                    let forge_amt: Wad = config.conditions.amount.into();
                     let action = Action::Forge(forge_amt);
                     prior.on_rite_actions(trove_id, array![action].span());
                     yin.transfer(ekubo_positions.contract_address, forge_amt.into());
@@ -221,7 +222,7 @@ pub mod time_dca_rite {
                     dca_amount = forge_amt.into();
                 },
                 OrderType::SellAsset => {
-                    let withdraw_amt: u128 = config.amount;
+                    let withdraw_amt: u128 = config.conditions.amount;
                     let action = Action::Withdraw(
                         AssetBalance { address: config.asset, amount: withdraw_amt },
                     );
@@ -240,7 +241,7 @@ pub mod time_dca_rite {
             }
 
             let start_time: u64 = get_block_timestamp();
-            let end_time: u64 = config.durations.order_duration.to_valid_end_time(start_time);
+            let end_time: u64 = config.conditions.order_duration.to_valid_end_time(start_time);
             let order_key = OrderKey {
                 sell_token,
                 buy_token,
@@ -257,7 +258,7 @@ pub mod time_dca_rite {
                 .write(
                     trove_id,
                     DcaOrder {
-                        position_id, fee: pool_key.fee, end_time, order_type: config.order_type,
+                        position_id, fee: pool_key.fee, end_time, order_type: config.conditions.order_type,
                     },
                 );
             self.latest_order_ts.write(trove_id, get_block_timestamp());
@@ -268,9 +269,9 @@ pub mod time_dca_rite {
                         trove_id,
                         asset: config.asset,
                         order_id: position_id,
-                        order_type: config.order_type,
+                        order_type: config.conditions.order_type,
                         fee: pool_key.fee,
-                        order_duration: config.durations.order_duration.to_seconds(),
+                        order_duration: config.conditions.order_duration.to_seconds(),
                     },
                 );
         }
@@ -306,16 +307,16 @@ pub mod time_dca_rite {
         // 2. the last order has completed (whether withdrawn or not).
         fn get_order_type(self: @ContractState, trove_id: u64, config: TimeDcaConfig) -> OrderType {
             // Zero frequency is used as a flag for disabling time-DCA
-            if config.durations.order_frequency.is_zero() {
+            if config.conditions.order_frequency.is_zero() {
                 return OrderType::None;
             }
 
             let current_ts: u64 = get_block_timestamp();
             let latest_order_ts: u64 = self.latest_order_ts.read(trove_id);
-            let earliest_next_order_ts: u64 = latest_order_ts + config.durations.order_frequency;
+            let earliest_next_order_ts: u64 = latest_order_ts + config.conditions.order_frequency;
             // TODO
             if earliest_next_order_ts >= current_ts {
-                config.order_type
+                config.conditions.order_type
             } else {
                 OrderType::None
             }

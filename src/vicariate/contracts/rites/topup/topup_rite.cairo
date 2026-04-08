@@ -26,13 +26,6 @@ pub mod topup_rite {
     use opus_compose::vicariate::contracts::rites::utils::rites_utils;
     use opus_compose::vicariate::interfaces::prior::{IPriorDispatcher, IPriorDispatcherTrait};
     use opus_compose::vicariate::interfaces::rite::{IRITE_ID, IRite};
-
-    component!(path: SRC5Component, storage: src5, event: SRC5Event);
-
-    #[abi(embed_v0)]
-    impl SRC5Impl = SRC5Component::SRC5Impl<ContractState>;
-
-    impl SRC5InternalImpl = SRC5Component::InternalImpl<ContractState>;
     use opus_compose::vicariate::types::Action;
     use opus_compose::vicariate::utils::sqrt_ratio_limit::calculate_sqrt_ratio_limit;
     use starknet::storage::{
@@ -43,23 +36,31 @@ pub mod topup_rite {
     use wadray::{RAY_ONE, Ray, Wad, rmul_wr};
     use super::ITopupRite;
 
+    component!(path: SRC5Component, storage: src5, event: SRC5Event);
+
+    #[abi(embed_v0)]
+    impl SRC5Impl = SRC5Component::SRC5Impl<ContractState>;
+
+    impl SRC5InternalImpl = SRC5Component::InternalImpl<ContractState>;
+
     #[storage]
     struct Storage {
+        #[substorage(v0)]
+        src5: SRC5Component::Storage,
         yin: IERC20Dispatcher,
         prior: IPriorDispatcher,
         ekubo_core: ICoreDispatcher,
         ekubo_router: IRouterDispatcher,
         topup_configs: Map<u64, TopupConfig>, // ATU trove ID -> config
-        #[substorage(v0)]
-        src5: SRC5Component::Storage,
     }
 
     #[event]
     #[derive(Copy, Drop, starknet::Event, PartialEq)]
     pub enum Event {
+        #[flat]
+        SRC5Event: SRC5Component::Event,
         TopupConfigUpdated: TopupConfigUpdated,
         TopupExecuted: TopupExecuted,
-        SRC5Event: SRC5Component::Event,
     }
 
     #[derive(Copy, Drop, starknet::Event, PartialEq)]
