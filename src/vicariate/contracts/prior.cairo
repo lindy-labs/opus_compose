@@ -40,10 +40,9 @@ pub mod prior {
     const ON_FLASH_MINT_SUCCESS: u256 =
         0x439148f0bbc682ca079e46d6e2c2f0c1e3b820f1a291b069d8882abf8cf18dd9_u256;
 
-    // Extracted from Shrine
     pub const MAX_RELATIVE_THRESHOLD: u128 = RAY_ONE;
-    pub const MAX_FORGE_FEE_PCT: u128 = 4 * WAD_ONE;
     pub const MAX_INCENTIVE: u128 = 0x7FFFFFFFFFFFFFFFFFFFFFFFFFFF;
+    pub const MAX_FORGE_FEE_PCT: u128 = 4 * WAD_ONE; // From Shrine
 
     //
     // Storage
@@ -63,7 +62,7 @@ pub mod prior {
         // Number of smart troves per user
         // Starts from index 1
         user_smart_troves_count: Map<ContractAddress, u64>,
-        user_smart_troves: Map<(ContractAddress, u64), u64>, // (user, index) -> PRI trove ID
+        user_smart_troves: Map<(ContractAddress, u64), u64>,
         // Smart trove ID -> owner
         smart_trove_owners: Map<u64, ContractAddress>,
         smart_trove_configs: Map<u64, SmartTroveConfig>,
@@ -74,7 +73,7 @@ pub mod prior {
         transient_trove_id: u64,
         // Counter incremented on each callback from a rite, used to verify
         // that at least one callback was made during execution.
-        // Cleared together with transient_trove_id after execution completes.
+        // Cleared together with `transient_trove_id` after execution completes.
         transient_callback_nonce: usize,
     }
 
@@ -226,10 +225,9 @@ pub mod prior {
         ) -> u64 {
             let user = get_caller_address();
 
-            let sentinel = self.sentinel.read();
             let prior: ContractAddress = get_contract_address();
             for yang_asset in yang_assets {
-                self.deposit_setup(sentinel, prior, user, *yang_asset);
+                self.deposit_setup(prior, user, *yang_asset);
             }
 
             let trove_id: u64 = self
@@ -257,15 +255,38 @@ pub mod prior {
             let caller = get_caller_address();
             self.assert_smart_trove_owner(caller, trove_id);
 
+            let abbot = self.abbot.read();
+            let yangs: Span<ContractAddress> = self.sentinel.read().get_yang_addresses();
+            let mut trove_assets: Array<AssetBalance> = Default::default();
+            for yang in yangs {
+                let amount = abbot.get_trove_asset_balance(trove_id, *yang);
+                if amount.is_non_zero() {
+                    trove_assets.append(AssetBalance { address: *yang, amount }); 
+                }
+            }
+
             // Close trove in Abbot
-            self.abbot.read().close_trove(trove_id);
+            let shrine = self.shrine.read();
+            let yin = IERC20Dispatcher { contract_address: shrine.contract_address };
+            let trove_health: Health = shrine.get_trove_health(trove_id);
+            let prior = get_contract_address(); 
+            yin.transfer_from(caller, prior, trove_health.debt.into());
+            abbot.close_trove(trove_id);
+
+            // Transfer withdrawn assets to caller
+            for trove_asset in trove_assets {
+                let asset = IERC20Dispatcher { contract_address: trove_asset.address };
+                // Capped at the contract's balance as there may be loss of precision
+                let withdrawn: u256 = min(trove_asset.amount.into(), asset.balance_of(prior));
+                asset.transfer(caller, withdrawn);
+            }
         }
 
         fn deposit(ref self: ContractState, trove_id: u64, yang_asset: AssetBalance) {
             let caller: ContractAddress = get_caller_address();
             self.assert_smart_trove_owner(caller, trove_id);
 
-            self.deposit_setup(self.sentinel.read(), get_contract_address(), caller, yang_asset);
+            self.deposit_setup(get_contract_address(), caller, yang_asset);
 
             self.abbot.read().deposit(trove_id, yang_asset);
         }
@@ -706,11 +727,11 @@ pub mod prior {
 
         fn deposit_setup(
             ref self: ContractState,
-            sentinel: ISentinelDispatcher,
             prior: ContractAddress,
             user: ContractAddress,
             yang_asset: AssetBalance,
         ) {
+            let sentinel = self.sentinel.read();
             let yang = IERC20Dispatcher { contract_address: yang_asset.address };
             yang.transfer_from(user, prior, yang_asset.amount.into());
 
