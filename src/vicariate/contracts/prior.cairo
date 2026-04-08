@@ -41,7 +41,7 @@ pub mod prior {
         0x439148f0bbc682ca079e46d6e2c2f0c1e3b820f1a291b069d8882abf8cf18dd9_u256;
 
     pub const MAX_RELATIVE_THRESHOLD: u128 = RAY_ONE;
-    pub const MAX_INCENTIVE: u128 = 0x7FFFFFFFFFFFFFFFFFFFFFFFFFFF;
+    pub const MAX_INCENTIVE: u128 = 0x7FFFFFFFFFFFFFFFFFFFFFFFF;
     pub const MAX_FORGE_FEE_PCT: u128 = 4 * WAD_ONE; // From Shrine
 
     //
@@ -376,7 +376,11 @@ pub mod prior {
         // at the end of the rite.
         fn can_execute_rite(self: @ContractState, trove_id: u64) -> bool {
             let rite = self.rites.read(trove_id);
-            self.can_execute_rite_helper(rite, trove_id)
+            if rite.contract_address.is_zero() {
+                false
+            } else {
+                self.can_execute_rite_helper(rite, trove_id)
+            }
         }
 
         // Can be called by anyone
@@ -400,7 +404,7 @@ pub mod prior {
             }
 
             // Check LTV condition if relative threshold is set
-            if config.relative_threshold == RAY_ONE.into() {
+            if config.relative_threshold != RAY_ONE.into() {
                 let trove_health: Health = shrine.get_trove_health(trove_id);
                 let stop_ltv: Ray = trove_health.threshold * config.relative_threshold;
                 assert!(trove_health.ltv <= stop_ltv, "PRI: LTV exceeds relative threshold");
@@ -453,8 +457,9 @@ pub mod prior {
             assert!(caller == rite.contract_address, "PRI: Caller not rite");
             assert!(self.transient_trove_id.read() == trove_id, "PRI: Execution not started");
 
+            let abbot = self.abbot.read();
             for action in actions {
-                self.execute_action(trove_id, rite.contract_address, self.abbot.read(), *action);
+                self.execute_action(trove_id, rite.contract_address, abbot, *action);
             }
 
             let current_nonce = self.transient_callback_nonce.read();

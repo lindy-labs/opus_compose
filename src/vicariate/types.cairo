@@ -4,6 +4,15 @@ use starknet::ContractAddress;
 use starknet::storage_access::StorePacking;
 use wadray::{Ray, Wad};
 
+#[derive(Copy, Drop, Serde)]
+pub enum Action {
+    None,
+    Forge: Wad,
+    Melt: Wad,
+    Deposit: AssetBalance,
+    Withdraw: AssetBalance,
+}
+
 // Packing constants for SmartTroveConfig
 // Layout: [incentive_amount (bits 152–250, 99 bits) | max_forge_fee_pct (bits 90–151, 62 bits)
 // | relative_threshold (bits 0–89, 90 bits)]
@@ -16,15 +25,6 @@ const TWO_POW_152: u256 = 0x100000000000000000000000000000000000000;
 const MASK_90: u256 = 0x3FFFFFFFFFFFFFFFFFFFFFF;
 const MASK_62: u256 = 0x3FFFFFFFFFFFFFFF;
 const MASK_99: u256 = 0x7FFFFFFFFFFFFFFFFFFFFFFFF;
-
-#[derive(Copy, Drop, Serde)]
-pub enum Action {
-    None,
-    Forge: Wad,
-    Melt: Wad,
-    Deposit: AssetBalance,
-    Withdraw: AssetBalance,
-}
 
 // Packs relative_threshold, max_forge_fee_pct, and incentive into a single felt252.
 // Layout: [incentive_amount (bits 152–250, 99 bits) | max_forge_fee_pct (bits 90–151, 62 bits)
