@@ -261,7 +261,7 @@ pub mod prior {
             for yang in yangs {
                 let amount = abbot.get_trove_asset_balance(trove_id, *yang);
                 if amount.is_non_zero() {
-                    trove_assets.append(AssetBalance { address: *yang, amount }); 
+                    trove_assets.append(AssetBalance { address: *yang, amount });
                 }
             }
 
@@ -269,7 +269,7 @@ pub mod prior {
             let shrine = self.shrine.read();
             let yin = IERC20Dispatcher { contract_address: shrine.contract_address };
             let trove_health: Health = shrine.get_trove_health(trove_id);
-            let prior = get_contract_address(); 
+            let prior = get_contract_address();
             yin.transfer_from(caller, prior, trove_health.debt.into());
             abbot.close_trove(trove_id);
 
@@ -567,7 +567,8 @@ pub mod prior {
                 get_caller_address() == self.flash_mint.read().contract_address,
                 "PRI: Illegal callback",
             );
-            assert!(initiator == get_contract_address(), "PRI: Initiator must be lever");
+            let prior: ContractAddress = get_contract_address();
+            assert!(initiator == prior, "PRI: Initiator must be Prior");
 
             let ModifyLeverParams {
                 user, action,
@@ -581,7 +582,7 @@ pub mod prior {
 
             match action {
                 ModifyLeverAction::LeverUp(params) => {
-                    let LeverUpParams { trove_id, yang, swaps } = params;
+                    let LeverUpParams { trove_id, yang, swaps, min_asset_amount } = params;
                     let config = self.smart_trove_configs.read(trove_id);
 
                     // Transfer yin to Ekubo's router and swap for collateral
@@ -590,7 +591,10 @@ pub mod prior {
 
                     // Withdraw the collateral asset from Ekubo's router to this contract.
                     let asset_amt: u256 = router_clear
-                        .clear_minimum(EkuboERC20Dispatcher { contract_address: yang }, 1);
+                        .clear_minimum(
+                            EkuboERC20Dispatcher { contract_address: yang },
+                            min_asset_amount.into(),
+                        );
 
                     // Deposit purchased collateral to trove
                     self.approve_token_for_gate(sentinel, yang, asset_amt);
@@ -611,6 +615,7 @@ pub mod prior {
                     abbot.melt(trove_id, amount.try_into().unwrap());
 
                     // Withdraw collateral to this contract
+                    // This amount should be an upper bound taking slippage into account.
                     abbot.withdraw(trove_id, yang_asset);
 
                     // Transfer collateral to Ekubo's router and swap for yin
@@ -621,17 +626,24 @@ pub mod prior {
                     // and can be withdrawn
                     router_clear
                         .clear_minimum(EkuboERC20Dispatcher { contract_address: token }, amount);
-                    let yin_amount = yin.balance_of(initiator);
 
-                    // Transfer any excess yin back to the user.
-                    if yin_amount > amount {
-                        yin.transfer(user, yin_amount - amount);
-                    }
-                    // Transfer any remainder collateral to the user
-                    router_clear
+                    // Re-deposit any remainder collateral
+                    let remainder_asset: u256 = router_clear
                         .clear_minimum_to_recipient(
-                            EkuboERC20Dispatcher { contract_address: yang_asset.address }, 0, user,
+                            EkuboERC20Dispatcher { contract_address: yang_asset.address }, 0, prior,
                         );
+                    if remainder_asset.is_non_zero() {
+                        self
+                            .abbot
+                            .read()
+                            .deposit(
+                                trove_id,
+                                AssetBalance {
+                                    address: yang_asset.address,
+                                    amount: remainder_asset.try_into().unwrap(),
+                                },
+                            );
+                    }
                 },
             }
 

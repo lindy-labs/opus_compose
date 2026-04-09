@@ -83,11 +83,15 @@ pub struct LeverUpParams {
     pub trove_id: u64,
     pub yang: ContractAddress,
     pub swaps: Array<Swap>,
+    pub min_asset_amount: u128,
 }
 
 #[derive(Serde, Drop)]
 pub struct LeverDownParams {
     pub trove_id: u64,
+    // The asset amount to withdraw from the trove should be an
+    // upper bound taking slippage into account. Excess asset
+    // amount will be deposited back into the trove.
     pub yang_asset: AssetBalance,
     pub swaps: Array<Swap>,
 }
