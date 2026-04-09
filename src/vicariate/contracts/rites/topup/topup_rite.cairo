@@ -51,7 +51,7 @@ pub mod topup_rite {
         prior: IPriorDispatcher,
         ekubo_core: ICoreDispatcher,
         ekubo_router: IRouterDispatcher,
-        topup_configs: Map<u64, TopupConfig>, // ATU trove ID -> config
+        topup_configs: Map<u64, TopupConfig> // ATU trove ID -> config
     }
 
     #[event]

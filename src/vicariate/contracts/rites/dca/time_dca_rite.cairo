@@ -23,7 +23,6 @@ pub mod time_dca_rite {
     impl SRC5InternalImpl = SRC5Component::InternalImpl<ContractState>;
     impl EkuboDcaInternalImpl = EkuboDcaComponent::InternalImpl<ContractState>;
     impl EkuboOracleInternalImpl = EkuboOracleComponent::InternalImpl<ContractState>;
-
     use starknet::storage::{
         Map, StorageMapReadAccess, StorageMapWriteAccess, StoragePointerReadAccess,
         StoragePointerWriteAccess,
@@ -101,7 +100,9 @@ pub mod time_dca_rite {
             let order: DcaOrder = self.ekubo_dca.get_order(trove_id);
             let order_data = self
                 .ekubo_dca
-                .get_consolidated_order_data(self.yin.read().contract_address, current_config.asset, order);
+                .get_consolidated_order_data(
+                    self.yin.read().contract_address, current_config.asset, order,
+                );
             assert!(order_data.order_status == OrderStatus::None, "{}: Ongoing order", RITE_ID());
 
             let mut config = config;
@@ -166,27 +167,21 @@ pub mod time_dca_rite {
             let config = self.time_dca_configs.read(trove_id);
             let order: DcaOrder = self.ekubo_dca.get_order(trove_id);
             let yin: IERC20Dispatcher = self.yin.read();
-            self.ekubo_dca.close_order(
-                yin,
-                prior,
-                trove_id,
-                config.asset,
-                order,
-                false,
-                RITE_ID(),
-            );
+            self.ekubo_dca.close_order(yin, prior, trove_id, config.asset, order, false, RITE_ID());
 
-            self.ekubo_dca.create_order(
-                yin,
-                prior,
-                trove_id,
-                config.asset,
-                config.pool_params,
-                config.conditions.order_type,
-                config.conditions.order_duration,
-                config.conditions.amount,
-                RITE_ID()
-            );
+            self
+                .ekubo_dca
+                .create_order(
+                    yin,
+                    prior,
+                    trove_id,
+                    config.asset,
+                    config.pool_params,
+                    config.conditions.order_type,
+                    config.conditions.order_duration,
+                    config.conditions.amount,
+                    RITE_ID(),
+                );
             self.latest_order_ts.write(trove_id, get_block_timestamp());
         }
 
@@ -197,15 +192,11 @@ pub mod time_dca_rite {
 
             let config = self.time_dca_configs.read(trove_id);
             let order: DcaOrder = self.ekubo_dca.get_order(trove_id);
-            self.ekubo_dca.close_order(
-                self.yin.read(),
-                prior,
-                trove_id,
-                config.asset,
-                order,
-                true,
-                RITE_ID(),
-            );
+            self
+                .ekubo_dca
+                .close_order(
+                    self.yin.read(), prior, trove_id, config.asset, order, true, RITE_ID(),
+                );
         }
     }
 

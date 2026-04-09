@@ -24,7 +24,6 @@ pub mod price_dca_rite {
     impl SRC5InternalImpl = SRC5Component::InternalImpl<ContractState>;
     impl EkuboDcaInternalImpl = EkuboDcaComponent::InternalImpl<ContractState>;
     impl EkuboOracleInternalImpl = EkuboOracleComponent::InternalImpl<ContractState>;
-
     use starknet::storage::{
         Map, StorageMapReadAccess, StorageMapWriteAccess, StoragePointerReadAccess,
         StoragePointerWriteAccess,
@@ -103,7 +102,9 @@ pub mod price_dca_rite {
             let order: DcaOrder = self.ekubo_dca.get_order(trove_id);
             let order_data = self
                 .ekubo_dca
-                .get_consolidated_order_data(self.yin.read().contract_address, current_config.asset, order);
+                .get_consolidated_order_data(
+                    self.yin.read().contract_address, current_config.asset, order,
+                );
             assert!(order_data.order_status == OrderStatus::None, "{}: Ongoing order", RITE_ID());
 
             let mut config = config;
@@ -152,8 +153,11 @@ pub mod price_dca_rite {
         fn is_ready(self: @ContractState, trove_id: u64) -> bool {
             let config = self.price_dca_configs.read(trove_id);
             match self.get_order_type(config) {
-                OrderType::BuyAsset | OrderType::SellAsset => {
-                    self.ekubo_dca.has_ended(self.yin.read().contract_address, config.asset, trove_id)
+                OrderType::BuyAsset |
+                OrderType::SellAsset => {
+                    self
+                        .ekubo_dca
+                        .has_ended(self.yin.read().contract_address, config.asset, trove_id)
                 },
                 OrderType::None => false,
             }
@@ -175,24 +179,12 @@ pub mod price_dca_rite {
             let config = self.price_dca_configs.read(trove_id);
             let order: DcaOrder = self.ekubo_dca.get_order(trove_id);
             let yin: IERC20Dispatcher = self.yin.read();
-            self.ekubo_dca.close_order(
-                yin,
-                prior,
-                trove_id,
-                config.asset,
-                order,
-                false,
-                RITE_ID(),
-            );
+            self.ekubo_dca.close_order(yin, prior, trove_id, config.asset, order, false, RITE_ID());
 
             let order_type = self.get_order_type(config);
             let order_amount: u128 = match order_type {
-                OrderType::BuyAsset => {
-                    config.price_conditions.buy_amount.into()
-                },
-                OrderType::SellAsset => {
-                    config.price_conditions.sell_amount
-                },
+                OrderType::BuyAsset => { config.price_conditions.buy_amount.into() },
+                OrderType::SellAsset => { config.price_conditions.sell_amount },
                 OrderType::None => {
                     // Should be unreachable because Prior already checked if
                     // rite is ready for execution
@@ -200,17 +192,19 @@ pub mod price_dca_rite {
                 },
             };
 
-            self.ekubo_dca.create_order(
-                yin,
-                prior,
-                trove_id,
-                config.asset,
-                config.pool_params,
-                order_type,
-                config.durations.order_duration,
-                order_amount,
-                RITE_ID()
-            );
+            self
+                .ekubo_dca
+                .create_order(
+                    yin,
+                    prior,
+                    trove_id,
+                    config.asset,
+                    config.pool_params,
+                    order_type,
+                    config.durations.order_duration,
+                    order_amount,
+                    RITE_ID(),
+                );
         }
 
         fn end(ref self: ContractState, trove_id: u64) {
@@ -220,15 +214,11 @@ pub mod price_dca_rite {
 
             let config = self.price_dca_configs.read(trove_id);
             let order: DcaOrder = self.ekubo_dca.get_order(trove_id);
-            self.ekubo_dca.close_order(
-                self.yin.read(),
-                prior,
-                trove_id,
-                config.asset,
-                order,
-                true,
-                RITE_ID(),
-            );
+            self
+                .ekubo_dca
+                .close_order(
+                    self.yin.read(), prior, trove_id, config.asset, order, true, RITE_ID(),
+                );
         }
     }
 
@@ -245,7 +235,9 @@ pub mod price_dca_rite {
 
             let asset_price: Wad = self
                 .ekubo_oracle
-                .get_asset_price(config.asset, self.yin.read().contract_address, config.durations.twap_duration);
+                .get_asset_price(
+                    config.asset, self.yin.read().contract_address, config.durations.twap_duration,
+                );
             let should_buy: bool = buy_is_enabled
                 && asset_price <= config.price_conditions.buy_price;
             let should_sell: bool = sell_is_enabled

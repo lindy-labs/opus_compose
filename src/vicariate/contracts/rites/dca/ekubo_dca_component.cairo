@@ -199,14 +199,17 @@ pub mod EkuboDcaComponent {
 
             self.twamm_orders.write(trove_id, Default::default());
 
-            self.emit(TwammOrderClosed {
-                trove_id,
-                asset,
-                order_id: order.position_id,
-                order_type: order.order_type,
-                remaining_sell_token,
-                purchased_buy_token,
-            });
+            self
+                .emit(
+                    TwammOrderClosed {
+                        trove_id,
+                        asset,
+                        order_id: order.position_id,
+                        order_type: order.order_type,
+                        remaining_sell_token,
+                        purchased_buy_token,
+                    },
+                );
         }
 
         fn create_order(
@@ -226,9 +229,7 @@ pub mod EkuboDcaComponent {
                 return;
             }
 
-            let pool_key: PoolKey =
-                pool_params
-                .into_pool_key(asset, yin.contract_address);
+            let pool_key: PoolKey = pool_params.into_pool_key(asset, yin.contract_address);
 
             let ekubo_positions = self.ekubo_positions.read();
 
@@ -238,27 +239,18 @@ pub mod EkuboDcaComponent {
                 OrderType::BuyAsset => {
                     let action = Action::Forge(order_amount.into());
                     prior.on_rite_actions(trove_id, array![action].span());
-                    yin
-                        .transfer(
-                            ekubo_positions.contract_address,
-                            order_amount.into()
-                        );
+                    yin.transfer(ekubo_positions.contract_address, order_amount.into());
 
                     sell_token = yin.contract_address;
                     buy_token = asset;
                 },
                 OrderType::SellAsset => {
                     let action = Action::Withdraw(
-                        AssetBalance {
-                            address: asset, amount: order_amount
-                        },
+                        AssetBalance { address: asset, amount: order_amount },
                     );
                     prior.on_rite_actions(trove_id, array![action].span());
                     IERC20Dispatcher { contract_address: asset }
-                        .transfer(
-                            ekubo_positions.contract_address,
-                            order_amount.into()
-                        );
+                        .transfer(ekubo_positions.contract_address, order_amount.into());
 
                     sell_token = asset;
                     buy_token = yin.contract_address;
@@ -273,29 +265,28 @@ pub mod EkuboDcaComponent {
             let start_time: u64 = get_block_timestamp();
             let end_time: u64 = order_duration.to_valid_end_time(start_time);
             let order_key = OrderKey {
-                sell_token,
-                buy_token,
-                fee: pool_key.fee,
-                start_time: 0,
-                end_time,
+                sell_token, buy_token, fee: pool_key.fee, start_time: 0, end_time,
             };
 
             let (position_id, _sale_rate) = ekubo_positions
                 .mint_and_increase_sell_amount(order_key, order_amount);
 
-            self.set_order(
-                trove_id,
-                DcaOrder { position_id, fee: pool_key.fee, end_time, order_type },
-            );
+            self
+                .set_order(
+                    trove_id, DcaOrder { position_id, fee: pool_key.fee, end_time, order_type },
+                );
 
-            self.emit(TwammOrderCreated {
-                trove_id,
-                asset,
-                order_id: position_id,
-                order_type,
-                fee: pool_key.fee,
-                order_duration: order_duration.to_seconds(),
-            });
+            self
+                .emit(
+                    TwammOrderCreated {
+                        trove_id,
+                        asset,
+                        order_id: position_id,
+                        order_type,
+                        fee: pool_key.fee,
+                        order_duration: order_duration.to_seconds(),
+                    },
+                );
         }
 
         fn set_ekubo_positions(

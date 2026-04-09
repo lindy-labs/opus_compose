@@ -3,8 +3,8 @@ pub mod EkuboOracleComponent {
     use ekubo::extensions::oracle::{IOracleDispatcher, IOracleDispatcherTrait};
     use opus_compose::constants::CASH_DECIMALS;
     use opus_compose::interfaces::erc20::{IERC20Dispatcher, IERC20DispatcherTrait};
-    use starknet::storage::{StoragePointerReadAccess, StoragePointerWriteAccess};
     use starknet::ContractAddress;
+    use starknet::storage::{StoragePointerReadAccess, StoragePointerWriteAccess};
     use wadray::Wad;
 
     #[storage]
@@ -31,9 +31,7 @@ pub mod EkuboOracleComponent {
                 .get_price_x128_over_last(asset, yin_address, twap_duration);
 
             opus::utils::math::convert_ekubo_oracle_price_to_wad(
-                price_x128,
-                IERC20Dispatcher { contract_address: asset }.decimals(),
-                CASH_DECIMALS,
+                price_x128, IERC20Dispatcher { contract_address: asset }.decimals(), CASH_DECIMALS,
             )
         }
 

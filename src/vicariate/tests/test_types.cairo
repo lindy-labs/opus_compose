@@ -1,12 +1,11 @@
 use opus_compose::vicariate::contracts::rites::dca::types::{
-    DcaOrderDuration, PriceDcaDurations, DcaOrder, OrderType, PriceConditions,
-    TimeDcaConditions,
+    DcaOrder, DcaOrderDuration, OrderType, PriceConditions, PriceDcaDurations, TimeDcaConditions,
 };
 use opus_compose::vicariate::contracts::rites::topup::types::TopupConditions;
 use opus_compose::vicariate::contracts::rites::types::EkuboPoolParams;
 use opus_compose::vicariate::types::SmartTroveConfig;
 use starknet::storage_access::StorePacking;
-use wadray::{Ray, Wad, RAY_ONE, RAY_PERCENT, WAD_ONE};
+use wadray::{RAY_ONE, RAY_PERCENT, Ray, WAD_ONE, Wad};
 
 // --- EkuboPoolParams packing tests ---
 
@@ -132,9 +131,9 @@ fn test_smart_trove_config_packing_max_incentive() {
 #[test]
 fn test_smart_trove_config_packing_typical() {
     assert_smart_trove_config_roundtrip(
-        (RAY_PERCENT * 80).into(),  // 0.8 relative threshold
-        (WAD_ONE / 100).into(),              // 1% max forge fee
-        (WAD_ONE * 5).into(),        // 5 CASH incentive
+        (RAY_PERCENT * 80).into(), // 0.8 relative threshold
+        (WAD_ONE / 100).into(), // 1% max forge fee
+        (WAD_ONE * 5).into() // 5 CASH incentive
     );
 }
 
@@ -154,9 +153,7 @@ fn test_topup_conditions_packing_zero() {
 #[test]
 fn test_topup_conditions_packing_max_balance() {
     // min_asset_balance: full u128 range
-    assert_topup_conditions_roundtrip(
-        0xffffffffffffffffffffffffffffffff_u128, 0_u128.into(),
-    );
+    assert_topup_conditions_roundtrip(0xffffffffffffffffffffffffffffffff_u128, 0_u128.into());
 }
 
 #[test]
@@ -169,10 +166,7 @@ fn test_topup_conditions_packing_max_slippage() {
 
 #[test]
 fn test_topup_conditions_packing_typical() {
-    assert_topup_conditions_roundtrip(
-        (100 * WAD_ONE),
-        (5 * RAY_PERCENT).into(),
-    );
+    assert_topup_conditions_roundtrip((100 * WAD_ONE), (5 * RAY_PERCENT).into());
 }
 
 // --- PriceConditions packing tests ---
@@ -198,17 +192,17 @@ fn test_price_conditions_packing_max_amounts() {
         max_price.into(),
         0xffffffffffffffffffffffffffffffff_u128.into(), // max buy amount
         max_price.into(),
-        0xffffffffffffffffffffffffffffffff_u128, // max sell amount
+        0xffffffffffffffffffffffffffffffff_u128 // max sell amount
     );
 }
 
 #[test]
 fn test_price_conditions_packing_typical() {
     assert_price_conditions_roundtrip(
-        (2000 * WAD_ONE).into(),   // buy at $2000
-        (100 * WAD_ONE).into(),    // buy 100 CASH worth
-        (2500 * WAD_ONE).into(),   // sell at $2500
-        50_u128,                   // sell 50 tokens
+        (2000 * WAD_ONE).into(), // buy at $2000
+        (100 * WAD_ONE).into(), // buy 100 CASH worth
+        (2500 * WAD_ONE).into(), // sell at $2500
+        50_u128 // sell 50 tokens
     );
 }
 
@@ -216,10 +210,7 @@ fn test_price_conditions_packing_typical() {
 fn test_price_conditions_packing_only_buy() {
     // Only buy enabled (sell_amount = 0 disables sell side)
     assert_price_conditions_roundtrip(
-        (1500 * WAD_ONE).into(),
-        (50 * WAD_ONE).into(),
-        0_u128.into(),
-        0,
+        (1500 * WAD_ONE).into(), (50 * WAD_ONE).into(), 0_u128.into(), 0,
     );
 }
 
@@ -227,10 +218,7 @@ fn test_price_conditions_packing_only_buy() {
 fn test_price_conditions_packing_only_sell() {
     // Only sell enabled (buy_amount = 0 disables buy side)
     assert_price_conditions_roundtrip(
-        0_u128.into(),
-        0_u128.into(),
-        (3000 * WAD_ONE).into(),
-        100_u128,
+        0_u128.into(), 0_u128.into(), (3000 * WAD_ONE).into(), 100_u128,
     );
 }
 
@@ -263,34 +251,57 @@ fn test_time_dca_conditions_packing_max_values() {
 fn test_time_dca_conditions_packing_all_order_types() {
     let amount = 100_u128;
     let frequency = 86400_u64; // 1 day
-    assert_time_dca_conditions_roundtrip(amount, frequency, DcaOrderDuration::OneWeek, OrderType::None);
-    assert_time_dca_conditions_roundtrip(amount, frequency, DcaOrderDuration::OneWeek, OrderType::BuyAsset);
-    assert_time_dca_conditions_roundtrip(amount, frequency, DcaOrderDuration::OneWeek, OrderType::SellAsset);
+    assert_time_dca_conditions_roundtrip(
+        amount, frequency, DcaOrderDuration::OneWeek, OrderType::None,
+    );
+    assert_time_dca_conditions_roundtrip(
+        amount, frequency, DcaOrderDuration::OneWeek, OrderType::BuyAsset,
+    );
+    assert_time_dca_conditions_roundtrip(
+        amount, frequency, DcaOrderDuration::OneWeek, OrderType::SellAsset,
+    );
 }
 
 #[test]
 fn test_time_dca_conditions_packing_all_durations() {
     let amount = 500_u128;
     let frequency = 604800_u64; // 1 week
-    assert_time_dca_conditions_roundtrip(amount, frequency, DcaOrderDuration::ThreeHours, OrderType::BuyAsset);
-    assert_time_dca_conditions_roundtrip(amount, frequency, DcaOrderDuration::SixHours, OrderType::BuyAsset);
-    assert_time_dca_conditions_roundtrip(amount, frequency, DcaOrderDuration::TwelveHours, OrderType::BuyAsset);
-    assert_time_dca_conditions_roundtrip(amount, frequency, DcaOrderDuration::TwentyFourHours, OrderType::BuyAsset);
-    assert_time_dca_conditions_roundtrip(amount, frequency, DcaOrderDuration::ThreeDays, OrderType::BuyAsset);
-    assert_time_dca_conditions_roundtrip(amount, frequency, DcaOrderDuration::OneWeek, OrderType::BuyAsset);
-    assert_time_dca_conditions_roundtrip(amount, frequency, DcaOrderDuration::TwoWeeks, OrderType::BuyAsset);
-    assert_time_dca_conditions_roundtrip(amount, frequency, DcaOrderDuration::OneMonth, OrderType::BuyAsset);
-    assert_time_dca_conditions_roundtrip(amount, frequency, DcaOrderDuration::ThreeMonths, OrderType::BuyAsset);
-    assert_time_dca_conditions_roundtrip(amount, frequency, DcaOrderDuration::SixMonths, OrderType::BuyAsset);
+    assert_time_dca_conditions_roundtrip(
+        amount, frequency, DcaOrderDuration::ThreeHours, OrderType::BuyAsset,
+    );
+    assert_time_dca_conditions_roundtrip(
+        amount, frequency, DcaOrderDuration::SixHours, OrderType::BuyAsset,
+    );
+    assert_time_dca_conditions_roundtrip(
+        amount, frequency, DcaOrderDuration::TwelveHours, OrderType::BuyAsset,
+    );
+    assert_time_dca_conditions_roundtrip(
+        amount, frequency, DcaOrderDuration::TwentyFourHours, OrderType::BuyAsset,
+    );
+    assert_time_dca_conditions_roundtrip(
+        amount, frequency, DcaOrderDuration::ThreeDays, OrderType::BuyAsset,
+    );
+    assert_time_dca_conditions_roundtrip(
+        amount, frequency, DcaOrderDuration::OneWeek, OrderType::BuyAsset,
+    );
+    assert_time_dca_conditions_roundtrip(
+        amount, frequency, DcaOrderDuration::TwoWeeks, OrderType::BuyAsset,
+    );
+    assert_time_dca_conditions_roundtrip(
+        amount, frequency, DcaOrderDuration::OneMonth, OrderType::BuyAsset,
+    );
+    assert_time_dca_conditions_roundtrip(
+        amount, frequency, DcaOrderDuration::ThreeMonths, OrderType::BuyAsset,
+    );
+    assert_time_dca_conditions_roundtrip(
+        amount, frequency, DcaOrderDuration::SixMonths, OrderType::BuyAsset,
+    );
 }
 
 #[test]
 fn test_time_dca_conditions_packing_typical() {
     // Typical: 1000 CASH buy, daily, 1-week orders
     assert_time_dca_conditions_roundtrip(
-        1000_u128,
-        86400_u64,
-        DcaOrderDuration::OneWeek,
-        OrderType::BuyAsset,
+        1000_u128, 86400_u64, DcaOrderDuration::OneWeek, OrderType::BuyAsset,
     );
 }

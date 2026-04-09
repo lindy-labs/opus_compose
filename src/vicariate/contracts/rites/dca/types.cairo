@@ -18,7 +18,8 @@ const MASK_62: u256 = 0x3FFFFFFFFFFFFFFF;
 const TWO_POW_62: u256 = 0x4000000000000000;
 
 // TimeDcaConditions packing shifts and masks (packed into felt252)
-// Layout: amount (128 bits) | order_frequency (64 bits) | order_duration (4 bits) | order_type (2 bits) = 198 bits
+// Layout: amount (128 bits) | order_frequency (64 bits) | order_duration (4 bits) | order_type (2
+// bits) = 198 bits
 const TWO_POW_196: u256 = 0x10000000000000000000000000000000000000000000000000;
 const TWO_POW_4: u256 = 0x10;
 const MASK_4: u256 = 0xF;
@@ -165,13 +166,11 @@ impl PriceConditionsPacking of StorePacking<PriceConditions, PackedPriceConditio
         let buy_price_u128: u128 = value.buy_price.into();
         let buy_price_masked: u128 = buy_price_u128 & MASK_123_U128;
         let buy_amount_u128: u128 = value.buy_amount.into();
-        let buy_packed: u256 = buy_amount_u128.into()
-            + (buy_price_masked.into() * TWO_POW_128);
+        let buy_packed: u256 = buy_amount_u128.into() + (buy_price_masked.into() * TWO_POW_128);
 
         let sell_price_u128: u128 = value.sell_price.into();
         let sell_price_masked: u128 = sell_price_u128 & MASK_123_U128;
-        let sell_packed: u256 = value.sell_amount.into()
-            + (sell_price_masked.into() * TWO_POW_128);
+        let sell_packed: u256 = value.sell_amount.into() + (sell_price_masked.into() * TWO_POW_128);
 
         PackedPriceConditions {
             buy: buy_packed.try_into().unwrap(), sell: sell_packed.try_into().unwrap(),
@@ -183,9 +182,7 @@ impl PriceConditionsPacking of StorePacking<PriceConditions, PackedPriceConditio
         let sell_u256: u256 = value.sell.into();
 
         let buy_amount: u128 = (buy_u256 & MASK_128).try_into().unwrap();
-        let buy_price: u128 = ((buy_u256 / TWO_POW_128) & MASK_123_U128.into())
-            .try_into()
-            .unwrap();
+        let buy_price: u128 = ((buy_u256 / TWO_POW_128) & MASK_123_U128.into()).try_into().unwrap();
         let sell_amount: u128 = (sell_u256 & MASK_128).try_into().unwrap();
         let sell_price: u128 = ((sell_u256 / TWO_POW_128) & MASK_123_U128.into())
             .try_into()
@@ -238,12 +235,12 @@ impl TimeDcaConditionsPacking of StorePacking<TimeDcaConditions, felt252> {
         TimeDcaConditions {
             amount: (v & MASK_128).try_into().unwrap(),
             order_frequency: ((v / TWO_POW_128) & MASK_64).try_into().unwrap(),
-            order_duration: IndexedEnum::<DcaOrderDuration>::from_index(
-                (duration_and_type & MASK_4).try_into().unwrap(),
-            ),
-            order_type: IndexedEnum::<OrderType>::from_index(
-                ((duration_and_type / TWO_POW_4) & MASK_2).try_into().unwrap(),
-            ),
+            order_duration: IndexedEnum::<
+                DcaOrderDuration,
+            >::from_index((duration_and_type & MASK_4).try_into().unwrap()),
+            order_type: IndexedEnum::<
+                OrderType,
+            >::from_index(((duration_and_type / TWO_POW_4) & MASK_2).try_into().unwrap()),
         }
     }
 }
