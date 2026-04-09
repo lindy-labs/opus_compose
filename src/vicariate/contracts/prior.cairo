@@ -41,8 +41,8 @@ pub mod prior {
         0x439148f0bbc682ca079e46d6e2c2f0c1e3b820f1a291b069d8882abf8cf18dd9_u256;
 
     pub const MAX_RELATIVE_THRESHOLD: u128 = RAY_ONE;
-    pub const MAX_INCENTIVE: u128 = 0x7FFFFFFFFFFFFFFFFFFFFFFFF;
     pub const MAX_FORGE_FEE_PCT: u128 = 4 * WAD_ONE; // From Shrine
+    pub const MAX_INCENTIVE: u128 = 0x7FFFFFFFFFFFFFFFFFFFFFFFF;
 
     //
     // Storage
@@ -150,6 +150,7 @@ pub mod prior {
         #[key]
         pub yang: ContractAddress,
         pub amount: Wad,
+        pub min_asset_amount: u128,
     }
 
     #[derive(Copy, Drop, starknet::Event, PartialEq)]
@@ -161,7 +162,8 @@ pub mod prior {
         #[key]
         pub yang: ContractAddress,
         pub amount: Wad,
-        pub yang_asset_amount: u128,
+        pub yang_asset_amount_withdrawn: u128,
+        pub yang_asset_amount_redeposited: u128,
     }
 
     //
@@ -497,7 +499,6 @@ pub mod prior {
             let trove_id: u64 = lever_up_params.trove_id;
             self.assert_smart_trove_owner(user, trove_id);
 
-            let yang = lever_up_params.yang;
             let mut call_data: Array<felt252> = array![];
             let modify_lever_params = ModifyLeverParams {
                 user, action: ModifyLeverAction::LeverUp(lever_up_params),
@@ -513,8 +514,6 @@ pub mod prior {
                     amount.into(),
                     call_data.span(),
                 );
-
-            self.emit(LeverUp { user, trove_id, amount, yang });
         }
 
         // Unwind a position for a specific collateral for a Trove
@@ -528,8 +527,6 @@ pub mod prior {
             let trove_id: u64 = lever_down_params.trove_id;
             self.assert_smart_trove_owner(user, trove_id);
 
-            let yang = lever_down_params.yang_asset.address;
-            let yang_asset_amount = lever_down_params.yang_asset.amount;
             let modify_lever_params = ModifyLeverParams {
                 user, action: ModifyLeverAction::LeverDown(lever_down_params),
             };
@@ -545,8 +542,6 @@ pub mod prior {
                     amount.into(),
                     call_data.span(),
                 );
-
-            self.emit(LeverDown { user, trove_id, amount, yang, yang_asset_amount });
         }
     }
 
@@ -606,6 +601,17 @@ pub mod prior {
 
                     // Borrow yin from trove and send to this contract to repay the flash mint
                     abbot.forge(trove_id, amount.try_into().unwrap(), config.max_forge_fee_pct);
+
+                    self
+                        .emit(
+                            LeverUp {
+                                user,
+                                trove_id,
+                                amount: amount.try_into().unwrap(),
+                                yang,
+                                min_asset_amount,
+                            },
+                        );
                 },
                 ModifyLeverAction::LeverDown(params) => {
                     let LeverDownParams { trove_id, yang_asset, swaps } = params;
@@ -628,10 +634,12 @@ pub mod prior {
                         .clear_minimum(EkuboERC20Dispatcher { contract_address: token }, amount);
 
                     // Re-deposit any remainder collateral
-                    let remainder_asset: u256 = router_clear
+                    let remainder_asset: u128 = router_clear
                         .clear_minimum_to_recipient(
                             EkuboERC20Dispatcher { contract_address: yang_asset.address }, 0, prior,
-                        );
+                        )
+                        .try_into()
+                        .unwrap();
                     if remainder_asset.is_non_zero() {
                         self
                             .abbot
@@ -639,11 +647,22 @@ pub mod prior {
                             .deposit(
                                 trove_id,
                                 AssetBalance {
-                                    address: yang_asset.address,
-                                    amount: remainder_asset.try_into().unwrap(),
+                                    address: yang_asset.address, amount: remainder_asset,
                                 },
                             );
                     }
+
+                    self
+                        .emit(
+                            LeverDown {
+                                user,
+                                trove_id,
+                                amount: amount.try_into().unwrap(),
+                                yang: yang_asset.address,
+                                yang_asset_amount_withdrawn: yang_asset.amount,
+                                yang_asset_amount_redeposited: remainder_asset,
+                            },
+                        );
                 },
             }
 
