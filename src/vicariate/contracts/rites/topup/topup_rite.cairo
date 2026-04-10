@@ -193,46 +193,53 @@ pub mod topup_rite {
                     yin.contract_address,
                 );
 
-            prior.on_rite_actions(trove_id, array![Action::Forge(swap_params.forge_amount)].span());
+            // Take slippage into account for non-CASH tokens and mint additional CASH
+            let adjusted_forge_amount: Wad = if swap_params.swap_data.is_some() {
+                rmul_wr(swap_params.forge_amount, RAY_ONE.into() + config.conditions.slippage)
+            } else {
+                swap_params.forge_amount
+            };
+            let mut actual_forge_amount: Wad = adjusted_forge_amount;
+
+            prior.on_rite_actions(trove_id, array![Action::Forge(adjusted_forge_amount)].span());
 
             let mut excess_yin: u256 = Zero::zero();
             if let Some((route_node, token_amount)) = swap_params.swap_data {
                 let ekubo_router = self.ekubo_router.read();
-                yin.transfer(ekubo_router.contract_address, swap_params.forge_amount.into());
+                yin.transfer(ekubo_router.contract_address, adjusted_forge_amount.into());
                 ekubo_router.swap(route_node, token_amount);
 
-                let min_asset_out: u256 = rmul_wr(
-                    config.topup_amount.into(), RAY_ONE.into() - config.conditions.slippage,
-                )
-                    .into();
+                // Clear at least the topup amount of asset to destination
                 IClearDispatcher { contract_address: ekubo_router.contract_address }
                     .clear_minimum_to_recipient(
                         EkuboERC20Dispatcher { contract_address: config.asset },
-                        min_asset_out,
+                        config.topup_amount.into(),
                         config.destination,
                     );
+
+                // Repay excess yin
                 excess_yin = IClearDispatcher { contract_address: ekubo_router.contract_address }
                     .clear_minimum_to_recipient(
                         EkuboERC20Dispatcher { contract_address: yin.contract_address },
                         0,
                         prior.contract_address,
                     );
-                // Repay excess yin
                 if excess_yin.is_non_zero() {
                     prior
                         .on_rite_actions(
                             trove_id, array![Action::Melt(excess_yin.try_into().unwrap())].span(),
                         );
+                    actual_forge_amount - excess_yin.try_into().unwrap();
                 }
             } else {
-                yin.transfer(config.destination, swap_params.forge_amount.into());
+                yin.transfer(config.destination, adjusted_forge_amount.into());
             }
 
             self
                 .emit(
                     TopupExecuted {
                         trove_id,
-                        forge_amount: swap_params.forge_amount,
+                        forge_amount: adjusted_forge_amount,
                         asset: config.asset,
                         topup_amount: config.topup_amount,
                         destination: config.destination,
@@ -288,12 +295,14 @@ pub mod topup_rite {
                     pool_price.sqrt_ratio, slippage, cash_is_token0,
                 );
                 let route_node = RouteNode { pool_key, sqrt_ratio_limit, skip_ahead: 0 };
-                let token_amount = TokenAmount { token: asset, amount: topup_amount.into() };
+                // Set amount to negative for exact output swap i.e. amount you want to get out of the pool
+                let token_amount = TokenAmount { token: asset, amount: -(topup_amount.into()) };
                 let quote_delta: Delta = ekubo_router.quote_swap(route_node, token_amount);
+                // Amount is positive i.e. amount you need to provide to the pool
                 let cash_amount: u128 = if cash_is_token0 {
-                    (-quote_delta.amount0).try_into().unwrap()
+                    quote_delta.amount0.try_into().unwrap()
                 } else {
-                    (-quote_delta.amount1).try_into().unwrap()
+                    quote_delta.amount1.try_into().unwrap()
                 };
                 SwapParams {
                     forge_amount: cash_amount.into(),
