@@ -77,6 +77,7 @@ pub mod topup_rite {
         #[key]
         pub trove_id: u64,
         pub forge_amount: Wad,
+        pub refunded: Wad,
         pub asset: ContractAddress,
         pub topup_amount: u128,
         pub destination: ContractAddress,
@@ -199,11 +200,10 @@ pub mod topup_rite {
             } else {
                 swap_params.forge_amount
             };
-            let mut actual_forge_amount: Wad = adjusted_forge_amount;
 
             prior.on_rite_actions(trove_id, array![Action::Forge(adjusted_forge_amount)].span());
 
-            let mut excess_yin: u256 = Zero::zero();
+            let mut refunded: u256 = Zero::zero();
             if let Some((route_node, token_amount)) = swap_params.swap_data {
                 let ekubo_router = self.ekubo_router.read();
                 yin.transfer(ekubo_router.contract_address, adjusted_forge_amount.into());
@@ -218,18 +218,17 @@ pub mod topup_rite {
                     );
 
                 // Repay excess yin
-                excess_yin = IClearDispatcher { contract_address: ekubo_router.contract_address }
+                refunded = IClearDispatcher { contract_address: ekubo_router.contract_address }
                     .clear_minimum_to_recipient(
                         EkuboERC20Dispatcher { contract_address: yin.contract_address },
                         0,
                         prior.contract_address,
                     );
-                if excess_yin.is_non_zero() {
+                if refunded.is_non_zero() {
                     prior
                         .on_rite_actions(
-                            trove_id, array![Action::Melt(excess_yin.try_into().unwrap())].span(),
+                            trove_id, array![Action::Melt(refunded.try_into().unwrap())].span(),
                         );
-                    actual_forge_amount - excess_yin.try_into().unwrap();
                 }
             } else {
                 yin.transfer(config.destination, adjusted_forge_amount.into());
@@ -240,6 +239,7 @@ pub mod topup_rite {
                     TopupExecuted {
                         trove_id,
                         forge_amount: adjusted_forge_amount,
+                        refunded: refunded.try_into().unwrap(),
                         asset: config.asset,
                         topup_amount: config.topup_amount,
                         destination: config.destination,
