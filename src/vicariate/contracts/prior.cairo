@@ -374,15 +374,12 @@ pub mod prior {
             self.emit(RiteSet { user: caller, trove_id, rite });
         }
 
-        // Note that this does not check that the LTV does not exceed the relative threhsold
-        // at the end of the rite.
+        // Note that this does not check:
+        // 1. the configured max forge fee % is less than the current value;
+        // 2. the LTV does not exceed the relative threhsold at the end of the rite;
         fn can_execute_rite(self: @ContractState, trove_id: u64) -> bool {
             let rite = self.rites.read(trove_id);
-            if rite.contract_address.is_zero() {
-                false
-            } else {
-                self.can_execute_rite_helper(rite, trove_id)
-            }
+            self.can_execute_rite_helper(rite, trove_id)
         }
 
         // Can be called by anyone
@@ -692,16 +689,10 @@ pub mod prior {
         fn can_execute_rite_helper(
             self: @ContractState, rite: IRiteDispatcher, trove_id: u64,
         ) -> bool {
-            let can_execute: bool = rite.is_ready(trove_id);
-            if can_execute {
-                let config: SmartTroveConfig = self.smart_trove_configs.read(trove_id);
-                let forge_fee_pct: Wad = self.shrine.read().get_forge_fee_pct();
-                if forge_fee_pct > config.max_forge_fee_pct {
-                    return false;
-                }
-                true
-            } else {
+            if rite.contract_address.is_zero() {
                 false
+            } else {
+                rite.is_ready(trove_id)
             }
         }
 
