@@ -3,6 +3,7 @@ use opus::interfaces::{
     IAbbotDispatcher, IAbbotDispatcherTrait, IGateDispatcher, IGateDispatcherTrait,
     IShrineDispatcherTrait,
 };
+use opus::utils::assertions::assert_equalish;
 use opus::types::{AssetBalance, Health};
 use opus_compose::addresses::mainnet;
 use opus_compose::interfaces::erc20::{IERC20Dispatcher, IERC20DispatcherTrait};
@@ -10,12 +11,10 @@ use opus_compose::vicariate::interfaces::prior::IPriorDispatcherTrait;
 use opus_compose::vicariate::tests::utils::prior_utils;
 use snforge_std::{CheatSpan, cheat_caller_address};
 use starknet::ContractAddress;
-use wadray::{RAY_ONE, Ray, Wad};
-
-const USER: ContractAddress = 'test user'.try_into().unwrap();
+use wadray::{RAY_ONE, Ray, WAD_ONE, Wad};
 
 //
-// Test: Deployment
+// Deployment
 //
 
 #[test]
@@ -34,20 +33,20 @@ fn test_prior_deployment() {
 }
 
 //
-// Test: IAbbot Interface - Open Trove
+// Abbot functions
 //
 
 #[test]
 #[fork("MAINNET_VICARIATE")]
 fn test_open_trove_success() {
     let test_config = prior_utils::prior_deploy(None);
-    let user = USER;
+    let user = prior_utils::USER;
     let yang = mainnet::ETH;
-    let yang_amount: u128 = 100000000000000000; // 0.1 ETH
-    let forge_amount: Wad = 50000000_u128.into(); // 50 CASH
-    let max_forge_fee_pct: Wad = 1_u128.into(); // 1%
+    let yang_amount: u128 = WAD_ONE / 10; // 0.1 ETH
+    let forge_amount: Wad = (50 * WAD_ONE).into(); // 50 CASH
+    let max_forge_fee_pct: Wad = Zero::zero();
 
-    let prior = IAbbotDispatcher { contract_address: test_config.prior.contract_address };
+    let prior_abbot = IAbbotDispatcher { contract_address: test_config.prior.contract_address };
 
     prior_utils::fund_user_eth(user, yang_amount.into());
     prior_utils::approve_gate_for_user(test_config.eth_gate, yang, user);
@@ -57,27 +56,30 @@ fn test_open_trove_success() {
 
     // Open trove
     cheat_caller_address(test_config.prior.contract_address, user, CheatSpan::TargetCalls(1));
-    let trove_id = prior
+    let trove_id = prior_abbot
         .open_trove(
             array![AssetBalance { address: yang, amount: yang_amount }].span(),
             forge_amount,
             max_forge_fee_pct,
         );
 
+    let count = prior_abbot.get_troves_count();
+    assert(count == 1, 'count should be 1');
+
     // Verify trove owner
     let primary_owner = test_config.abbot.get_trove_owner(trove_id);
     assert!(primary_owner.is_some(), "Primary owner should exist");
     assert!(primary_owner.unwrap() == test_config.prior.contract_address, "Primary owner mismatch");
 
-    let atu_owner = prior.get_trove_owner(trove_id);
-    assert!(atu_owner.is_some(), "ATU owner should exist");
-    assert!(atu_owner.unwrap() == user, "ATU owner mismatch");
+    let smart_trove_owner = prior_abbot.get_trove_owner(trove_id);
+    assert!(smart_trove_owner.is_some(), "Smart Trove owner should exist");
+    assert!(smart_trove_owner.unwrap() == user, "Smart Trove owner mismatch");
 
-    let atu_trove_id_by_index = test_config.prior.get_trove_id_by_index(1);
-    assert_eq!(atu_trove_id_by_index, trove_id, "Wrong ATU trove ID by index");
+    let smart_trove_id_by_index = test_config.prior.get_trove_id_by_index(1);
+    assert_eq!(smart_trove_id_by_index, trove_id, "Wrong Smart Trove ID by index");
 
     // Verify user's trove IDs
-    let trove_ids = prior.get_user_trove_ids(user);
+    let trove_ids = prior_abbot.get_user_trove_ids(user);
     assert(trove_ids.len() == 1, 'should have 1 trove');
     assert(*trove_ids.at(0) == trove_id, 'trove_id mismatch');
 
@@ -96,54 +98,15 @@ fn test_open_trove_success() {
 
 #[test]
 #[fork("MAINNET_VICARIATE")]
-fn test_get_troves_count() {
-    let test_config = prior_utils::prior_deploy(None);
-    let user: ContractAddress = 'test user'.try_into().unwrap();
-    let yang = mainnet::ETH;
-    let yang_amount: u128 = 100000000000000000; // 0.1 ETH
-    let forge_amount: Wad = 50000000_u128.into();
-    let max_forge_fee_pct: Wad = 1_u128.into();
-
-    let abbot = IAbbotDispatcher { contract_address: test_config.prior.contract_address };
-
-    // Initial count should be 0
-    let initial_count = abbot.get_troves_count();
-    assert(initial_count == 0, 'initial count should be 0');
-
-    // Fund and approve
-    prior_utils::fund_user_eth(user, yang_amount.into());
-    prior_utils::approve_gate_for_user(test_config.eth_gate, yang, user);
-    prior_utils::approve_for_user(test_config.prior.contract_address, yang, user);
-
-    // Open trove
-    cheat_caller_address(test_config.prior.contract_address, user, CheatSpan::TargetCalls(1));
-    let _ = abbot
-        .open_trove(
-            array![AssetBalance { address: yang, amount: yang_amount }].span(),
-            forge_amount,
-            max_forge_fee_pct,
-        );
-
-    // Count should be 1
-    let count = abbot.get_troves_count();
-    assert(count == 1, 'count should be 1');
-}
-
-//
-// Test: IAbbot Interface - Close Trove
-//
-
-#[test]
-#[fork("MAINNET_VICARIATE")]
 fn test_close_trove_success() {
     let test_config = prior_utils::prior_deploy(None);
-    let user: ContractAddress = 'test user'.try_into().unwrap();
+    let user: ContractAddress = prior_utils::USER;
     let yang = mainnet::ETH;
-    let yang_amount: u128 = 100000000000000000;
-    let forge_amount: Wad = 50000000_u128.into();
-    let max_forge_fee_pct: Wad = 1_u128.into();
+    let yang_amount: u128 = WAD_ONE;
+    let forge_amount: Wad = (5 * WAD_ONE).into();
+    let max_forge_fee_pct: Wad = Zero::zero();
 
-    let abbot = IAbbotDispatcher { contract_address: test_config.prior.contract_address };
+    let prior_abbot = IAbbotDispatcher { contract_address: test_config.prior.contract_address };
 
     // Setup
     prior_utils::fund_user_eth(user, yang_amount.into());
@@ -152,7 +115,7 @@ fn test_close_trove_success() {
 
     // Open trove
     cheat_caller_address(test_config.prior.contract_address, user, CheatSpan::TargetCalls(1));
-    let trove_id = abbot
+    let trove_id = prior_abbot
         .open_trove(
             array![AssetBalance { address: yang, amount: yang_amount }].span(),
             forge_amount,
@@ -160,13 +123,12 @@ fn test_close_trove_success() {
         );
 
     // Close trove
+    cheat_caller_address(test_config.shrine.contract_address, user, CheatSpan::TargetCalls(1));
+    IERC20Dispatcher { contract_address: test_config.shrine.contract_address }.approve(test_config.prior.contract_address, forge_amount.into());
     cheat_caller_address(test_config.prior.contract_address, user, CheatSpan::TargetCalls(1));
-    abbot.close_trove(trove_id);
+    prior_abbot.close_trove(trove_id);
 
-    // Note: ATU Abbot no longer clears owner on close
-    // The underlying Abbot trove is closed, but ATU tracking remains
-    // Verify the close succeeded by checking owner still exists in ATU tracking
-    let owner = abbot.get_trove_owner(trove_id);
+    let owner = prior_abbot.get_trove_owner(trove_id);
     assert(owner.is_some(), 'owner should still exist');
 
     // Verify trove deposit is zero after close
@@ -183,67 +145,139 @@ fn test_close_trove_success() {
 #[should_panic(expected: "PRI: Not owner")]
 fn test_close_trove_not_owner_reverts() {
     let test_config = prior_utils::prior_deploy(None);
-    let user: ContractAddress = 'test user'.try_into().unwrap();
-    let other_user: ContractAddress = 'other user'.try_into().unwrap();
-    let yang = mainnet::ETH;
-    let yang_amount: u128 = 100000000000000000;
-    let forge_amount: Wad = 50000000_u128.into();
-    let max_forge_fee_pct: Wad = 1_u128.into();
+    let user: ContractAddress = prior_utils::USER;
 
-    let abbot = IAbbotDispatcher { contract_address: test_config.prior.contract_address };
+    let prior_abbot = IAbbotDispatcher { contract_address: test_config.prior.contract_address };
 
-    // Setup
-    prior_utils::fund_user_eth(user, yang_amount.into());
-    prior_utils::approve_gate_for_user(test_config.eth_gate, yang, user);
-    prior_utils::approve_for_user(test_config.prior.contract_address, yang, user);
-
-    // Open trove as user
-    cheat_caller_address(test_config.prior.contract_address, user, CheatSpan::TargetCalls(1));
-    let trove_id = abbot
-        .open_trove(
-            array![AssetBalance { address: yang, amount: yang_amount }].span(),
-            forge_amount,
-            max_forge_fee_pct,
-        );
+    let trove_id: u64 = prior_utils::open_trove_for_user(prior_abbot, user);
 
     // Try to close as other_user
-    cheat_caller_address(test_config.prior.contract_address, other_user, CheatSpan::TargetCalls(1));
-    abbot.close_trove(trove_id);
+    cheat_caller_address(test_config.prior.contract_address, prior_utils::BAD_GUY, CheatSpan::TargetCalls(1));
+    prior_abbot.close_trove(trove_id);
 }
 
+#[test]
+#[fork("MAINNET_VICARIATE")]
+fn test_deposit_success() {
+    let test_config = prior_utils::prior_deploy(None);
+    let user: ContractAddress = prior_utils::USER;
+    let yang: ContractAddress = mainnet::ETH;
+    let deposit_amount: u128 = WAD_ONE / 10; // 0.1 ETH
+
+    let prior_abbot = IAbbotDispatcher { contract_address: test_config.prior.contract_address };
+
+    let trove_id: u64 = prior_utils::open_trove_for_user(prior_abbot, user);
+    let before_yang_deposit: Wad = test_config.shrine.get_deposit(yang, trove_id);
+    
+    // Deposit additional collateral
+    prior_utils::fund_user_eth(user, deposit_amount.into());
+    prior_utils::approve_gate_for_user(test_config.eth_gate, yang, user);
+    cheat_caller_address(test_config.prior.contract_address, user, CheatSpan::TargetCalls(1));
+    prior_abbot.deposit(trove_id, AssetBalance { address: yang, amount: deposit_amount });
+
+    let after_yang_deposit: Wad = test_config.shrine.get_deposit(yang, trove_id);
+    let expected_yang_deposit: Wad = before_yang_deposit + deposit_amount.into();
+    let error_margin: Wad = 20_u128.into();
+    assert_equalish(after_yang_deposit, expected_yang_deposit, error_margin, 'Wrong yang deposit amount');
+}
+
+#[test]
+#[fork("MAINNET_VICARIATE")]
+#[should_panic(expected: "PRI: Not owner")]
+fn test_deposit_not_owner_reverts() {
+    let test_config = prior_utils::prior_deploy(None);
+    let user: ContractAddress = prior_utils::USER;
+    let yang: ContractAddress = mainnet::ETH;
+    let deposit_amount: u128 = WAD_ONE / 10; // 0.1 ETH
+
+    let prior_abbot = IAbbotDispatcher { contract_address: test_config.prior.contract_address };
+    let trove_id: u64 = prior_utils::open_trove_for_user(prior_abbot, user);
+    
+    cheat_caller_address(test_config.prior.contract_address, prior_utils::BAD_GUY, CheatSpan::TargetCalls(1));
+    prior_abbot.deposit(trove_id, AssetBalance { address: yang, amount: deposit_amount });
+}
+
+#[test]
+#[fork("MAINNET_VICARIATE")]
+fn test_withdraw_success() {
+    let test_config = prior_utils::prior_deploy(None);
+    let user: ContractAddress = prior_utils::USER;
+    let yang: ContractAddress = mainnet::ETH;
+    let yang_erc20 = IERC20Dispatcher { contract_address: yang };
+    let deposit_amount: u128 = WAD_ONE / 10; // 0.1 ETH
+
+    let prior_abbot = IAbbotDispatcher { contract_address: test_config.prior.contract_address };
+    let trove_id: u64 = prior_utils::open_trove_for_user(prior_abbot, user);
+    
+    let before_yang_balance: u256 = yang_erc20.balance_of(user);
+    
+    // Repay and withdraw collateral
+    let trove_health: Health = test_config.shrine.get_trove_health(trove_id);
+    let repay_amount: Wad = trove_health.debt;
+    cheat_caller_address(test_config.shrine.contract_address, user, CheatSpan::TargetCalls(1));
+    IERC20Dispatcher { contract_address: test_config.shrine.contract_address }.approve(test_config.prior.contract_address, repay_amount.into());
+    cheat_caller_address(test_config.prior.contract_address, user, CheatSpan::TargetCalls(2));
+    prior_abbot.melt(trove_id, trove_health.debt);
+    prior_abbot.withdraw(trove_id, AssetBalance { address: yang, amount: deposit_amount });
+
+    let after_yang_balance: u256 = yang_erc20.balance_of(user);
+    let expected_yang_balance: u256 = before_yang_balance + deposit_amount.into();
+    let error_margin: u256 = 1_u128.into();
+    assert_equalish(after_yang_balance, expected_yang_balance, error_margin, 'Wrong yang balance');
+}
+
+#[test]
+#[fork("MAINNET_VICARIATE")]
+#[should_panic(expected: "PRI: Not owner")]
+fn test_withdraw_not_owner_reverts() {
+    let test_config = prior_utils::prior_deploy(None);
+    let user: ContractAddress = prior_utils::USER;
+    let yang: ContractAddress = mainnet::ETH;
+
+    let prior_abbot = IAbbotDispatcher { contract_address: test_config.prior.contract_address };
+    let trove_id: u64 = prior_utils::open_trove_for_user(prior_abbot, user);
+    
+    cheat_caller_address(test_config.prior.contract_address, prior_utils::BAD_GUY, CheatSpan::TargetCalls(1));
+    prior_abbot.withdraw(trove_id, AssetBalance { address: yang, amount: WAD_ONE / 100 });
+}
+
+#[test]
+#[fork("MAINNET_VICARIATE")]
+fn test_forge_success() {
+    let test_config = prior_utils::prior_deploy(None);
+    let user: ContractAddress = prior_utils::USER;
+    let prior_abbot = IAbbotDispatcher { contract_address: test_config.prior.contract_address };
+    let trove_id: u64 = prior_utils::open_trove_for_user(prior_abbot, user);
+
+    let before_balance: Wad = test_config.shrine.get_yin(user); 
+    
+    // Forge additional CASH
+    let forge_amount: Wad = WAD_ONE.into();
+    cheat_caller_address(test_config.prior.contract_address, user, CheatSpan::TargetCalls(1));
+    prior_abbot.forge(trove_id, forge_amount, Zero::zero());
+
+    let after_balance: Wad = test_config.shrine.get_yin(user);
+    let expected_balance: Wad = before_balance + forge_amount;
+    assert_eq!(after_balance, expected_balance, "Wrong yin balance");
+
+}
+
+
 //
-// Test: IAtuAbbot Interface - Config Management
+// Prior functions
 //
 
 #[test]
 #[fork("MAINNET_VICARIATE")]
-fn test_get_trove_config_no_config() {
+fn test_default_smart_trove_config() {
     let test_config = prior_utils::prior_deploy(None);
-    let user: ContractAddress = 'test user'.try_into().unwrap();
-    let yang = mainnet::ETH;
-    let yang_amount: u128 = 100000000000000000;
-    let forge_amount: Wad = 50000000_u128.into();
-    let max_forge_fee_pct: Wad = 1_u128.into();
-
-    let abbot = IAbbotDispatcher { contract_address: test_config.prior.contract_address };
-
-    // Setup
-    prior_utils::fund_user_eth(user, yang_amount.into());
-    prior_utils::approve_gate_for_user(test_config.eth_gate, yang, user);
-    prior_utils::approve_for_user(test_config.prior.contract_address, yang, user);
-
-    // Open trove (but don't set config)
-    cheat_caller_address(test_config.prior.contract_address, user, CheatSpan::TargetCalls(1));
-    let trove_id = abbot
-        .open_trove(
-            array![AssetBalance { address: yang, amount: yang_amount }].span(),
-            forge_amount,
-            max_forge_fee_pct,
-        );
+    let user: ContractAddress = prior_utils::USER;
+    let prior_abbot = IAbbotDispatcher { contract_address: test_config.prior.contract_address };
+    let trove_id: u64 = prior_utils::open_trove_for_user(prior_abbot, user);
 
     // Config should exist but have default values
     let config = test_config.prior.get_trove_config(trove_id);
-    assert(config.is_some(), 'config should exist');
+    assert_eq!(config, Default::default(), "Wrong default config");
 }
 
 #[test]
@@ -257,150 +291,6 @@ fn test_can_execute_rite_returns_false_no_trove() {
     assert(!can_execute, 'can_execute should be false');
 }
 
-//
-// Test: IAbbot Interface - Deposit
-//
-
-#[test]
-#[fork("MAINNET_VICARIATE")]
-fn test_deposit_success() {
-    let test_config = prior_utils::prior_deploy(None);
-    let user: ContractAddress = 'test user'.try_into().unwrap();
-    let yang = mainnet::ETH;
-    let yang_amount: u128 = 100000000000000000;
-    let deposit_amount: u128 = 50000000000000000; // 0.05 ETH
-    let forge_amount: Wad = 50000000_u128.into();
-    let max_forge_fee_pct: Wad = 1_u128.into();
-
-    let abbot = IAbbotDispatcher { contract_address: test_config.prior.contract_address };
-
-    // Fund user (initial + deposit)
-    let total_amount: u256 = (yang_amount + deposit_amount).into();
-    prior_utils::fund_user_eth(user, total_amount);
-    prior_utils::approve_gate_for_user(test_config.eth_gate, yang, user);
-    prior_utils::approve_for_user(test_config.prior.contract_address, yang, user);
-
-    // Open trove
-    cheat_caller_address(test_config.prior.contract_address, user, CheatSpan::TargetCalls(1));
-    let trove_id = abbot
-        .open_trove(
-            array![AssetBalance { address: yang, amount: yang_amount }].span(),
-            forge_amount,
-            max_forge_fee_pct,
-        );
-
-    // Deposit additional collateral
-    cheat_caller_address(test_config.prior.contract_address, user, CheatSpan::TargetCalls(1));
-    abbot.deposit(trove_id, AssetBalance { address: yang, amount: deposit_amount });
-    // No panic = success
-}
-
-#[test]
-#[fork("MAINNET_VICARIATE")]
-#[should_panic(expected: "PRI: Not owner")]
-fn test_deposit_not_owner_reverts() {
-    let test_config = prior_utils::prior_deploy(None);
-    let user: ContractAddress = 'test user'.try_into().unwrap();
-    let other_user: ContractAddress = 'other user'.try_into().unwrap();
-    let yang = mainnet::ETH;
-    let yang_amount: u128 = 100000000000000000;
-    let forge_amount: Wad = 50000000_u128.into();
-    let max_forge_fee_pct: Wad = 1_u128.into();
-
-    let abbot = IAbbotDispatcher { contract_address: test_config.prior.contract_address };
-
-    // Setup
-    prior_utils::fund_user_eth(user, yang_amount.into());
-    prior_utils::approve_gate_for_user(test_config.eth_gate, yang, user);
-    prior_utils::approve_for_user(test_config.prior.contract_address, yang, user);
-
-    // Open trove
-    cheat_caller_address(test_config.prior.contract_address, user, CheatSpan::TargetCalls(1));
-    let trove_id = abbot
-        .open_trove(
-            array![AssetBalance { address: yang, amount: yang_amount }].span(),
-            forge_amount,
-            max_forge_fee_pct,
-        );
-
-    // Try deposit as other user
-    cheat_caller_address(test_config.prior.contract_address, other_user, CheatSpan::TargetCalls(1));
-    abbot.deposit(trove_id, AssetBalance { address: yang, amount: 1000 });
-}
-
-//
-// Test: IAbbot Interface - Withdraw
-//
-
-#[test]
-#[fork("MAINNET_VICARIATE")]
-#[should_panic(expected: "PRI: Not owner")]
-fn test_withdraw_not_owner_reverts() {
-    let test_config = prior_utils::prior_deploy(None);
-    let user: ContractAddress = 'test user'.try_into().unwrap();
-    let other_user: ContractAddress = 'other user'.try_into().unwrap();
-    let yang = mainnet::ETH;
-    let yang_amount: u128 = 100000000000000000;
-    let forge_amount: Wad = 50000000_u128.into();
-    let max_forge_fee_pct: Wad = 1_u128.into();
-
-    let abbot = IAbbotDispatcher { contract_address: test_config.prior.contract_address };
-
-    // Setup
-    prior_utils::fund_user_eth(user, yang_amount.into());
-    prior_utils::approve_gate_for_user(test_config.eth_gate, yang, user);
-    prior_utils::approve_for_user(test_config.prior.contract_address, yang, user);
-
-    // Open trove
-    cheat_caller_address(test_config.prior.contract_address, user, CheatSpan::TargetCalls(1));
-    let trove_id = abbot
-        .open_trove(
-            array![AssetBalance { address: yang, amount: yang_amount }].span(),
-            forge_amount,
-            max_forge_fee_pct,
-        );
-
-    // Try withdraw as other user
-    cheat_caller_address(test_config.prior.contract_address, other_user, CheatSpan::TargetCalls(1));
-    abbot.withdraw(trove_id, AssetBalance { address: yang, amount: 1000 });
-}
-
-//
-// Test: IAbbot Interface - Forge
-//
-
-#[test]
-#[fork("MAINNET_VICARIATE")]
-fn test_forge_success() {
-    let test_config = prior_utils::prior_deploy(None);
-    let user: ContractAddress = 'test user'.try_into().unwrap();
-    let yang = mainnet::ETH;
-    let yang_amount: u128 = 100000000000000000;
-    let forge_amount: Wad = 50000000_u128.into();
-    let max_forge_fee_pct: Wad = 1_u128.into();
-
-    let abbot = IAbbotDispatcher { contract_address: test_config.prior.contract_address };
-
-    // Setup
-    prior_utils::fund_user_eth(user, yang_amount.into());
-    prior_utils::approve_gate_for_user(test_config.eth_gate, yang, user);
-    prior_utils::approve_for_user(test_config.prior.contract_address, yang, user);
-
-    // Open trove with initial forge
-    cheat_caller_address(test_config.prior.contract_address, user, CheatSpan::TargetCalls(1));
-    let trove_id = abbot
-        .open_trove(
-            array![AssetBalance { address: yang, amount: yang_amount }].span(),
-            forge_amount,
-            max_forge_fee_pct,
-        );
-
-    // Forge additional CASH
-    let additional_forge: Wad = 10000_u128.into();
-    cheat_caller_address(test_config.prior.contract_address, user, CheatSpan::TargetCalls(1));
-    abbot.forge(trove_id, additional_forge, max_forge_fee_pct);
-    // No panic = success
-}
 
 //
 // Test: Get Trove ID by Index

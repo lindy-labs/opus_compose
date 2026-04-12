@@ -41,7 +41,7 @@ pub mod time_dca_rite {
         prior: IPriorDispatcher,
         time_dca_configs: Map<u64, TimeDcaConfig>,
         // Mapping of smart trove ID to the latest order's timestamp
-        latest_order_ts: Map<u64, u64>,
+        last_order_ts: Map<u64, u64>,
     }
 
     #[event]
@@ -142,8 +142,8 @@ pub mod time_dca_rite {
             }
 
             let current_ts: u64 = get_block_timestamp();
-            let latest_order_ts: u64 = self.latest_order_ts.read(trove_id);
-            let earliest_next_order_ts: u64 = latest_order_ts + config.conditions.order_frequency;
+            let last_order_ts: u64 = self.last_order_ts.read(trove_id);
+            let earliest_next_order_ts: u64 = last_order_ts + config.conditions.order_frequency;
             if earliest_next_order_ts >= current_ts {
                 self.ekubo_dca.has_ended(self.yin.read().contract_address, config.asset, trove_id)
             } else {
@@ -182,7 +182,7 @@ pub mod time_dca_rite {
                     config.conditions.amount,
                     RITE_ID(),
                 );
-            self.latest_order_ts.write(trove_id, get_block_timestamp());
+            self.last_order_ts.write(trove_id, get_block_timestamp());
         }
 
         fn end(ref self: ContractState, trove_id: u64) {
@@ -202,25 +202,6 @@ pub mod time_dca_rite {
 
     #[generate_trait]
     impl TimeDcaRiteHelpers of TimeDcaRiteHelpersTrait {
-        // Returns the order type based on
-        // 1. the configured frequency period has elapsed since the last order; and
-        // 2. the last order has completed (whether withdrawn or not).
-        fn get_order_type(self: @ContractState, trove_id: u64, config: TimeDcaConfig) -> OrderType {
-            // Zero frequency is used as a flag for disabling time-DCA
-            if config.conditions.order_frequency.is_zero() {
-                return OrderType::None;
-            }
-
-            let current_ts: u64 = get_block_timestamp();
-            let latest_order_ts: u64 = self.latest_order_ts.read(trove_id);
-            let earliest_next_order_ts: u64 = latest_order_ts + config.conditions.order_frequency;
-            // TODO
-            if earliest_next_order_ts >= current_ts {
-                config.conditions.order_type
-            } else {
-                OrderType::None
-            }
-        }
     }
 
     fn RITE_ID() -> ByteArray {

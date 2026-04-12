@@ -257,29 +257,32 @@ pub mod prior {
             let caller = get_caller_address();
             self.assert_smart_trove_owner(caller, trove_id);
 
-            let abbot = self.abbot.read();
             let yangs: Span<ContractAddress> = self.sentinel.read().get_yang_addresses();
-            let mut trove_assets: Array<AssetBalance> = Default::default();
-            for yang in yangs {
-                let amount = abbot.get_trove_asset_balance(trove_id, *yang);
-                if amount.is_non_zero() {
-                    trove_assets.append(AssetBalance { address: *yang, amount });
+            let prior = get_contract_address();
+
+            let shrine = self.shrine.read();
+            let yang_balances = shrine.get_trove_deposits(trove_id);
+            let mut before_balances: Array<AssetBalance> = Default::default();
+            for yang_balance in yang_balances {
+                if yang_balance.amount.is_non_zero() {
+                    let yang = *(yangs.at(*yang_balance.yang_id - 1));
+                    let before_amount: u256 = IERC20Dispatcher { contract_address: yang }.balance_of(prior);
+                    before_balances.append(AssetBalance { address: yang, amount: before_amount.try_into().unwrap() });
                 }
             }
 
             // Close trove in Abbot
-            let shrine = self.shrine.read();
             let yin = IERC20Dispatcher { contract_address: shrine.contract_address };
             let trove_health: Health = shrine.get_trove_health(trove_id);
-            let prior = get_contract_address();
+            let abbot = self.abbot.read();
             yin.transfer_from(caller, prior, trove_health.debt.into());
             abbot.close_trove(trove_id);
 
             // Transfer withdrawn assets to caller
-            for trove_asset in trove_assets {
-                let asset = IERC20Dispatcher { contract_address: trove_asset.address };
+            for before_balance in before_balances {
+                let asset = IERC20Dispatcher { contract_address: before_balance.address };
                 // Capped at the contract's balance as there may be loss of precision
-                let withdrawn: u256 = min(trove_asset.amount.into(), asset.balance_of(prior));
+                let withdrawn: u256 = min(before_balance.amount.into(), asset.balance_of(prior));
                 asset.transfer(caller, withdrawn);
             }
         }
@@ -297,10 +300,16 @@ pub mod prior {
             let caller: ContractAddress = get_caller_address();
             self.assert_smart_trove_owner(caller, trove_id);
 
+            // There may be precision loss between converting 
+            // asset to yang in Abbot, then back to asset in Gate.
+            let prior: ContractAddress = get_contract_address();
+            let yang_erc20 = IERC20Dispatcher { contract_address: yang_asset.address };
+            let before: u256 = yang_erc20.balance_of(prior);
             self.abbot.read().withdraw(trove_id, yang_asset);
+            let after: u256 = yang_erc20.balance_of(prior);
 
-            IERC20Dispatcher { contract_address: yang_asset.address }
-                .transfer(caller, yang_asset.amount.into());
+            let withdrawn: u256 = after - before;
+            yang_erc20.transfer(caller, withdrawn);
         }
 
         fn forge(ref self: ContractState, trove_id: u64, amount: Wad, max_forge_fee_pct: Wad) {

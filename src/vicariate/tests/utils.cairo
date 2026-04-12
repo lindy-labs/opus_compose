@@ -1,15 +1,21 @@
 pub mod prior_utils {
+    use core::num::traits::Zero;
     use ekubo::interfaces::erc20::{IERC20Dispatcher, IERC20DispatcherTrait};
     use opus::interfaces::{
-        IAbbotDispatcher, IGateDispatcher, ISentinelDispatcher, IShrineDispatcher,
+        IAbbotDispatcher, IAbbotDispatcherTrait, IGateDispatcher, ISentinelDispatcher, IShrineDispatcher,
     };
+    use opus::types::AssetBalance;
     use opus_compose::addresses::mainnet;
     use opus_compose::vicariate::interfaces::prior::IPriorDispatcher;
     use snforge_std::{
-        ContractClass, ContractClassTrait, DeclareResultTrait, declare, start_cheat_caller_address,
+        CheatSpan, cheat_caller_address, ContractClass, ContractClassTrait, DeclareResultTrait, declare, start_cheat_caller_address,
         stop_cheat_caller_address,
     };
     use starknet::ContractAddress;
+    use wadray::{WAD_ONE, Wad};
+
+    pub const USER: ContractAddress = 'user'.try_into().unwrap();
+    pub const BAD_GUY: ContractAddress = 'bad guy'.try_into().unwrap();
 
     #[derive(Copy, Drop)]
     pub struct PriorTestClasses {
@@ -84,5 +90,26 @@ pub mod prior_utils {
         start_cheat_caller_address(token, user);
         token_contract.approve(contract_addr, 0xFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFF);
         stop_cheat_caller_address(token);
+    }
+
+    pub fn open_trove_for_user(prior_abbot: IAbbotDispatcher, user: ContractAddress) -> u64 {
+        let yang = mainnet::ETH;
+        let yang_amount: u128 = WAD_ONE;
+        let forge_amount: Wad = (5 * WAD_ONE).into();
+        let max_forge_fee_pct: Wad = Zero::zero();
+
+        // Setup
+        fund_user_eth(user, yang_amount.into());
+        approve_gate_for_user(IGateDispatcher { contract_address: mainnet::ETH }, yang, user);
+        approve_for_user(prior_abbot.contract_address, yang, user);
+
+        // Open trove as user
+        cheat_caller_address(prior_abbot.contract_address, user, CheatSpan::TargetCalls(1));
+        prior_abbot
+            .open_trove(
+                array![AssetBalance { address: yang, amount: yang_amount }].span(),
+                forge_amount,
+                max_forge_fee_pct,
+            )
     }
 }

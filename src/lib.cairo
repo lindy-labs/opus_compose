@@ -81,8 +81,8 @@ pub mod vicariate {
 
     #[cfg(test)]
     pub mod tests {
-        //pub mod test_prior;
+        pub mod test_prior;
         pub mod test_types;
-        //pub mod utils;
+        pub mod utils;
     }
 }
