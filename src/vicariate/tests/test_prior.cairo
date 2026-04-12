@@ -7,8 +7,10 @@ use opus::utils::assertions::assert_equalish;
 use opus::types::{AssetBalance, Health};
 use opus_compose::addresses::mainnet;
 use opus_compose::interfaces::erc20::{IERC20Dispatcher, IERC20DispatcherTrait};
+use opus_compose::vicariate::contracts::prior::{prior as prior_contract};
 use opus_compose::vicariate::interfaces::prior::IPriorDispatcherTrait;
 use opus_compose::vicariate::tests::utils::prior_utils;
+use opus_compose::vicariate::types::SmartTroveConfig;
 use snforge_std::{CheatSpan, cheat_caller_address};
 use starknet::ContractAddress;
 use wadray::{RAY_ONE, Ray, WAD_ONE, Wad};
@@ -151,7 +153,6 @@ fn test_close_trove_not_owner_reverts() {
 
     let trove_id: u64 = prior_utils::open_trove_for_user(prior_abbot, user);
 
-    // Try to close as other_user
     cheat_caller_address(test_config.prior.contract_address, prior_utils::BAD_GUY, CheatSpan::TargetCalls(1));
     prior_abbot.close_trove(trove_id);
 }
@@ -269,7 +270,7 @@ fn test_forge_success() {
 
 #[test]
 #[fork("MAINNET_VICARIATE")]
-fn test_default_smart_trove_config() {
+fn test_default_config() {
     let test_config = prior_utils::prior_deploy(None);
     let user: ContractAddress = prior_utils::USER;
     let prior_abbot = IAbbotDispatcher { contract_address: test_config.prior.contract_address };
@@ -282,12 +283,50 @@ fn test_default_smart_trove_config() {
 
 #[test]
 #[fork("MAINNET_VICARIATE")]
-fn test_can_execute_rite_returns_false_no_trove() {
+fn test_set_config_capped() {
+    let test_config = prior_utils::prior_deploy(None);
+    let user: ContractAddress = prior_utils::USER;
+    let prior_abbot = IAbbotDispatcher { contract_address: test_config.prior.contract_address };
+    let trove_id: u64 = prior_utils::open_trove_for_user(prior_abbot, user);
+
+    // Set config with relative_threshold far beyond max (RAY_ONE)
+    let config = SmartTroveConfig {
+        relative_threshold: (prior_contract::MAX_RELATIVE_THRESHOLD + 1).into(),
+        max_forge_fee_pct: (prior_contract::MAX_FORGE_FEE_PCT + 1).into(),
+        incentive: (prior_contract::MAX_INCENTIVE + 1).into()
+    };
+
+    cheat_caller_address(test_config.prior.contract_address, user, CheatSpan::TargetCalls(1));
+    test_config.prior.set_trove_config(trove_id, config);
+
+    let stored = test_config.prior.get_trove_config(trove_id);
+    assert_eq!(stored.relative_threshold, prior_contract::MAX_RELATIVE_THRESHOLD.into(), "Relative threshold not capped");
+    assert_eq!(stored.max_forge_fee_pct, prior_contract::MAX_FORGE_FEE_PCT.into(), "Max forge fee % not capped");
+    assert_eq!(stored.incentive, prior_contract::MAX_INCENTIVE.into(), "Max incentive not capped");
+}
+
+#[test]
+#[fork("MAINNET_VICARIATE")]
+#[should_panic(expected: "PRI: Not owner")]
+fn test_set_config_not_owner() {
+    let test_config = prior_utils::prior_deploy(None);
+    let user: ContractAddress = prior_utils::USER;
+    let prior_abbot = IAbbotDispatcher { contract_address: test_config.prior.contract_address };
+    let trove_id: u64 = prior_utils::open_trove_for_user(prior_abbot, user);
+
+    // Config should exist but have default values
+    cheat_caller_address(test_config.prior.contract_address, prior_utils::BAD_GUY, CheatSpan::TargetCalls(1));
+    test_config.prior.set_trove_config(trove_id, Default::default());
+}
+
+#[test]
+#[fork("MAINNET_VICARIATE")]
+fn test_can_execute_rite_invalid_trove() {
     let test_config = prior_utils::prior_deploy(None);
 
     // No trove created - can_execute_rite should return false
     // (no rite attached, so is_ready would revert or return false)
-    let can_execute = test_config.prior.can_execute_rite(999);
+    let can_execute = test_config.prior.can_execute_rite(1);
     assert(!can_execute, 'can_execute should be false');
 }
 
