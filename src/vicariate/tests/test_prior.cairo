@@ -260,7 +260,28 @@ fn test_forge_success() {
     let after_balance: Wad = test_config.shrine.get_yin(user);
     let expected_balance: Wad = before_balance + forge_amount;
     assert_eq!(after_balance, expected_balance, "Wrong yin balance");
+}
 
+#[test]
+#[fork("MAINNET_VICARIATE")]
+fn test_melt_success() {
+    let test_config = prior_utils::prior_deploy(None);
+    let user: ContractAddress = prior_utils::USER;
+    let prior_abbot = IAbbotDispatcher { contract_address: test_config.prior.contract_address };
+    let trove_id: u64 = prior_utils::open_trove_for_user(prior_abbot, user);
+
+    let before_health: Health = test_config.shrine.get_trove_health(trove_id); 
+    
+    // Forge additional CASH
+    let melt_amount: Wad = (WAD_ONE / 10).into();
+    cheat_caller_address(test_config.shrine.contract_address, user, CheatSpan::TargetCalls(1));
+    IERC20Dispatcher { contract_address: test_config.shrine.contract_address }.approve(test_config.prior.contract_address, melt_amount.into());
+    cheat_caller_address(test_config.prior.contract_address, user, CheatSpan::TargetCalls(1));
+    prior_abbot.melt(trove_id, melt_amount);
+
+    let after_health: Health = test_config.shrine.get_trove_health(trove_id); 
+    let expected_debt: Wad = before_health.debt - melt_amount;
+    assert_eq!(after_health.debt, expected_debt, "Wrong debt");
 }
 
 
@@ -303,6 +324,42 @@ fn test_set_config_capped() {
     assert_eq!(stored.relative_threshold, prior_contract::MAX_RELATIVE_THRESHOLD.into(), "Relative threshold not capped");
     assert_eq!(stored.max_forge_fee_pct, prior_contract::MAX_FORGE_FEE_PCT.into(), "Max forge fee % not capped");
     assert_eq!(stored.incentive, prior_contract::MAX_INCENTIVE.into(), "Max incentive not capped");
+}
+
+#[test]
+#[fork("MAINNET_VICARIATE")]
+fn test_set_config_exact_max_values() {
+    let test_config = prior_utils::prior_deploy(None);
+    let user: ContractAddress = prior_utils::USER;
+    let prior_abbot = IAbbotDispatcher { contract_address: test_config.prior.contract_address };
+    let trove_id: u64 = prior_utils::open_trove_for_user(prior_abbot, user);
+
+    // Set each field exactly at its maximum — should be stored unchanged (no capping)
+    let config = SmartTroveConfig {
+        relative_threshold: prior_contract::MAX_RELATIVE_THRESHOLD.into(),
+        max_forge_fee_pct: prior_contract::MAX_FORGE_FEE_PCT.into(),
+        incentive: prior_contract::MAX_INCENTIVE.into(),
+    };
+
+    cheat_caller_address(test_config.prior.contract_address, user, CheatSpan::TargetCalls(1));
+    test_config.prior.set_trove_config(trove_id, config);
+
+    let stored = test_config.prior.get_trove_config(trove_id);
+    assert_eq!(
+        stored.relative_threshold,
+        prior_contract::MAX_RELATIVE_THRESHOLD.into(),
+        "relative_threshold changed at max",
+    );
+    assert_eq!(
+        stored.max_forge_fee_pct,
+        prior_contract::MAX_FORGE_FEE_PCT.into(),
+        "fee pct changed at max",
+    );
+    assert_eq!(
+        stored.incentive,
+        prior_contract::MAX_INCENTIVE.into(),
+        "incentive changed at max",
+    );
 }
 
 #[test]
