@@ -84,5 +84,8 @@ pub mod vicariate {
         pub mod test_prior;
         pub mod test_types;
         pub mod utils;
+        pub mod rites {
+            pub mod test_topup_rite;
+        }
     }
 }
