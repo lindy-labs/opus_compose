@@ -134,7 +134,7 @@ pub mod topup_rite {
 
                 assert!(
                     config.asset == cash || config.pool_params.tick_spacing.is_non_zero(),
-                    "{}: No swap path",
+                    "{}: Invalid pool params",
                     RITE_ID(),
                 );
                 assert!(
@@ -143,7 +143,7 @@ pub mod topup_rite {
                         .conditions
                         .min_asset_balance // Prevent multiple topups
                         ,
-                    "{}: Invalid topup amount",
+                    "{}: Topup amount less than minimum",
                     RITE_ID(),
                 );
                 assert!(config.destination.is_non_zero(), "{}: Invalid destination", RITE_ID());
