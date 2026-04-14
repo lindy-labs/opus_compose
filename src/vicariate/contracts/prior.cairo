@@ -281,8 +281,9 @@ pub mod prior {
             // Transfer withdrawn assets to caller
             for before_balance in before_balances {
                 let asset = IERC20Dispatcher { contract_address: before_balance.address };
+                let after: u256 = asset.balance_of(prior);
                 // Capped at the contract's balance as there may be loss of precision
-                let withdrawn: u256 = min(before_balance.amount.into(), asset.balance_of(prior));
+                let withdrawn: u256 = after - before_balance.amount.into();
                 asset.transfer(caller, withdrawn);
             }
         }
