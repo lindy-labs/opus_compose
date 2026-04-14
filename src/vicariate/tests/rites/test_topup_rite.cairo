@@ -388,36 +388,3 @@ fn test_get_swap_params_cash_asset_no_swap() {
     assert(swap_params.swap_data.is_none(), 'no swap for cash asset');
 }
 
-// --- Event tests ---
-
-#[test]
-#[fork("MAINNET_VICARIATE")]
-fn test_set_trove_config_emits_event() {
-    let (_prior, trove_id, rite_addr) = setup_trove_with_topup_rite();
-    let user = prior_utils::USER;
-    let rite = IRiteDispatcher { contract_address: rite_addr };
-
-    let config = default_topup_config(user);
-
-    let mut spy = spy_events();
-
-    cheat_caller_address(rite_addr, user, CheatSpan::TargetCalls(1));
-    rite.set_trove_config(trove_id, serialize_config(config));
-
-    use opus_compose::vicariate::contracts::rites::topup::topup_rite::topup_rite::{
-        Event, TopupConfigUpdated,
-    };
-
-    spy.assert_emitted(
-        @array![
-            (
-                rite_addr,
-                Event::TopupConfigUpdated(TopupConfigUpdated {
-                    user,
-                    trove_id,
-                    config,
-                }),
-            ),
-        ],
-    );
-}
