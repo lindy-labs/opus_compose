@@ -144,7 +144,7 @@ pub mod time_dca_rite {
             let current_ts: u64 = get_block_timestamp();
             let last_order_ts: u64 = self.last_order_ts.read(trove_id);
             let earliest_next_order_ts: u64 = last_order_ts + config.conditions.order_frequency;
-            if earliest_next_order_ts >= current_ts {
+            if current_ts >= earliest_next_order_ts {
                 self.ekubo_dca.has_ended(self.yin.read().contract_address, config.asset, trove_id)
             } else {
                 false
