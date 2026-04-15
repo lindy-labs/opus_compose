@@ -19,7 +19,7 @@ use snforge_std::{
     cheat_caller_address, declare, spy_events,
 };
 use starknet::ContractAddress;
-use wadray::{RAY_PERCENT, Ray, Wad, WAD_ONE};
+use wadray::{RAY_PERCENT, Ray, rmul_wr, Wad, WAD_ONE};
 
 
 //
@@ -216,79 +216,6 @@ fn test_disable_trove_config() {
 
 #[test]
 #[fork("MAINNET_VICARIATE")]
-fn test_cash_topup() {
-    let (prior, trove_id, rite_addr) = setup_trove_with_topup_rite();
-    let user = prior_utils::USER;
-    let rite = IRiteDispatcher { contract_address: rite_addr };
-
-    let mut spy = spy_events();
-
-    let mut config = default_topup_config(user);
-    let cash = IERC20Dispatcher { contract_address: mainnet::SHRINE };
-    let shrine = IShrineDispatcher { contract_address: mainnet::SHRINE };
-    let before_user_cash_balance: u128 = cash.balance_of(user).try_into().unwrap();
-    let before_trove_health: Health = shrine.get_trove_health(trove_id);
-
-    config.conditions.min_asset_balance = before_user_cash_balance + 1;
-
-    cheat_caller_address(rite_addr, user, CheatSpan::TargetCalls(1));
-    rite.set_trove_config(trove_id, serialize_config(config));
-
-    assert_eq!(prior.get_rite(trove_id), rite_addr, "Rite not set");
-    assert!(prior.can_execute_rite(trove_id), "Rite should be ready");
-    assert!(rite.is_ready(trove_id), "Rite should be ready #2");
-    assert!(rite.has_ended(trove_id), "Rite should have ended");
-
-    cheat_caller_address(prior.contract_address, user, CheatSpan::TargetCalls(1));
-    prior.execute_rite(trove_id);
-
-    let after_user_cash_balance: u128 = cash.balance_of(user).try_into().unwrap();
-    let expected_user_cash_balance: u128 = before_user_cash_balance + config.topup_amount;
-    assert_eq!(after_user_cash_balance, expected_user_cash_balance, "Topup did not happen");
-    
-    let after_trove_health: Health = shrine.get_trove_health(trove_id);
-    let expected_trove_debt: Wad = before_trove_health.debt + config.topup_amount.into();
-    assert_eq!(after_trove_health.debt, expected_trove_debt, "Wrong trove debt");
-
-    assert!(!prior.can_execute_rite(trove_id), "Rite should not be ready");
-    assert!(!rite.is_ready(trove_id), "Rite should not be ready #2");
-    assert!(rite.has_ended(trove_id), "Rite should have ended #2");
-
-    spy.assert_emitted(
-        @array![
-            (
-                rite_addr,
-                topup_rite_contract::Event::TopupExecuted(topup_rite_contract::TopupExecuted {
-                    trove_id,
-                    forge_amount: config.topup_amount.into(),
-                    refunded: Zero::zero(),
-                    asset: cash.contract_address,
-                    topup_amount: config.topup_amount,
-                    destination: user,
-                }),
-            ),
-            
-        ],
-    );
-    spy.assert_emitted(
-        @array![
-            (
-                prior.contract_address,
-                prior_contract::Event::RiteExecuted(prior_contract::RiteExecuted {
-                    caller: user,
-                    trove_id,
-                    rite: rite_addr,
-                    incentive: Zero::zero()
-                }),
-            ),
-       ],
-   );
-}
-
-
-
-#[test]
-#[fork("MAINNET_VICARIATE")]
 fn test_set_trove_config_max_slippage() {
     let (_prior, trove_id, rite_addr) = setup_trove_with_topup_rite();
     let user = prior_utils::USER;
@@ -467,20 +394,171 @@ fn test_end_non_prior_caller_reverts() {
 
 #[test]
 #[fork("MAINNET_VICARIATE")]
-fn test_get_swap_params_cash_asset_no_swap() {
-    let (_prior, trove_id, rite_addr) = setup_trove_with_topup_rite();
+fn test_cash_topup() {
+    let (prior, trove_id, rite_addr) = setup_trove_with_topup_rite();
     let user = prior_utils::USER;
     let rite = IRiteDispatcher { contract_address: rite_addr };
 
-    let config = default_topup_config(user);
+    let mut spy = spy_events();
+
+    let mut config = default_topup_config(user);
+    let cash = IERC20Dispatcher { contract_address: mainnet::SHRINE };
+    let shrine = IShrineDispatcher { contract_address: mainnet::SHRINE };
+    let before_user_cash_balance: u128 = cash.balance_of(user).try_into().unwrap();
+    let before_trove_health: Health = shrine.get_trove_health(trove_id);
+
+    config.conditions.min_asset_balance = before_user_cash_balance + 1;
+
     cheat_caller_address(rite_addr, user, CheatSpan::TargetCalls(1));
     rite.set_trove_config(trove_id, serialize_config(config));
+
+    assert_eq!(prior.get_rite(trove_id), rite_addr, "Rite not set");
+    assert!(prior.can_execute_rite(trove_id), "Rite should be ready");
+    assert!(rite.is_ready(trove_id), "Rite should be ready #2");
+    assert!(rite.has_ended(trove_id), "Rite should have ended");
 
     let topup = ITopupRiteDispatcher { contract_address: rite_addr };
     let swap_params = topup.get_swap_params(trove_id);
 
     let forge_amount: u128 = swap_params.forge_amount.into();
-    assert(forge_amount == 10 * WAD_ONE, 'forge should be topup_amt');
-    assert(swap_params.swap_data.is_none(), 'no swap for cash asset');
+    assert_eq!(forge_amount, config.topup_amount, "Wrong forge amonut");
+    assert!(swap_params.swap_data.is_none(), "Wrong swap data");
+
+    cheat_caller_address(prior.contract_address, user, CheatSpan::TargetCalls(1));
+    prior.execute_rite(trove_id);
+
+    let after_user_cash_balance: u128 = cash.balance_of(user).try_into().unwrap();
+    let expected_user_cash_balance: u128 = before_user_cash_balance + config.topup_amount;
+    assert_eq!(after_user_cash_balance, expected_user_cash_balance, "Topup did not happen");
+    
+    let after_trove_health: Health = shrine.get_trove_health(trove_id);
+    let expected_trove_debt: Wad = before_trove_health.debt + config.topup_amount.into();
+    assert_eq!(after_trove_health.debt, expected_trove_debt, "Wrong trove debt");
+
+    assert!(!prior.can_execute_rite(trove_id), "Rite should not be ready");
+    assert!(!rite.is_ready(trove_id), "Rite should not be ready #2");
+    assert!(rite.has_ended(trove_id), "Rite should have ended #2");
+
+    spy.assert_emitted(
+        @array![
+            (
+                rite_addr,
+                topup_rite_contract::Event::TopupExecuted(topup_rite_contract::TopupExecuted {
+                    trove_id,
+                    forge_amount: config.topup_amount.into(),
+                    refunded: Zero::zero(),
+                    asset: cash.contract_address,
+                    topup_amount: config.topup_amount,
+                    destination: user,
+                }),
+            ),
+            
+        ],
+    );
+    spy.assert_emitted(
+        @array![
+            (
+                prior.contract_address,
+                prior_contract::Event::RiteExecuted(prior_contract::RiteExecuted {
+                    caller: user,
+                    trove_id,
+                    rite: rite_addr,
+                    incentive: Zero::zero()
+                }),
+            ),
+       ],
+   );
 }
 
+#[test]
+#[fork("MAINNET_VICARIATE")]
+fn test_usdc_topup() {
+    let (prior, trove_id, rite_addr) = setup_trove_with_topup_rite();
+    let user = prior_utils::USER;
+    let rite = IRiteDispatcher { contract_address: rite_addr };
+
+    let mut spy = spy_events();
+
+    let slippage: Ray = RAY_PERCENT.into();
+    let config = TopupConfig {
+        asset: mainnet::USDC,
+        pool_params: EkuboPoolParams {
+            fee: 6805647338418769825990228293189632,
+            tick_spacing: 20,
+            extension: Zero::zero(),
+        },
+        conditions: TopupConditions {
+            min_asset_balance: 5000000, // 5 USDC
+            slippage
+        },
+        topup_amount: 10000000, // 10 USDC
+        destination: user,
+    };
+
+    cheat_caller_address(rite_addr, user, CheatSpan::TargetCalls(1));
+    rite.set_trove_config(trove_id, serialize_config(config));
+
+    assert_eq!(prior.get_rite(trove_id), rite_addr, "Rite not set");
+    assert!(prior.can_execute_rite(trove_id), "Rite should be ready");
+    assert!(rite.is_ready(trove_id), "Rite should be ready #2");
+    assert!(rite.has_ended(trove_id), "Rite should have ended");
+
+    let usdc = IERC20Dispatcher { contract_address: mainnet::USDC };
+    let shrine = IShrineDispatcher { contract_address: mainnet::SHRINE };
+    let before_user_usdc_balance: u128 = usdc.balance_of(user).try_into().unwrap();
+    let before_trove_health: Health = shrine.get_trove_health(trove_id);
+
+    let topup = ITopupRiteDispatcher { contract_address: rite_addr };
+    let swap_params = topup.get_swap_params(trove_id);
+
+    let forge_amount: u128 = swap_params.forge_amount.into();
+    assert!(forge_amount.is_non_zero(), "Wrong forge amonut");
+    assert!(swap_params.swap_data.is_some(), "Wrong swap data");
+
+    cheat_caller_address(prior.contract_address, user, CheatSpan::TargetCalls(1));
+    prior.execute_rite(trove_id);
+
+    let after_user_usdc_balance: u128 = usdc.balance_of(user).try_into().unwrap();
+    let expected_user_usdc_balance: u128 = before_user_usdc_balance + config.topup_amount;
+    assert_eq!(after_user_usdc_balance, expected_user_usdc_balance, "Topup did not happen");
+    
+    let after_trove_health: Health = shrine.get_trove_health(trove_id);
+    let expected_trove_debt: Wad = before_trove_health.debt + forge_amount.into();
+    assert_eq!(after_trove_health.debt, expected_trove_debt, "Wrong trove debt");
+
+    assert!(!prior.can_execute_rite(trove_id), "Rite should not be ready");
+    assert!(!rite.is_ready(trove_id), "Rite should not be ready #2");
+    assert!(rite.has_ended(trove_id), "Rite should have ended #2");
+
+    let expected_refunded: Wad = rmul_wr(forge_amount.into(), slippage);
+    let expected_forge_amount: Wad = forge_amount.into() + expected_refunded;
+    spy.assert_emitted(
+        @array![
+            (
+                rite_addr,
+                topup_rite_contract::Event::TopupExecuted(topup_rite_contract::TopupExecuted {
+                    trove_id,
+                    forge_amount: expected_forge_amount,
+                    refunded: expected_refunded,
+                    asset: usdc.contract_address,
+                    topup_amount: config.topup_amount,
+                    destination: user,
+                }),
+            ),
+            
+        ],
+    );
+    spy.assert_emitted(
+        @array![
+            (
+                prior.contract_address,
+                prior_contract::Event::RiteExecuted(prior_contract::RiteExecuted {
+                    caller: user,
+                    trove_id,
+                    rite: rite_addr,
+                    incentive: Zero::zero()
+                }),
+            ),
+       ],
+   );
+}
