@@ -295,7 +295,8 @@ pub mod topup_rite {
                     pool_price.sqrt_ratio, slippage, cash_is_token0,
                 );
                 let route_node = RouteNode { pool_key, sqrt_ratio_limit, skip_ahead: 0 };
-                // Set amount to negative for exact output swap i.e. amount you want to get out of the pool
+                // Set amount to negative for exact output swap i.e. amount you want to get out of
+                // the pool
                 let token_amount = TokenAmount { token: asset, amount: -(topup_amount.into()) };
                 let quote_delta: Delta = ekubo_router.quote_swap(route_node, token_amount);
                 // Amount is positive i.e. amount you need to provide to the pool

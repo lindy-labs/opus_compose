@@ -201,8 +201,7 @@ pub mod time_dca_rite {
     }
 
     #[generate_trait]
-    impl TimeDcaRiteHelpers of TimeDcaRiteHelpersTrait {
-    }
+    impl TimeDcaRiteHelpers of TimeDcaRiteHelpersTrait {}
 
     fn RITE_ID() -> ByteArray {
         "TIME_DCA"

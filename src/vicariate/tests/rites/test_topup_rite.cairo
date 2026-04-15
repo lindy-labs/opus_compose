@@ -4,26 +4,26 @@ use opus::types::Health;
 use opus_compose::addresses::mainnet;
 use opus_compose::interfaces::erc20::{IERC20Dispatcher, IERC20DispatcherTrait};
 use opus_compose::shared::components::src5::{ISRC5Dispatcher, ISRC5DispatcherTrait};
-use opus_compose::vicariate::contracts::prior::{prior as prior_contract};
+use opus_compose::vicariate::contracts::prior::prior as prior_contract;
 use opus_compose::vicariate::contracts::rites::topup::constants::MAX_SLIPPAGE;
 use opus_compose::vicariate::contracts::rites::topup::topup_rite::{
-    ITopupRiteDispatcher, ITopupRiteDispatcherTrait, topup_rite as topup_rite_contract
+    ITopupRiteDispatcher, ITopupRiteDispatcherTrait, topup_rite as topup_rite_contract,
 };
 use opus_compose::vicariate::contracts::rites::topup::types::{TopupConditions, TopupConfig};
 use opus_compose::vicariate::contracts::rites::types::EkuboPoolParams;
 use opus_compose::vicariate::interfaces::prior::{IPriorDispatcher, IPriorDispatcherTrait};
-use opus_compose::vicariate::interfaces::rite::{IRiteDispatcher, IRiteDispatcherTrait, IRITE_ID};
+use opus_compose::vicariate::interfaces::rite::{IRITE_ID, IRiteDispatcher, IRiteDispatcherTrait};
 use opus_compose::vicariate::tests::utils::prior_utils;
 use snforge_std::{
     CheatSpan, ContractClassTrait, DeclareResultTrait, EventSpyAssertionsTrait,
     cheat_caller_address, declare, spy_events,
 };
 use starknet::ContractAddress;
-use wadray::{RAY_PERCENT, Ray, rmul_wr, Wad, WAD_ONE};
+use wadray::{RAY_PERCENT, Ray, WAD_ONE, Wad, rmul_wr};
 
 
 //
-// Helpers 
+// Helpers
 //
 
 fn deploy_topup_rite(prior_address: ContractAddress) -> ContractAddress {
@@ -47,8 +47,7 @@ fn default_topup_config(destination: ContractAddress) -> TopupConfig {
         asset: mainnet::SHRINE,
         pool_params: default_pool_params(),
         conditions: TopupConditions {
-            min_asset_balance: 5 * WAD_ONE,
-            slippage: RAY_PERCENT.into(),
+            min_asset_balance: 5 * WAD_ONE, slippage: RAY_PERCENT.into(),
         },
         topup_amount: 10 * WAD_ONE,
         destination,
@@ -62,8 +61,7 @@ fn serialize_config(config: TopupConfig) -> Span<felt252> {
 }
 
 // Open a trove via Prior, deploy a topup rite, and attach it.
-fn setup_trove_with_topup_rite()
--> (IPriorDispatcher, u64, ContractAddress) {
+fn setup_trove_with_topup_rite() -> (IPriorDispatcher, u64, ContractAddress) {
     let test_config = prior_utils::prior_deploy(None);
     let user = prior_utils::USER;
 
@@ -73,9 +71,7 @@ fn setup_trove_with_topup_rite()
     let rite_addr = deploy_topup_rite(test_config.prior.contract_address);
 
     // Attach rite to trove
-    cheat_caller_address(
-        test_config.prior.contract_address, user, CheatSpan::TargetCalls(2),
-    );
+    cheat_caller_address(test_config.prior.contract_address, user, CheatSpan::TargetCalls(2));
     test_config.prior.set_rite(trove_id, rite_addr);
     test_config.prior.set_trove_config(trove_id, prior_utils::BASE_TROVE_CONFIG());
 
@@ -94,7 +90,10 @@ fn test_topup_rite_constructor() {
     let rite = IRiteDispatcher { contract_address: rite_addr };
 
     assert!(rite.get_rite_id() == "TOPUP", "wrong rite id");
-    assert!(ISRC5Dispatcher { contract_address: rite_addr }.supports_interface(IRITE_ID), "Rite SRC5 ID not supported");
+    assert!(
+        ISRC5Dispatcher { contract_address: rite_addr }.supports_interface(IRITE_ID),
+        "Rite SRC5 ID not supported",
+    );
 }
 
 #[test]
@@ -151,30 +150,28 @@ fn test_balance_above_minimum_asset_balance() {
     assert!(!rite.is_ready(trove_id), "Rite should not be ready #2");
     assert!(rite.has_ended(trove_id), "Rite should have ended");
 
-    spy.assert_emitted(
-        @array![
-            (
-                rite_addr,
-                topup_rite_contract::Event::TopupConfigUpdated(topup_rite_contract::TopupConfigUpdated {
-                    user,
-                    trove_id,
-                    config,
-                }),
-            ),
-        ],
-    );
-    spy.assert_emitted(
-        @array![
-            (
-                prior.contract_address,
-                prior_contract::Event::RiteSet(prior_contract::RiteSet {
-                    user,
-                    trove_id,
-                    rite: rite_addr,
-                }),
-            ),
-        ],
-    );
+    spy
+        .assert_emitted(
+            @array![
+                (
+                    rite_addr,
+                    topup_rite_contract::Event::TopupConfigUpdated(
+                        topup_rite_contract::TopupConfigUpdated { user, trove_id, config },
+                    ),
+                ),
+            ],
+        );
+    spy
+        .assert_emitted(
+            @array![
+                (
+                    prior.contract_address,
+                    prior_contract::Event::RiteSet(
+                        prior_contract::RiteSet { user, trove_id, rite: rite_addr },
+                    ),
+                ),
+            ],
+        );
 }
 
 #[test]
@@ -199,19 +196,18 @@ fn test_disable_trove_config() {
     assert!(!prior.can_execute_rite(trove_id), "Rite should not be ready");
     assert!(!rite.is_ready(trove_id), "Rite should not be ready #2");
     assert!(rite.has_ended(trove_id), "Rite should have ended");
-    
-    spy.assert_emitted(
-        @array![
-            (
-                rite_addr,
-                topup_rite_contract::Event::TopupConfigUpdated(topup_rite_contract::TopupConfigUpdated {
-                    user,
-                    trove_id,
-                    config,
-                }),
-            ),
-        ],
-    );
+
+    spy
+        .assert_emitted(
+            @array![
+                (
+                    rite_addr,
+                    topup_rite_contract::Event::TopupConfigUpdated(
+                        topup_rite_contract::TopupConfigUpdated { user, trove_id, config },
+                    ),
+                ),
+            ],
+        );
 }
 
 #[test]
@@ -222,8 +218,10 @@ fn test_set_trove_config_max_slippage() {
     let rite = IRiteDispatcher { contract_address: rite_addr };
 
     let config = TopupConfig {
-        conditions: TopupConditions { slippage: MAX_SLIPPAGE.into(), ..default_topup_config(user).conditions },
-        ..default_topup_config(user)
+        conditions: TopupConditions {
+            slippage: MAX_SLIPPAGE.into(), ..default_topup_config(user).conditions,
+        },
+        ..default_topup_config(user),
     };
 
     cheat_caller_address(rite_addr, user, CheatSpan::TargetCalls(1));
@@ -245,8 +243,10 @@ fn test_set_trove_config_zero_slippage_reverts() {
     let rite = IRiteDispatcher { contract_address: rite_addr };
 
     let config = TopupConfig {
-        conditions: TopupConditions { slippage: Zero::zero(), ..default_topup_config(user).conditions },
-        ..default_topup_config(user)
+        conditions: TopupConditions {
+            slippage: Zero::zero(), ..default_topup_config(user).conditions,
+        },
+        ..default_topup_config(user),
     };
 
     cheat_caller_address(rite_addr, user, CheatSpan::TargetCalls(1));
@@ -263,10 +263,9 @@ fn test_set_trove_config_slippage_exceeds_max_reverts() {
 
     let config = TopupConfig {
         conditions: TopupConditions {
-            slippage: (MAX_SLIPPAGE + 1).into(),
-            ..default_topup_config(user).conditions
+            slippage: (MAX_SLIPPAGE + 1).into(), ..default_topup_config(user).conditions,
         },
-        ..default_topup_config(user)
+        ..default_topup_config(user),
     };
 
     cheat_caller_address(rite_addr, user, CheatSpan::TargetCalls(1));
@@ -311,7 +310,7 @@ fn test_set_trove_config_no_swap_path_reverts() {
     let config = TopupConfig {
         asset: mainnet::USDC,
         pool_params: EkuboPoolParams { fee: 3000_u128, tick_spacing: 0, extension: Zero::zero() },
-        ..default_topup_config(user)
+        ..default_topup_config(user),
     };
 
     cheat_caller_address(rite_addr, user, CheatSpan::TargetCalls(1));
@@ -328,7 +327,7 @@ fn test_set_trove_config_topup_amount_below_min_balance_reverts() {
 
     let config = TopupConfig {
         topup_amount: 1 * WAD_ONE, // below min_asset_balance (5 * WAD_ONE)
-        ..default_topup_config(user)
+        ..default_topup_config(user),
     };
 
     cheat_caller_address(rite_addr, user, CheatSpan::TargetCalls(1));
@@ -430,7 +429,7 @@ fn test_cash_topup() {
     let after_user_cash_balance: u128 = cash.balance_of(user).try_into().unwrap();
     let expected_user_cash_balance: u128 = before_user_cash_balance + config.topup_amount;
     assert_eq!(after_user_cash_balance, expected_user_cash_balance, "Topup did not happen");
-    
+
     let after_trove_health: Health = shrine.get_trove_health(trove_id);
     let expected_trove_debt: Wad = before_trove_health.debt + config.topup_amount.into();
     assert_eq!(after_trove_health.debt, expected_trove_debt, "Wrong trove debt");
@@ -439,35 +438,37 @@ fn test_cash_topup() {
     assert!(!rite.is_ready(trove_id), "Rite should not be ready #2");
     assert!(rite.has_ended(trove_id), "Rite should have ended #2");
 
-    spy.assert_emitted(
-        @array![
-            (
-                rite_addr,
-                topup_rite_contract::Event::TopupExecuted(topup_rite_contract::TopupExecuted {
-                    trove_id,
-                    forge_amount: config.topup_amount.into(),
-                    refunded: Zero::zero(),
-                    asset: cash.contract_address,
-                    topup_amount: config.topup_amount,
-                    destination: user,
-                }),
-            ),
-            
-        ],
-    );
-    spy.assert_emitted(
-        @array![
-            (
-                prior.contract_address,
-                prior_contract::Event::RiteExecuted(prior_contract::RiteExecuted {
-                    caller: user,
-                    trove_id,
-                    rite: rite_addr,
-                    incentive: Zero::zero()
-                }),
-            ),
-       ],
-   );
+    spy
+        .assert_emitted(
+            @array![
+                (
+                    rite_addr,
+                    topup_rite_contract::Event::TopupExecuted(
+                        topup_rite_contract::TopupExecuted {
+                            trove_id,
+                            forge_amount: config.topup_amount.into(),
+                            refunded: Zero::zero(),
+                            asset: cash.contract_address,
+                            topup_amount: config.topup_amount,
+                            destination: user,
+                        },
+                    ),
+                ),
+            ],
+        );
+    spy
+        .assert_emitted(
+            @array![
+                (
+                    prior.contract_address,
+                    prior_contract::Event::RiteExecuted(
+                        prior_contract::RiteExecuted {
+                            caller: user, trove_id, rite: rite_addr, incentive: Zero::zero(),
+                        },
+                    ),
+                ),
+            ],
+        );
 }
 
 #[test]
@@ -483,14 +484,10 @@ fn test_usdc_topup() {
     let config = TopupConfig {
         asset: mainnet::USDC,
         pool_params: EkuboPoolParams {
-            fee: 6805647338418769825990228293189632,
-            tick_spacing: 20,
-            extension: Zero::zero(),
+            fee: 6805647338418769825990228293189632, tick_spacing: 20, extension: Zero::zero(),
         },
-        conditions: TopupConditions {
-            min_asset_balance: 5000000, // 5 USDC
-            slippage
-        },
+        conditions: TopupConditions { min_asset_balance: 5000000, // 5 USDC
+        slippage },
         topup_amount: 10000000, // 10 USDC
         destination: user,
     };
@@ -521,7 +518,7 @@ fn test_usdc_topup() {
     let after_user_usdc_balance: u128 = usdc.balance_of(user).try_into().unwrap();
     let expected_user_usdc_balance: u128 = before_user_usdc_balance + config.topup_amount;
     assert_eq!(after_user_usdc_balance, expected_user_usdc_balance, "Topup did not happen");
-    
+
     let after_trove_health: Health = shrine.get_trove_health(trove_id);
     let expected_trove_debt: Wad = before_trove_health.debt + forge_amount.into();
     assert_eq!(after_trove_health.debt, expected_trove_debt, "Wrong trove debt");
@@ -532,33 +529,35 @@ fn test_usdc_topup() {
 
     let expected_refunded: Wad = rmul_wr(forge_amount.into(), slippage);
     let expected_forge_amount: Wad = forge_amount.into() + expected_refunded;
-    spy.assert_emitted(
-        @array![
-            (
-                rite_addr,
-                topup_rite_contract::Event::TopupExecuted(topup_rite_contract::TopupExecuted {
-                    trove_id,
-                    forge_amount: expected_forge_amount,
-                    refunded: expected_refunded,
-                    asset: usdc.contract_address,
-                    topup_amount: config.topup_amount,
-                    destination: user,
-                }),
-            ),
-            
-        ],
-    );
-    spy.assert_emitted(
-        @array![
-            (
-                prior.contract_address,
-                prior_contract::Event::RiteExecuted(prior_contract::RiteExecuted {
-                    caller: user,
-                    trove_id,
-                    rite: rite_addr,
-                    incentive: Zero::zero()
-                }),
-            ),
-       ],
-   );
+    spy
+        .assert_emitted(
+            @array![
+                (
+                    rite_addr,
+                    topup_rite_contract::Event::TopupExecuted(
+                        topup_rite_contract::TopupExecuted {
+                            trove_id,
+                            forge_amount: expected_forge_amount,
+                            refunded: expected_refunded,
+                            asset: usdc.contract_address,
+                            topup_amount: config.topup_amount,
+                            destination: user,
+                        },
+                    ),
+                ),
+            ],
+        );
+    spy
+        .assert_emitted(
+            @array![
+                (
+                    prior.contract_address,
+                    prior_contract::Event::RiteExecuted(
+                        prior_contract::RiteExecuted {
+                            caller: user, trove_id, rite: rite_addr, incentive: Zero::zero(),
+                        },
+                    ),
+                ),
+            ],
+        );
 }

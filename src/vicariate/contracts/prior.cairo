@@ -266,8 +266,14 @@ pub mod prior {
             for yang_balance in yang_balances {
                 if yang_balance.amount.is_non_zero() {
                     let yang = *(yangs.at(*yang_balance.yang_id - 1));
-                    let before_amount: u256 = IERC20Dispatcher { contract_address: yang }.balance_of(prior);
-                    before_balances.append(AssetBalance { address: yang, amount: before_amount.try_into().unwrap() });
+                    let before_amount: u256 = IERC20Dispatcher { contract_address: yang }
+                        .balance_of(prior);
+                    before_balances
+                        .append(
+                            AssetBalance {
+                                address: yang, amount: before_amount.try_into().unwrap(),
+                            },
+                        );
                 }
             }
 
@@ -301,7 +307,7 @@ pub mod prior {
             let caller: ContractAddress = get_caller_address();
             self.assert_smart_trove_owner(caller, trove_id);
 
-            // There may be precision loss between converting 
+            // There may be precision loss between converting
             // asset to yang in Abbot, then back to asset in Gate.
             let prior: ContractAddress = get_contract_address();
             let yang_erc20 = IERC20Dispatcher { contract_address: yang_asset.address };

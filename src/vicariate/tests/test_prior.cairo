@@ -3,11 +3,11 @@ use opus::interfaces::{
     IAbbotDispatcher, IAbbotDispatcherTrait, IGateDispatcher, IGateDispatcherTrait,
     IShrineDispatcherTrait,
 };
-use opus::utils::assertions::assert_equalish;
 use opus::types::{AssetBalance, Health};
+use opus::utils::assertions::assert_equalish;
 use opus_compose::addresses::mainnet;
 use opus_compose::interfaces::erc20::{IERC20Dispatcher, IERC20DispatcherTrait};
-use opus_compose::vicariate::contracts::prior::{prior as prior_contract};
+use opus_compose::vicariate::contracts::prior::prior as prior_contract;
 use opus_compose::vicariate::interfaces::prior::IPriorDispatcherTrait;
 use opus_compose::vicariate::tests::utils::prior_utils;
 use opus_compose::vicariate::types::SmartTroveConfig;
@@ -126,7 +126,8 @@ fn test_close_trove_success() {
 
     // Close trove
     cheat_caller_address(test_config.shrine.contract_address, user, CheatSpan::TargetCalls(1));
-    IERC20Dispatcher { contract_address: test_config.shrine.contract_address }.approve(test_config.prior.contract_address, forge_amount.into());
+    IERC20Dispatcher { contract_address: test_config.shrine.contract_address }
+        .approve(test_config.prior.contract_address, forge_amount.into());
     cheat_caller_address(test_config.prior.contract_address, user, CheatSpan::TargetCalls(1));
     prior_abbot.close_trove(trove_id);
 
@@ -153,7 +154,9 @@ fn test_close_trove_not_owner_reverts() {
 
     let trove_id: u64 = prior_utils::open_trove_for_user(prior_abbot, user);
 
-    cheat_caller_address(test_config.prior.contract_address, prior_utils::BAD_GUY, CheatSpan::TargetCalls(1));
+    cheat_caller_address(
+        test_config.prior.contract_address, prior_utils::BAD_GUY, CheatSpan::TargetCalls(1),
+    );
     prior_abbot.close_trove(trove_id);
 }
 
@@ -169,7 +172,7 @@ fn test_deposit_success() {
 
     let trove_id: u64 = prior_utils::open_trove_for_user(prior_abbot, user);
     let before_yang_deposit: Wad = test_config.shrine.get_deposit(yang, trove_id);
-    
+
     // Deposit additional collateral
     prior_utils::fund_user_eth(user, deposit_amount.into());
     prior_utils::approve_gate_for_user(test_config.eth_gate, yang, user);
@@ -179,7 +182,9 @@ fn test_deposit_success() {
     let after_yang_deposit: Wad = test_config.shrine.get_deposit(yang, trove_id);
     let expected_yang_deposit: Wad = before_yang_deposit + deposit_amount.into();
     let error_margin: Wad = 20_u128.into();
-    assert_equalish(after_yang_deposit, expected_yang_deposit, error_margin, 'Wrong yang deposit amount');
+    assert_equalish(
+        after_yang_deposit, expected_yang_deposit, error_margin, 'Wrong yang deposit amount',
+    );
 }
 
 #[test]
@@ -193,8 +198,10 @@ fn test_deposit_not_owner_reverts() {
 
     let prior_abbot = IAbbotDispatcher { contract_address: test_config.prior.contract_address };
     let trove_id: u64 = prior_utils::open_trove_for_user(prior_abbot, user);
-    
-    cheat_caller_address(test_config.prior.contract_address, prior_utils::BAD_GUY, CheatSpan::TargetCalls(1));
+
+    cheat_caller_address(
+        test_config.prior.contract_address, prior_utils::BAD_GUY, CheatSpan::TargetCalls(1),
+    );
     prior_abbot.deposit(trove_id, AssetBalance { address: yang, amount: deposit_amount });
 }
 
@@ -209,14 +216,15 @@ fn test_withdraw_success() {
 
     let prior_abbot = IAbbotDispatcher { contract_address: test_config.prior.contract_address };
     let trove_id: u64 = prior_utils::open_trove_for_user(prior_abbot, user);
-    
+
     let before_yang_balance: u256 = yang_erc20.balance_of(user);
-    
+
     // Repay and withdraw collateral
     let trove_health: Health = test_config.shrine.get_trove_health(trove_id);
     let repay_amount: Wad = trove_health.debt;
     cheat_caller_address(test_config.shrine.contract_address, user, CheatSpan::TargetCalls(1));
-    IERC20Dispatcher { contract_address: test_config.shrine.contract_address }.approve(test_config.prior.contract_address, repay_amount.into());
+    IERC20Dispatcher { contract_address: test_config.shrine.contract_address }
+        .approve(test_config.prior.contract_address, repay_amount.into());
     cheat_caller_address(test_config.prior.contract_address, user, CheatSpan::TargetCalls(2));
     prior_abbot.melt(trove_id, trove_health.debt);
     prior_abbot.withdraw(trove_id, AssetBalance { address: yang, amount: deposit_amount });
@@ -237,8 +245,10 @@ fn test_withdraw_not_owner_reverts() {
 
     let prior_abbot = IAbbotDispatcher { contract_address: test_config.prior.contract_address };
     let trove_id: u64 = prior_utils::open_trove_for_user(prior_abbot, user);
-    
-    cheat_caller_address(test_config.prior.contract_address, prior_utils::BAD_GUY, CheatSpan::TargetCalls(1));
+
+    cheat_caller_address(
+        test_config.prior.contract_address, prior_utils::BAD_GUY, CheatSpan::TargetCalls(1),
+    );
     prior_abbot.withdraw(trove_id, AssetBalance { address: yang, amount: WAD_ONE / 100 });
 }
 
@@ -250,8 +260,8 @@ fn test_forge_success() {
     let prior_abbot = IAbbotDispatcher { contract_address: test_config.prior.contract_address };
     let trove_id: u64 = prior_utils::open_trove_for_user(prior_abbot, user);
 
-    let before_balance: Wad = test_config.shrine.get_yin(user); 
-    
+    let before_balance: Wad = test_config.shrine.get_yin(user);
+
     // Forge additional CASH
     let forge_amount: Wad = WAD_ONE.into();
     cheat_caller_address(test_config.prior.contract_address, user, CheatSpan::TargetCalls(1));
@@ -270,16 +280,17 @@ fn test_melt_success() {
     let prior_abbot = IAbbotDispatcher { contract_address: test_config.prior.contract_address };
     let trove_id: u64 = prior_utils::open_trove_for_user(prior_abbot, user);
 
-    let before_health: Health = test_config.shrine.get_trove_health(trove_id); 
-    
+    let before_health: Health = test_config.shrine.get_trove_health(trove_id);
+
     // Forge additional CASH
     let melt_amount: Wad = (WAD_ONE / 10).into();
     cheat_caller_address(test_config.shrine.contract_address, user, CheatSpan::TargetCalls(1));
-    IERC20Dispatcher { contract_address: test_config.shrine.contract_address }.approve(test_config.prior.contract_address, melt_amount.into());
+    IERC20Dispatcher { contract_address: test_config.shrine.contract_address }
+        .approve(test_config.prior.contract_address, melt_amount.into());
     cheat_caller_address(test_config.prior.contract_address, user, CheatSpan::TargetCalls(1));
     prior_abbot.melt(trove_id, melt_amount);
 
-    let after_health: Health = test_config.shrine.get_trove_health(trove_id); 
+    let after_health: Health = test_config.shrine.get_trove_health(trove_id);
     let expected_debt: Wad = before_health.debt - melt_amount;
     assert_eq!(after_health.debt, expected_debt, "Wrong debt");
 }
@@ -314,15 +325,23 @@ fn test_set_config_capped() {
     let config = SmartTroveConfig {
         relative_threshold: (prior_contract::MAX_RELATIVE_THRESHOLD + 1).into(),
         max_forge_fee_pct: (prior_contract::MAX_FORGE_FEE_PCT + 1).into(),
-        incentive: (prior_contract::MAX_INCENTIVE + 1).into()
+        incentive: (prior_contract::MAX_INCENTIVE + 1).into(),
     };
 
     cheat_caller_address(test_config.prior.contract_address, user, CheatSpan::TargetCalls(1));
     test_config.prior.set_trove_config(trove_id, config);
 
     let stored = test_config.prior.get_trove_config(trove_id);
-    assert_eq!(stored.relative_threshold, prior_contract::MAX_RELATIVE_THRESHOLD.into(), "Relative threshold not capped");
-    assert_eq!(stored.max_forge_fee_pct, prior_contract::MAX_FORGE_FEE_PCT.into(), "Max forge fee % not capped");
+    assert_eq!(
+        stored.relative_threshold,
+        prior_contract::MAX_RELATIVE_THRESHOLD.into(),
+        "Relative threshold not capped",
+    );
+    assert_eq!(
+        stored.max_forge_fee_pct,
+        prior_contract::MAX_FORGE_FEE_PCT.into(),
+        "Max forge fee % not capped",
+    );
     assert_eq!(stored.incentive, prior_contract::MAX_INCENTIVE.into(), "Max incentive not capped");
 }
 
@@ -355,11 +374,7 @@ fn test_set_config_exact_max_values() {
         prior_contract::MAX_FORGE_FEE_PCT.into(),
         "fee pct changed at max",
     );
-    assert_eq!(
-        stored.incentive,
-        prior_contract::MAX_INCENTIVE.into(),
-        "incentive changed at max",
-    );
+    assert_eq!(stored.incentive, prior_contract::MAX_INCENTIVE.into(), "incentive changed at max");
 }
 
 #[test]
@@ -372,7 +387,9 @@ fn test_set_config_not_owner() {
     let trove_id: u64 = prior_utils::open_trove_for_user(prior_abbot, user);
 
     // Config should exist but have default values
-    cheat_caller_address(test_config.prior.contract_address, prior_utils::BAD_GUY, CheatSpan::TargetCalls(1));
+    cheat_caller_address(
+        test_config.prior.contract_address, prior_utils::BAD_GUY, CheatSpan::TargetCalls(1),
+    );
     test_config.prior.set_trove_config(trove_id, Default::default());
 }
 

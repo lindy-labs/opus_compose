@@ -2,15 +2,16 @@ pub mod prior_utils {
     use core::num::traits::Zero;
     use ekubo::interfaces::erc20::{IERC20Dispatcher, IERC20DispatcherTrait};
     use opus::interfaces::{
-        IAbbotDispatcher, IAbbotDispatcherTrait, IGateDispatcher, ISentinelDispatcher, IShrineDispatcher,
+        IAbbotDispatcher, IAbbotDispatcherTrait, IGateDispatcher, ISentinelDispatcher,
+        IShrineDispatcher,
     };
     use opus::types::AssetBalance;
     use opus_compose::addresses::mainnet;
     use opus_compose::vicariate::interfaces::prior::IPriorDispatcher;
     use opus_compose::vicariate::types::SmartTroveConfig;
     use snforge_std::{
-        CheatSpan, cheat_caller_address, ContractClass, ContractClassTrait, DeclareResultTrait, declare, start_cheat_caller_address,
-        stop_cheat_caller_address,
+        CheatSpan, ContractClass, ContractClassTrait, DeclareResultTrait, cheat_caller_address,
+        declare, start_cheat_caller_address, stop_cheat_caller_address,
     };
     use starknet::ContractAddress;
     use wadray::{RAY_ONE, WAD_ONE, Wad};
@@ -22,7 +23,7 @@ pub mod prior_utils {
         SmartTroveConfig {
             relative_threshold: RAY_ONE.into(),
             max_forge_fee_pct: Zero::zero(),
-            incentive: Zero::zero()
+            incentive: Zero::zero(),
         }
     }
 
