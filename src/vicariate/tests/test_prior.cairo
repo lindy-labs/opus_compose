@@ -30,8 +30,8 @@ fn test_prior_deployment() {
     let one_index = test_config.prior.get_trove_id_by_index(1);
     assert!(one_index.is_zero(), "Index 1 should be empty");
 
-    let atu_troves_count = prior.get_troves_count();
-    assert!(atu_troves_count.is_zero(), "Troves count should be zero");
+    let smart_troves_count = prior.get_troves_count();
+    assert!(smart_troves_count.is_zero(), "Troves count should be zero");
 }
 
 //

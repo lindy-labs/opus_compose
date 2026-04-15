@@ -1,8 +1,10 @@
 use core::num::traits::Zero;
-use opus::interfaces::IAbbotDispatcher;
+use opus::interfaces::{IAbbotDispatcher, IShrineDispatcher, IShrineDispatcherTrait};
+use opus::types::Health;
 use opus_compose::addresses::mainnet;
 use opus_compose::interfaces::erc20::{IERC20Dispatcher, IERC20DispatcherTrait};
 use opus_compose::shared::components::src5::{ISRC5Dispatcher, ISRC5DispatcherTrait};
+use opus_compose::vicariate::contracts::prior::{prior as prior_contract};
 use opus_compose::vicariate::contracts::rites::topup::constants::MAX_SLIPPAGE;
 use opus_compose::vicariate::contracts::rites::topup::topup_rite::{
     ITopupRiteDispatcher, ITopupRiteDispatcherTrait, topup_rite as topup_rite_contract
@@ -17,7 +19,7 @@ use snforge_std::{
     cheat_caller_address, declare, spy_events,
 };
 use starknet::ContractAddress;
-use wadray::{RAY_PERCENT, Ray, WAD_ONE};
+use wadray::{RAY_PERCENT, Ray, Wad, WAD_ONE};
 
 
 //
@@ -72,9 +74,10 @@ fn setup_trove_with_topup_rite()
 
     // Attach rite to trove
     cheat_caller_address(
-        test_config.prior.contract_address, user, CheatSpan::TargetCalls(1),
+        test_config.prior.contract_address, user, CheatSpan::TargetCalls(2),
     );
     test_config.prior.set_rite(trove_id, rite_addr);
+    test_config.prior.set_trove_config(trove_id, prior_utils::BASE_TROVE_CONFIG());
 
     (test_config.prior, trove_id, rite_addr)
 }
@@ -124,14 +127,13 @@ fn test_set_trove_config_cash_asset_success() {
 
 #[test]
 #[fork("MAINNET_VICARIATE")]
-fn test_set_trove_config_disable_topup() {
+fn test_balance_above_minimum_asset_balance() {
     let (prior, trove_id, rite_addr) = setup_trove_with_topup_rite();
     let user = prior_utils::USER;
     let rite = IRiteDispatcher { contract_address: rite_addr };
 
     let mut spy = spy_events();
 
-    // First set a valid config
     let mut config = default_topup_config(user);
     let cash = IERC20Dispatcher { contract_address: mainnet::SHRINE };
     let user_cash_balance: u128 = cash.balance_of(user).try_into().unwrap();
@@ -145,6 +147,9 @@ fn test_set_trove_config_disable_topup() {
     cheat_caller_address(rite_addr, user, CheatSpan::TargetCalls(1));
     rite.set_trove_config(trove_id, serialize_config(config));
 
+    assert!(!prior.can_execute_rite(trove_id), "Rite should not be ready");
+    assert!(!rite.is_ready(trove_id), "Rite should not be ready #2");
+    assert!(rite.has_ended(trove_id), "Rite should have ended");
 
     spy.assert_emitted(
         @array![
@@ -158,25 +163,30 @@ fn test_set_trove_config_disable_topup() {
             ),
         ],
     );
+    spy.assert_emitted(
+        @array![
+            (
+                prior.contract_address,
+                prior_contract::Event::RiteSet(prior_contract::RiteSet {
+                    user,
+                    trove_id,
+                    rite: rite_addr,
+                }),
+            ),
+        ],
+    );
+}
 
-    cheat_caller_address(rite_addr, user, CheatSpan::TargetCalls(1));
-    rite.set_trove_config(trove_id, serialize_config(config));
+#[test]
+#[fork("MAINNET_VICARIATE")]
+fn test_disable_trove_config() {
+    let (prior, trove_id, rite_addr) = setup_trove_with_topup_rite();
+    let user = prior_utils::USER;
+    let rite = IRiteDispatcher { contract_address: rite_addr };
 
-    assert!(!prior.can_execute_rite(trove_id), "Rite should not be ready");
-    assert!(!rite.is_ready(trove_id), "Rite should not be ready #2");
-    assert!(rite.has_ended(trove_id), "Rite should have ended");
-
-    config.conditions.min_asset_balance = user_cash_balance + 1;
-
-    cheat_caller_address(rite_addr, user, CheatSpan::TargetCalls(1));
-    rite.set_trove_config(trove_id, serialize_config(config));
-
-    assert_eq!(prior.get_rite(trove_id), rite_addr, "Rite not set");
-    assert!(prior.can_execute_rite(trove_id), "Rite should be ready");
-    assert!(rite.is_ready(trove_id), "Rite should be ready #2");
-    assert!(rite.has_ended(trove_id), "Rite should not ended");
-
+    let mut spy = spy_events();
     // Disable by setting topup_amount to 0
+    let mut config = default_topup_config(user);
     config.topup_amount = 0;
     cheat_caller_address(rite_addr, user, CheatSpan::TargetCalls(1));
     rite.set_trove_config(trove_id, serialize_config(config));
@@ -186,10 +196,96 @@ fn test_set_trove_config_disable_topup() {
     let stored: TopupConfig = Serde::<TopupConfig>::deserialize(ref stored_iter).unwrap();
     assert!(stored.topup_amount.is_zero(), "should be zero");
 
-    assert!(!prior.can_execute_rite(trove_id), "Rite should not be ready #3");
-    assert!(!rite.is_ready(trove_id), "Rite should not be ready #4");
+    assert!(!prior.can_execute_rite(trove_id), "Rite should not be ready");
+    assert!(!rite.is_ready(trove_id), "Rite should not be ready #2");
     assert!(rite.has_ended(trove_id), "Rite should have ended");
+    
+    spy.assert_emitted(
+        @array![
+            (
+                rite_addr,
+                topup_rite_contract::Event::TopupConfigUpdated(topup_rite_contract::TopupConfigUpdated {
+                    user,
+                    trove_id,
+                    config,
+                }),
+            ),
+        ],
+    );
 }
+
+#[test]
+#[fork("MAINNET_VICARIATE")]
+fn test_cash_topup() {
+    let (prior, trove_id, rite_addr) = setup_trove_with_topup_rite();
+    let user = prior_utils::USER;
+    let rite = IRiteDispatcher { contract_address: rite_addr };
+
+    let mut spy = spy_events();
+
+    let mut config = default_topup_config(user);
+    let cash = IERC20Dispatcher { contract_address: mainnet::SHRINE };
+    let shrine = IShrineDispatcher { contract_address: mainnet::SHRINE };
+    let before_user_cash_balance: u128 = cash.balance_of(user).try_into().unwrap();
+    let before_trove_health: Health = shrine.get_trove_health(trove_id);
+
+    config.conditions.min_asset_balance = before_user_cash_balance + 1;
+
+    cheat_caller_address(rite_addr, user, CheatSpan::TargetCalls(1));
+    rite.set_trove_config(trove_id, serialize_config(config));
+
+    assert_eq!(prior.get_rite(trove_id), rite_addr, "Rite not set");
+    assert!(prior.can_execute_rite(trove_id), "Rite should be ready");
+    assert!(rite.is_ready(trove_id), "Rite should be ready #2");
+    assert!(rite.has_ended(trove_id), "Rite should have ended");
+
+    cheat_caller_address(prior.contract_address, user, CheatSpan::TargetCalls(1));
+    prior.execute_rite(trove_id);
+
+    let after_user_cash_balance: u128 = cash.balance_of(user).try_into().unwrap();
+    let expected_user_cash_balance: u128 = before_user_cash_balance + config.topup_amount;
+    assert_eq!(after_user_cash_balance, expected_user_cash_balance, "Topup did not happen");
+    
+    let after_trove_health: Health = shrine.get_trove_health(trove_id);
+    let expected_trove_debt: Wad = before_trove_health.debt + config.topup_amount.into();
+    assert_eq!(after_trove_health.debt, expected_trove_debt, "Wrong trove debt");
+
+    assert!(!prior.can_execute_rite(trove_id), "Rite should not be ready");
+    assert!(!rite.is_ready(trove_id), "Rite should not be ready #2");
+    assert!(rite.has_ended(trove_id), "Rite should have ended #2");
+
+    spy.assert_emitted(
+        @array![
+            (
+                rite_addr,
+                topup_rite_contract::Event::TopupExecuted(topup_rite_contract::TopupExecuted {
+                    trove_id,
+                    forge_amount: config.topup_amount.into(),
+                    refunded: Zero::zero(),
+                    asset: cash.contract_address,
+                    topup_amount: config.topup_amount,
+                    destination: user,
+                }),
+            ),
+            
+        ],
+    );
+    spy.assert_emitted(
+        @array![
+            (
+                prior.contract_address,
+                prior_contract::Event::RiteExecuted(prior_contract::RiteExecuted {
+                    caller: user,
+                    trove_id,
+                    rite: rite_addr,
+                    incentive: Zero::zero()
+                }),
+            ),
+       ],
+   );
+}
+
+
 
 #[test]
 #[fork("MAINNET_VICARIATE")]
