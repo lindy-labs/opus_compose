@@ -654,9 +654,7 @@ pub mod prior {
                         .try_into()
                         .unwrap();
                     if remainder_asset.is_non_zero() {
-                        self
-                            .abbot
-                            .read()
+                        abbot
                             .deposit(
                                 trove_id,
                                 AssetBalance {
