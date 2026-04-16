@@ -654,6 +654,7 @@ pub mod prior {
                         .try_into()
                         .unwrap();
                     if remainder_asset.is_non_zero() {
+                        self.approve_token_for_gate(sentinel, yang_asset.address, remainder_asset.into());
                         abbot
                             .deposit(
                                 trove_id,
