@@ -1,19 +1,20 @@
 #[starknet::contract]
 pub mod prior {
     use core::cmp::min;
-    use core::num::traits::Zero;
+    use core::num::traits::{Bounded, Zero};
     use core::option::OptionTrait;
     use ekubo::components::clear::{IClearDispatcher, IClearDispatcherTrait};
     use ekubo::interfaces::erc20::IERC20Dispatcher as EkuboERC20Dispatcher;
     use ekubo::interfaces::router::{IRouterDispatcher, IRouterDispatcherTrait};
     use opus::interfaces::abbot::IAbbot;
     use opus::interfaces::{
-        IAbbotDispatcher, IAbbotDispatcherTrait, ICaretakerDispatcher, ICaretakerDispatcherTrait,
+        IAbbotDispatcher, IAbbotDispatcherTrait, 
         IFlashBorrower, IFlashMintDispatcher, IFlashMintDispatcherTrait, ISentinelDispatcher,
         ISentinelDispatcherTrait, IShrineDispatcher, IShrineDispatcherTrait,
     };
     use opus::types::{AssetBalance, Health};
     use opus_compose::interfaces::erc20::{IERC20Dispatcher, IERC20DispatcherTrait};
+    use opus_compose::shared::components::reentrancy_guard::reentrancy_guard_component;
     use opus_compose::shared::components::src5::{ISRC5Dispatcher, ISRC5DispatcherTrait};
     use opus_compose::vicariate::interfaces::lever::ILever;
     use opus_compose::vicariate::interfaces::prior::IPrior;
@@ -22,7 +23,7 @@ pub mod prior {
     };
     use opus_compose::vicariate::types::{
         Action, LeverDownParams, LeverUpParams, ModifyLeverAction, ModifyLeverParams,
-        SmartTroveConfig,
+        TroveConfig,
     };
     use starknet::storage::{
         Map, StorageMapReadAccess, StorageMapWriteAccess, StoragePointerReadAccess,
@@ -30,6 +31,14 @@ pub mod prior {
     };
     use starknet::{ContractAddress, get_caller_address, get_contract_address};
     use wadray::{RAY_ONE, Ray, WAD_ONE, Wad};
+
+    //
+    // Components
+    //
+
+    component!(path: reentrancy_guard_component, storage: reentrancy_guard, event: ReentrancyGuardEvent);
+
+    impl ReentrancyGuardHelpers = reentrancy_guard_component::ReentrancyGuardHelpers<ContractState>;
 
     //
     // Constants
@@ -48,24 +57,35 @@ pub mod prior {
     // Storage
     //
 
+    // Note that Prior does not keep track of troves created by Abbot previously in
+    // its storage, except for `troves_count`.
     #[storage]
     struct Storage {
+        #[substorage(v0)]
+        reentrancy_guard: reentrancy_guard_component::Storage,
         shrine: IShrineDispatcher,
         sentinel: ISentinelDispatcher,
         abbot: IAbbotDispatcher,
-        caretaker: ICaretakerDispatcher,
         flash_mint: IFlashMintDispatcher,
         ekubo_router: IRouterDispatcher,
-        // Total smart troves count (monotonically increasing)
-        smart_troves_count: u64,
-        smart_trove_ids: Map<u64, u64>,
-        // Number of smart troves per user
-        // Starts from index 1
-        user_smart_troves_count: Map<ContractAddress, u64>,
-        user_smart_troves: Map<(ContractAddress, u64), u64>,
+        // Total number of troves in a Shrine; monotonically increasing
+        // also used to calculate the next ID (count+1) when opening a new trove
+        // in essence, it serves as an index / primary key in a SQL table
+        // This is initialized to the total number of troves created by Abbot previously.
+        troves_count: u64,
+        // the total number of troves of a particular address;
+        // used to build the tuple key of `user_troves` variable
+        // (user) -> (number of troves opened)
+        user_troves_count: Map<ContractAddress, u64>,
+        user_troves: Map<(ContractAddress, u64), u64>,
         // Smart trove ID -> owner
-        smart_trove_owners: Map<u64, ContractAddress>,
-        smart_trove_configs: Map<u64, SmartTroveConfig>,
+        trove_owner: Map<u64, ContractAddress>,
+        // Write-once during deployment
+        legacy_troves_count: u64,
+        //
+        // Rite storage
+        //
+        trove_configs: Map<u64, TroveConfig>,
         rites: Map<u64, IRiteDispatcher>,
         // Transient variable used to lock the trove ID before a callback to
         // prevent illegal actions across trove IDs with the same rite
@@ -84,7 +104,14 @@ pub mod prior {
     #[event]
     #[derive(Copy, Drop, starknet::Event, PartialEq)]
     pub enum Event {
-        SmartTroveCreated: SmartTroveCreated,
+        // Component events
+        ReentrancyGuardEvent: reentrancy_guard_component::Event,
+        // Original Abbot events
+        Deposit: Deposit,
+        Withdraw: Withdraw,
+        TroveOpened: TroveOpened,
+        TroveClosed: TroveClosed,
+        // Prior events
         ConfigUpdated: ConfigUpdated,
         RiteSet: RiteSet,
         RiteExecuted: RiteExecuted,
@@ -94,9 +121,39 @@ pub mod prior {
     }
 
     #[derive(Copy, Drop, starknet::Event, PartialEq)]
-    pub struct SmartTroveCreated {
+    pub struct Deposit {
         #[key]
         pub user: ContractAddress,
+        #[key]
+        pub trove_id: u64,
+        #[key]
+        pub yang: ContractAddress,
+        pub yang_amt: Wad,
+        pub asset_amt: u128,
+    }
+
+    #[derive(Copy, Drop, starknet::Event, PartialEq)]
+    pub struct Withdraw {
+        #[key]
+        pub user: ContractAddress,
+        #[key]
+        pub trove_id: u64,
+        #[key]
+        pub yang: ContractAddress,
+        pub yang_amt: Wad,
+        pub asset_amt: u128,
+    }
+
+    #[derive(Copy, Drop, starknet::Event, PartialEq)]
+    pub struct TroveOpened {
+        #[key]
+        pub user: ContractAddress,
+        #[key]
+        pub trove_id: u64,
+    }
+
+    #[derive(Copy, Drop, starknet::Event, PartialEq)]
+    pub struct TroveClosed {
         #[key]
         pub trove_id: u64,
     }
@@ -107,7 +164,7 @@ pub mod prior {
         pub user: ContractAddress,
         #[key]
         pub trove_id: u64,
-        pub config: SmartTroveConfig,
+        pub config: TroveConfig,
     }
 
     #[derive(Copy, Drop, starknet::Event, PartialEq)]
@@ -176,164 +233,152 @@ pub mod prior {
         shrine: ContractAddress,
         sentinel: ContractAddress,
         abbot: ContractAddress,
-        caretaker: ContractAddress,
         flash_mint: ContractAddress,
         ekubo_router: ContractAddress,
     ) {
         self.shrine.write(IShrineDispatcher { contract_address: shrine });
         self.sentinel.write(ISentinelDispatcher { contract_address: sentinel });
-        self.abbot.write(IAbbotDispatcher { contract_address: abbot });
-        self.caretaker.write(ICaretakerDispatcher { contract_address: caretaker });
+        let abbot = IAbbotDispatcher { contract_address: abbot };
+        self.abbot.write(abbot);
         self.flash_mint.write(IFlashMintDispatcher { contract_address: flash_mint });
         self.ekubo_router.write(IRouterDispatcher { contract_address: ekubo_router });
+
+        let legacy_troves_count: u64 = abbot.get_troves_count();
+        self.troves_count.write(legacy_troves_count);
+        self.legacy_troves_count.write(legacy_troves_count);
     }
 
     #[abi(embed_v0)]
     impl IAbbotImpl of IAbbot<ContractState> {
         fn get_trove_owner(self: @ContractState, trove_id: u64) -> Option<ContractAddress> {
-            let owner = self.smart_trove_owners.read(trove_id);
-            if owner.is_zero() {
-                Option::None
-            } else {
+            if trove_id <= self.legacy_troves_count.read() {
+                return self.abbot.read().get_trove_owner(trove_id);
+            }
+            let owner = self.trove_owner.read(trove_id);
+            if owner.is_non_zero() {
                 Option::Some(owner)
+            } else {
+                Option::None
             }
         }
 
         fn get_user_trove_ids(self: @ContractState, user: ContractAddress) -> Span<u64> {
             let mut trove_ids: Array<u64> = ArrayTrait::new();
-            let user_troves_count: u64 = self.user_smart_troves_count.read(user);
+            let legacy_trove_ids = self.abbot.read().get_user_trove_ids(user);
+            for legacy_trove_id in legacy_trove_ids {
+                trove_ids.append(*legacy_trove_id);
+            }
+
+            let user_troves_count: u64 = self.user_troves_count.read(user);
             for i in 0..user_troves_count {
-                trove_ids.append(self.user_smart_troves.read((user, i + 1)));
+                trove_ids.append(self.user_troves.read((user, i)));
             }
             trove_ids.span()
         }
 
         fn get_troves_count(self: @ContractState) -> u64 {
-            self.smart_troves_count.read()
+            self.troves_count.read()
         }
 
         fn get_trove_asset_balance(
             self: @ContractState, trove_id: u64, yang: ContractAddress,
         ) -> u128 {
-            assert!(self.smart_trove_owners.read(trove_id).is_non_zero(), "PRI: Not PRI trove");
-            self.abbot.read().get_trove_asset_balance(trove_id, yang)
+            self.sentinel.read().convert_to_assets(yang, self.shrine.read().get_deposit(yang, trove_id))
         }
 
+        // Create a new trove in the system with Yang deposits
+        // Note that since the forge amount must be greater than zero, the Shrine would also enforce
+        // that the minimum trove value has been deposited.
         fn open_trove(
-            ref self: ContractState,
-            yang_assets: Span<AssetBalance>,
-            forge_amount: Wad,
-            max_forge_fee_pct: Wad,
+            ref self: ContractState, yang_assets: Span<AssetBalance>, forge_amount: Wad, max_forge_fee_pct: Wad,
         ) -> u64 {
-            let user = get_caller_address();
+            assert!(yang_assets.len().is_non_zero(), "PRI: No yangs");
+            assert!(forge_amount.is_non_zero(), "PRI: No debt forged");
 
-            let prior: ContractAddress = get_contract_address();
+            let new_troves_count: u64 = self.troves_count.read() + 1;
+            self.troves_count.write(new_troves_count);
+
+            let user = get_caller_address();
+            let user_troves_count: u64 = self.user_troves_count.read(user);
+            self.user_troves_count.write(user, user_troves_count + 1);
+
+            let new_trove_id: u64 = new_troves_count;
+            self.user_troves.write((user, user_troves_count), new_trove_id);
+            self.trove_owner.write(new_trove_id, user);
+
+            // deposit all requested Yangs into the system
+            let shrine = self.shrine.read();
+            let sentinel = self.sentinel.read();
             for yang_asset in yang_assets {
-                self.deposit_setup(prior, user, *yang_asset);
+                self.deposit_helper(shrine, sentinel, new_trove_id, user, user, *yang_asset);
             }
 
-            let trove_id: u64 = self
-                .abbot
-                .read()
-                .open_trove(yang_assets, forge_amount, max_forge_fee_pct);
+            // forge Yin
+            shrine.forge(user, new_trove_id, forge_amount, max_forge_fee_pct);
 
-            let new_smart_troves_count: u64 = self.smart_troves_count.read() + 1;
-            self.smart_troves_count.write(new_smart_troves_count);
-            self.smart_trove_ids.write(new_smart_troves_count, trove_id);
+            self.emit(TroveOpened { user, trove_id: new_trove_id });
 
-            let new_user_smart_troves_count: u64 = self.user_smart_troves_count.read(user) + 1;
-            self.user_smart_troves_count.write(user, new_user_smart_troves_count);
-            self.user_smart_troves.write((user, new_user_smart_troves_count), trove_id);
-            self.smart_trove_owners.write(trove_id, user);
-
-            IERC20Dispatcher { contract_address: self.shrine.read().contract_address }
-                .transfer(user, forge_amount.into());
-
-            self.emit(SmartTroveCreated { user, trove_id });
-            trove_id
+            new_trove_id
         }
 
+        // close a trove, repaying its debt in full and withdrawing all the Yangs
         fn close_trove(ref self: ContractState, trove_id: u64) {
-            let caller = get_caller_address();
-            self.assert_smart_trove_owner(caller, trove_id);
-
-            let yangs: Span<ContractAddress> = self.sentinel.read().get_yang_addresses();
-            let prior = get_contract_address();
+            let user = get_caller_address();
+            self.assert_trove_owner(user, trove_id);
 
             let shrine = self.shrine.read();
-            let yang_balances = shrine.get_trove_deposits(trove_id);
-            let mut before_balances: Array<AssetBalance> = Default::default();
-            for yang_balance in yang_balances {
-                if yang_balance.amount.is_non_zero() {
-                    let yang = *(yangs.at(*yang_balance.yang_id - 1));
-                    let before_amount: u256 = IERC20Dispatcher { contract_address: yang }
-                        .balance_of(prior);
-                    before_balances
-                        .append(
-                            AssetBalance {
-                                address: yang, amount: before_amount.try_into().unwrap(),
-                            },
-                        );
+            // melting "max Wad" to instruct Shrine to melt *all* of trove's debt
+            shrine.melt(user, trove_id, Bounded::MAX);
+
+            // withdraw each and every Yang belonging to the trove from the system
+            let sentinel = self.sentinel.read();
+            let yangs: Span<ContractAddress> = sentinel.get_yang_addresses();
+            for yang in yangs {
+                let yang_amount: Wad = shrine.get_deposit(*yang, trove_id);
+                if yang_amount.is_zero() {
+                    continue;
                 }
+                self.withdraw_helper(shrine, sentinel, trove_id, user, user, *yang, yang_amount);
             }
 
-            // Close trove in Abbot
-            let yin = IERC20Dispatcher { contract_address: shrine.contract_address };
-            let trove_health: Health = shrine.get_trove_health(trove_id);
-            let abbot = self.abbot.read();
-            yin.transfer_from(caller, prior, trove_health.debt.into());
-            abbot.close_trove(trove_id);
-
-            // Transfer withdrawn assets to caller
-            for before_balance in before_balances {
-                let asset = IERC20Dispatcher { contract_address: before_balance.address };
-                let after: u256 = asset.balance_of(prior);
-                // Capped at the contract's balance as there may be loss of precision
-                let withdrawn: u256 = after - before_balance.amount.into();
-                asset.transfer(caller, withdrawn);
-            }
+            self.emit(TroveClosed { trove_id });
         }
 
+        // add Yang (an asset) to a trove
         fn deposit(ref self: ContractState, trove_id: u64, yang_asset: AssetBalance) {
-            let caller: ContractAddress = get_caller_address();
-            self.assert_smart_trove_owner(caller, trove_id);
+            // There is no need to check the yang address is non-zero because the
+            // Sentinel does not allow a zero address yang to be added.
 
-            self.deposit_setup(get_contract_address(), caller, yang_asset);
+            let user = get_caller_address();
+            self.assert_trove_owner(user, trove_id);
 
-            self.abbot.read().deposit(trove_id, yang_asset);
+            self.deposit_helper(self.shrine.read(), self.sentinel.read(), trove_id, user, user, yang_asset);
         }
 
+        // remove Yang (an asset) from a trove
         fn withdraw(ref self: ContractState, trove_id: u64, yang_asset: AssetBalance) {
-            let caller: ContractAddress = get_caller_address();
-            self.assert_smart_trove_owner(caller, trove_id);
+            // There is no need to check the yang address is non-zero because the
+            // Sentinel does not allow a zero address yang to be added.
 
-            // There may be precision loss between converting
-            // asset to yang in Abbot, then back to asset in Gate.
-            let prior: ContractAddress = get_contract_address();
-            let yang_erc20 = IERC20Dispatcher { contract_address: yang_asset.address };
-            let before: u256 = yang_erc20.balance_of(prior);
-            self.abbot.read().withdraw(trove_id, yang_asset);
-            let after: u256 = yang_erc20.balance_of(prior);
+            let user = get_caller_address();
+            self.assert_trove_owner(user, trove_id);
 
-            let withdrawn: u256 = after - before;
-            yang_erc20.transfer(caller, withdrawn);
+            let sentinel = self.sentinel.read();
+            let yang_amt: Wad = sentinel.convert_to_yang(yang_asset.address, yang_asset.amount);
+            self.withdraw_helper(self.shrine.read(), sentinel, trove_id, user, user, yang_asset.address, yang_amt);
         }
 
+        // create Yin in a trove
         fn forge(ref self: ContractState, trove_id: u64, amount: Wad, max_forge_fee_pct: Wad) {
-            let caller = get_caller_address();
-            self.assert_smart_trove_owner(caller, trove_id);
-            self.abbot.read().forge(trove_id, amount, max_forge_fee_pct);
-
-            IERC20Dispatcher { contract_address: self.shrine.read().contract_address }
-                .transfer(caller, amount.into());
+            let user = get_caller_address();
+            self.assert_trove_owner(user, trove_id);
+            self.shrine.read().forge(user, trove_id, amount, max_forge_fee_pct);
         }
 
-        // User needs to approve this Abbot for transfer
+        // destroy Yin from a trove
         fn melt(ref self: ContractState, trove_id: u64, amount: Wad) {
-            let caller = get_caller_address();
-            IERC20Dispatcher { contract_address: self.shrine.read().contract_address }
-                .transfer_from(caller, get_contract_address(), amount.into());
-            self.abbot.read().melt(trove_id, amount);
+            // note that caller does not need to be the trove's owner to melt
+            self.shrine.read().melt(get_caller_address(), trove_id, amount);
         }
     }
 
@@ -343,9 +388,9 @@ pub mod prior {
         // Config
         //
 
-        fn set_trove_config(ref self: ContractState, trove_id: u64, config: SmartTroveConfig) {
+        fn set_trove_config(ref self: ContractState, trove_id: u64, config: TroveConfig) {
             let user: ContractAddress = get_caller_address();
-            self.assert_smart_trove_owner(user, trove_id);
+            self.assert_trove_owner(user, trove_id);
 
             let mut config = config;
             config
@@ -353,17 +398,13 @@ pub mod prior {
             config.max_forge_fee_pct = min(config.max_forge_fee_pct, MAX_FORGE_FEE_PCT.into());
             config.incentive = min(config.incentive, MAX_INCENTIVE.into());
 
-            self.smart_trove_configs.write(trove_id, config);
+            self.trove_configs.write(trove_id, config);
 
             self.emit(ConfigUpdated { user, trove_id, config });
         }
 
-        fn get_trove_config(self: @ContractState, trove_id: u64) -> SmartTroveConfig {
-            self.smart_trove_configs.read(trove_id)
-        }
-
-        fn get_trove_id_by_index(self: @ContractState, index: u64) -> u64 {
-            self.smart_trove_ids.read(index)
+        fn get_trove_config(self: @ContractState, trove_id: u64) -> TroveConfig {
+            self.trove_configs.read(trove_id)
         }
 
         //
@@ -380,7 +421,7 @@ pub mod prior {
             let caller: ContractAddress = get_caller_address();
             // This also checks that the trove is a smart trove.
             // Otherwise, the owner would be zero address.
-            self.assert_smart_trove_owner(caller, trove_id);
+            self.assert_trove_owner(caller, trove_id);
 
             let rite_src5 = ISRC5Dispatcher { contract_address: rite };
             assert!(rite_src5.supports_interface(IRITE_ID), "PRI: Rite interface not supported");
@@ -409,13 +450,11 @@ pub mod prior {
             rite.perform(trove_id);
 
             // Settle incentive
-            let config: SmartTroveConfig = self.smart_trove_configs.read(trove_id);
+            let config: TroveConfig = self.trove_configs.read(trove_id);
             let shrine = self.shrine.read();
+            let caller: ContractAddress = get_caller_address();
             if config.incentive.is_non_zero() {
-                self.abbot.read().forge(trove_id, config.incentive, config.max_forge_fee_pct);
-
-                IERC20Dispatcher { contract_address: shrine.contract_address }
-                    .transfer(get_caller_address(), config.incentive.into());
+                shrine.forge(caller, trove_id, config.incentive, config.max_forge_fee_pct);
             }
 
             // Check LTV condition if relative threshold is set
@@ -431,7 +470,7 @@ pub mod prior {
             self
                 .emit(
                     RiteExecuted {
-                        caller: get_caller_address(),
+                        caller,
                         trove_id,
                         rite: rite.contract_address,
                         incentive: config.incentive,
@@ -444,7 +483,7 @@ pub mod prior {
         // it may otherwise brick the ongoing rite.
         fn end_rite(ref self: ContractState, trove_id: u64) {
             let caller = get_caller_address();
-            self.assert_smart_trove_owner(caller, trove_id);
+            self.assert_trove_owner(caller, trove_id);
 
             assert!(self.transient_trove_id.read().is_zero(), "PRI: Another trove in execution");
             self.transient_trove_id.write(trove_id);
@@ -472,31 +511,16 @@ pub mod prior {
             assert!(caller == rite.contract_address, "PRI: Caller not rite");
             assert!(self.transient_trove_id.read() == trove_id, "PRI: Execution not started");
 
-            let abbot = self.abbot.read();
+            let shrine = self.shrine.read();
+            let sentinel = self.sentinel.read();
+            let trove_owner: ContractAddress = self.get_trove_owner(trove_id).expect('PRI: No trove owner');
+            let prior: ContractAddress = get_contract_address();
             for action in actions {
-                self.execute_action(trove_id, rite.contract_address, abbot, *action);
+                self.execute_action(shrine, sentinel, trove_id, trove_owner, prior, rite.contract_address, *action);
             }
 
             let current_nonce = self.transient_callback_nonce.read();
             self.transient_callback_nonce.write(current_nonce + 1);
-        }
-
-        //
-        // Backwards compatibility with Abbot and Caretaker
-        //
-
-        // Mirror Caretaker's release function due to ownership check on primary Abbot
-        fn release(ref self: ContractState, trove_id: u64) -> Span<AssetBalance> {
-            let caller: ContractAddress = get_caller_address();
-            self.assert_smart_trove_owner(caller, trove_id);
-
-            let released_assets: Span<AssetBalance> = self.caretaker.read().release(trove_id);
-            for asset in released_assets {
-                IERC20Dispatcher { contract_address: *asset.address }
-                    .transfer(caller, (*asset.amount).into());
-            }
-
-            released_assets
         }
     }
 
@@ -510,7 +534,7 @@ pub mod prior {
         fn up(ref self: ContractState, amount: Wad, lever_up_params: LeverUpParams) {
             let user: ContractAddress = get_caller_address();
             let trove_id: u64 = lever_up_params.trove_id;
-            self.assert_smart_trove_owner(user, trove_id);
+            self.assert_trove_owner(user, trove_id);
 
             let mut call_data: Array<felt252> = array![];
             let modify_lever_params = ModifyLeverParams {
@@ -538,7 +562,7 @@ pub mod prior {
         fn down(ref self: ContractState, amount: Wad, lever_down_params: LeverDownParams) {
             let user: ContractAddress = get_caller_address();
             let trove_id: u64 = lever_down_params.trove_id;
-            self.assert_smart_trove_owner(user, trove_id);
+            self.assert_trove_owner(user, trove_id);
 
             let modify_lever_params = ModifyLeverParams {
                 user, action: ModifyLeverAction::LeverDown(lever_down_params),
@@ -582,16 +606,15 @@ pub mod prior {
                 user, action,
             } = Serde::<ModifyLeverParams>::deserialize(ref call_data).unwrap();
 
+            let shrine = self.shrine.read();
             let yin = IERC20Dispatcher { contract_address: token };
-            let abbot = self.abbot.read();
             let sentinel = self.sentinel.read();
             let router = self.ekubo_router.read();
             let router_clear = IClearDispatcher { contract_address: router.contract_address };
 
             match action {
                 ModifyLeverAction::LeverUp(params) => {
-                    let LeverUpParams { trove_id, yang, swaps, min_asset_amount } = params;
-                    let config = self.smart_trove_configs.read(trove_id);
+                    let LeverUpParams { trove_id, max_ltv, yang, max_forge_fee_pct, min_asset_amount, swaps } = params;
 
                     // Transfer yin to Ekubo's router and swap for collateral
                     yin.transfer(router.contract_address, amount);
@@ -606,14 +629,15 @@ pub mod prior {
 
                     // Deposit purchased collateral to trove
                     self.approve_token_for_gate(sentinel, yang, asset_amt);
-                    abbot
-                        .deposit(
-                            trove_id,
-                            AssetBalance { address: yang, amount: asset_amt.try_into().unwrap() },
-                        );
+                    let asset_amt_128: u128 = asset_amt.try_into().unwrap();
+                    self.deposit_helper(shrine, sentinel, trove_id, user, initiator, AssetBalance { address: yang, amount: asset_amt_128 });
 
                     // Borrow yin from trove and send to this contract to repay the flash mint
-                    abbot.forge(trove_id, amount.try_into().unwrap(), config.max_forge_fee_pct);
+                    shrine
+                        .forge(initiator, trove_id, amount.try_into().unwrap(), max_forge_fee_pct);
+
+                    let trove_health: Health = shrine.get_trove_health(trove_id);
+                    assert!(trove_health.ltv <= max_ltv, "PRI: Exceeds max LTV");
 
                     self
                         .emit(
@@ -627,42 +651,44 @@ pub mod prior {
                         );
                 },
                 ModifyLeverAction::LeverDown(params) => {
-                    let LeverDownParams { trove_id, yang_asset, swaps } = params;
-                    let yang_erc20 = IERC20Dispatcher { contract_address: yang_asset.address };
+                    let LeverDownParams { trove_id, max_ltv, yang, yang_amt, swaps } = params;
+                    let yang_erc20 = IERC20Dispatcher { contract_address: yang };
 
                     // Use the flash minted yin to repay the trove's debt
-                    abbot.melt(trove_id, amount.try_into().unwrap());
+                    self.melt(trove_id, amount.try_into().unwrap());
 
                     // Withdraw collateral to this contract
-                    // This amount should be an upper bound taking slippage into account.
-                    abbot.withdraw(trove_id, yang_asset);
+                    let asset_amt: u128 = self.withdraw_helper(shrine, sentinel, trove_id, user, initiator, yang, yang_amt);
 
                     // Transfer collateral to Ekubo's router and swap for yin
-                    yang_erc20.transfer(router.contract_address, yang_asset.amount.into());
+                    yang_erc20.transfer(router.contract_address, asset_amt.into());
                     router.multi_multihop_swap(swaps);
 
                     // Sanity check to ensure the amount of yin flash minted has been purchased
                     // and can be withdrawn
-                    router_clear
+                    let cleared_amount = router_clear
                         .clear_minimum(EkuboERC20Dispatcher { contract_address: token }, amount);
+                    // Transfer any excess to user
+                    if cleared_amount > amount {
+                        yin.transfer(user, cleared_amount - amount);
+                    }
 
                     // Re-deposit any remainder collateral
                     let remainder_asset: u128 = router_clear
                         .clear_minimum_to_recipient(
-                            EkuboERC20Dispatcher { contract_address: yang_asset.address }, 0, prior,
+                            EkuboERC20Dispatcher { contract_address: yang }, 0, prior,
                         )
                         .try_into()
                         .unwrap();
                     if remainder_asset.is_non_zero() {
-                        self.approve_token_for_gate(sentinel, yang_asset.address, remainder_asset.into());
-                        abbot
-                            .deposit(
-                                trove_id,
-                                AssetBalance {
-                                    address: yang_asset.address, amount: remainder_asset,
-                                },
-                            );
+                        self.approve_token_for_gate(sentinel, yang, remainder_asset.into());
+                        self.deposit_helper(shrine, sentinel, trove_id, user, prior, AssetBalance {
+                            address: yang, amount: remainder_asset,
+                        });
                     }
+
+                    let trove_health: Health = shrine.get_trove_health(trove_id);
+                    assert!(trove_health.ltv <= max_ltv, "PRI: Exceeds max LTV");
 
                     self
                         .emit(
@@ -670,8 +696,8 @@ pub mod prior {
                                 user,
                                 trove_id,
                                 amount: amount.try_into().unwrap(),
-                                yang: yang_asset.address,
-                                yang_asset_amount_withdrawn: yang_asset.amount,
+                                yang,
+                                yang_asset_amount_withdrawn: asset_amt,
                                 yang_asset_amount_redeposited: remainder_asset,
                             },
                         );
@@ -685,21 +711,73 @@ pub mod prior {
     #[generate_trait]
     impl PriorHelpers of PriorHelpersTrait {
         //
-        // Assertions
+        // Abbot helpers
         //
-
-        fn assert_smart_trove_owner(self: @ContractState, user: ContractAddress, trove_id: u64) {
-            assert!(self.smart_trove_owners.read(trove_id) == user, "PRI: Not owner");
+        
+        fn assert_trove_owner(self: @ContractState, user: ContractAddress, trove_id: u64) {
+            assert!(self.get_trove_owner(trove_id) == Option::Some(user), "PRI: Not trove owner")
         }
+
+        // Modifications from Abbot:
+        // - `depositor` has been added as a call arg to distinguish from the trove owner 
+        //   for lever and rite actions
+        // - Sentinel and Shrine dispatchers are passed as calldata to save gas when called
+        //   multiple times in the same transaction
+        fn deposit_helper(
+            ref self: ContractState, 
+            shrine: IShrineDispatcher,
+            sentinel: ISentinelDispatcher,
+            trove_id: u64, 
+            user: ContractAddress, 
+            depositor: ContractAddress, 
+            yang_asset: AssetBalance
+        ) {
+            // reentrancy guard is used as a precaution
+            self.reentrancy_guard.start();
+
+            let yang_amt: Wad = sentinel.enter(yang_asset.address, depositor, yang_asset.amount);
+            shrine.deposit(yang_asset.address, trove_id, yang_amt);
+
+            self.emit(Deposit { user, trove_id, yang: yang_asset.address, yang_amt, asset_amt: yang_asset.amount });
+
+            self.reentrancy_guard.end();
+        }
+
+        // Modifications from Abbot:
+        // - `recipient` has been added as a call arg to distinguish from the trove owner 
+        //   for lever and rite actions
+        // - Sentinel and Shrine dispatchers are passed as calldata to save gas when called
+        //   multiple times in the same transaction
+        fn withdraw_helper(
+            ref self: ContractState, 
+            shrine: IShrineDispatcher,
+            sentinel: ISentinelDispatcher,
+            trove_id: u64, 
+            user: ContractAddress, 
+            recipient: ContractAddress, 
+            yang: ContractAddress, 
+            yang_amt: Wad,
+        ) -> u128 {
+            // reentrancy guard is used as a precaution
+            self.reentrancy_guard.start();
+
+            let asset_amt: u128 = sentinel.exit(yang, recipient, yang_amt);
+            shrine.withdraw(yang, trove_id, yang_amt);
+
+            self.emit(Withdraw { user, trove_id, yang, yang_amt, asset_amt });
+
+            self.reentrancy_guard.end();
+            asset_amt
+        }
+
+        //
+        // Rite helpers
+        //
 
         fn assert_callback(self: @ContractState) {
             // Guarantee that at least one callback was executed
             assert!(!self.transient_callback_nonce.read().is_zero(), "PRI: Callback not executed");
         }
-
-        //
-        // View helpers
-        //
 
         fn can_execute_rite_helper(
             self: @ContractState, rite: IRiteDispatcher, trove_id: u64,
@@ -711,10 +789,6 @@ pub mod prior {
             }
         }
 
-        //
-        // State-modifying helpers
-        //
-
         fn clear_locks(ref self: ContractState) {
             self.transient_trove_id.write(Zero::zero());
             self.transient_callback_nonce.write(Zero::zero());
@@ -722,35 +796,38 @@ pub mod prior {
 
         fn execute_action(
             ref self: ContractState,
+            shrine: IShrineDispatcher,
+            sentinel: ISentinelDispatcher,
             trove_id: u64,
+            trove_owner: ContractAddress,
+            prior: ContractAddress,
             rite_address: ContractAddress,
-            abbot: IAbbotDispatcher,
             action: Action,
         ) {
             match action {
                 Action::Forge(amount) => {
-                    let config: SmartTroveConfig = self.smart_trove_configs.read(trove_id);
-                    abbot.forge(trove_id, amount, config.max_forge_fee_pct);
-
-                    // Transfer to rite
-                    IERC20Dispatcher { contract_address: self.shrine.read().contract_address }
-                        .transfer(rite_address, amount.into());
+                    // Forge to Rite directly
+                    let config: TroveConfig = self.trove_configs.read(trove_id);
+                    shrine.forge(rite_address, trove_id, amount, config.max_forge_fee_pct);
                 },
-                Action::Melt(amount) => { abbot.melt(trove_id, amount); },
+                Action::Melt(amount) => { 
+                    // Melt from Prior
+                    shrine.melt(prior, trove_id, amount);
+                },
                 Action::Deposit(asset_balance) => {
+                    // Deposit collateral already sent by Rite to Prior
                     self
                         .approve_token_for_gate(
-                            self.sentinel.read(),
+                            sentinel,
                             asset_balance.address,
                             asset_balance.amount.into(),
                         );
-                    abbot.deposit(trove_id, asset_balance);
+                    self.deposit_helper(shrine, sentinel, trove_id, trove_owner, prior, asset_balance);
                 },
                 Action::Withdraw(asset_balance) => {
-                    abbot.withdraw(trove_id, asset_balance);
-
-                    IERC20Dispatcher { contract_address: asset_balance.address }
-                        .transfer(rite_address, asset_balance.amount.into());
+                    // Withdraw collateral to Rite directly
+                    let yang_amt: Wad = sentinel.convert_to_yang(asset_balance.address, asset_balance.amount);
+                    self.withdraw_helper(shrine, sentinel, trove_id, trove_owner, rite_address, asset_balance.address, yang_amt);
                 },
                 Action::None => (),
             };
@@ -765,19 +842,6 @@ pub mod prior {
             // Invalid yangs will be caught in `sentinel.enter(...)`
             let gate = sentinel.get_gate_address(token);
             IERC20Dispatcher { contract_address: token }.approve(gate, amount);
-        }
-
-        fn deposit_setup(
-            ref self: ContractState,
-            prior: ContractAddress,
-            user: ContractAddress,
-            yang_asset: AssetBalance,
-        ) {
-            let sentinel = self.sentinel.read();
-            let yang = IERC20Dispatcher { contract_address: yang_asset.address };
-            yang.transfer_from(user, prior, yang_asset.amount.into());
-
-            self.approve_token_for_gate(sentinel, yang_asset.address, yang_asset.amount.into());
         }
     }
 }

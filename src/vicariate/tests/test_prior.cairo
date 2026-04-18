@@ -10,7 +10,7 @@ use opus_compose::interfaces::erc20::{IERC20Dispatcher, IERC20DispatcherTrait};
 use opus_compose::vicariate::contracts::prior::prior as prior_contract;
 use opus_compose::vicariate::interfaces::prior::IPriorDispatcherTrait;
 use opus_compose::vicariate::tests::utils::prior_utils;
-use opus_compose::vicariate::types::SmartTroveConfig;
+use opus_compose::vicariate::types::TroveConfig;
 use snforge_std::{CheatSpan, cheat_caller_address};
 use starknet::ContractAddress;
 use wadray::{RAY_ONE, Ray, WAD_ONE, Wad};
@@ -22,16 +22,14 @@ use wadray::{RAY_ONE, Ray, WAD_ONE, Wad};
 #[test]
 #[fork("MAINNET_VICARIATE")]
 fn test_prior_deployment() {
+    let abbot = IAbbotDispatcher { contract_address: mainnet::ABBOT };
+    let legacy_troves_count: u64 = abbot.get_troves_count();
+
     let test_config = prior_utils::prior_deploy(None);
     let prior = IAbbotDispatcher { contract_address: test_config.prior.contract_address };
 
-    let zero_index = test_config.prior.get_trove_id_by_index(0);
-    assert!(zero_index.is_zero(), "Index 0 should be empty");
-    let one_index = test_config.prior.get_trove_id_by_index(1);
-    assert!(one_index.is_zero(), "Index 1 should be empty");
-
-    let smart_troves_count = prior.get_troves_count();
-    assert!(smart_troves_count.is_zero(), "Troves count should be zero");
+    let troves_count = prior.get_troves_count();
+    assert_eq!(troves_count, legacy_troves_count, "Wrong starting troves count");
 }
 
 //
@@ -49,6 +47,7 @@ fn test_open_trove_success() {
     let max_forge_fee_pct: Wad = Zero::zero();
 
     let prior_abbot = IAbbotDispatcher { contract_address: test_config.prior.contract_address };
+    let count = prior_abbot.get_troves_count();
 
     prior_utils::fund_user_eth(user, yang_amount.into());
     prior_utils::approve_gate_for_user(test_config.eth_gate, yang, user);
@@ -65,25 +64,18 @@ fn test_open_trove_success() {
             max_forge_fee_pct,
         );
 
+    let expected_count = count + 1;
     let count = prior_abbot.get_troves_count();
-    assert(count == 1, 'count should be 1');
+    assert_eq!(count, expected_count, "Wrong troves count");
 
-    // Verify trove owner
-    let primary_owner = test_config.abbot.get_trove_owner(trove_id);
-    assert!(primary_owner.is_some(), "Primary owner should exist");
-    assert!(primary_owner.unwrap() == test_config.prior.contract_address, "Primary owner mismatch");
-
-    let smart_trove_owner = prior_abbot.get_trove_owner(trove_id);
-    assert!(smart_trove_owner.is_some(), "Smart Trove owner should exist");
-    assert!(smart_trove_owner.unwrap() == user, "Smart Trove owner mismatch");
-
-    let smart_trove_id_by_index = test_config.prior.get_trove_id_by_index(1);
-    assert_eq!(smart_trove_id_by_index, trove_id, "Wrong Smart Trove ID by index");
+    let trove_owner = prior_abbot.get_trove_owner(trove_id);
+    assert!(trove_owner.is_some(), "Smart Trove owner should exist");
+    assert!(trove_owner.unwrap() == user, "Smart Trove owner mismatch");
 
     // Verify user's trove IDs
     let trove_ids = prior_abbot.get_user_trove_ids(user);
-    assert(trove_ids.len() == 1, 'should have 1 trove');
-    assert(*trove_ids.at(0) == trove_id, 'trove_id mismatch');
+    assert_eq!(trove_ids.len(), 1, "Should have 1 trove");
+    assert_eq!(*trove_ids.at(0), trove_id, "Trove IDs mismatch");
 
     // Verify trove deposit via shrine
     let deposit = test_config.shrine.get_deposit(yang, trove_id);
@@ -322,7 +314,7 @@ fn test_set_config_capped() {
     let trove_id: u64 = prior_utils::open_trove_for_user(prior_abbot, user);
 
     // Set config with relative_threshold far beyond max (RAY_ONE)
-    let config = SmartTroveConfig {
+    let config = TroveConfig {
         relative_threshold: (prior_contract::MAX_RELATIVE_THRESHOLD + 1).into(),
         max_forge_fee_pct: (prior_contract::MAX_FORGE_FEE_PCT + 1).into(),
         incentive: (prior_contract::MAX_INCENTIVE + 1).into(),
@@ -354,7 +346,7 @@ fn test_set_config_exact_max_values() {
     let trove_id: u64 = prior_utils::open_trove_for_user(prior_abbot, user);
 
     // Set each field exactly at its maximum — should be stored unchanged (no capping)
-    let config = SmartTroveConfig {
+    let config = TroveConfig {
         relative_threshold: prior_contract::MAX_RELATIVE_THRESHOLD.into(),
         max_forge_fee_pct: prior_contract::MAX_FORGE_FEE_PCT.into(),
         incentive: prior_contract::MAX_INCENTIVE.into(),
@@ -405,37 +397,3 @@ fn test_can_execute_rite_invalid_trove() {
 }
 
 
-//
-// Test: Get Trove ID by Index
-//
-
-#[test]
-#[fork("MAINNET_VICARIATE")]
-fn test_get_trove_id_by_index() {
-    let test_config = prior_utils::prior_deploy(None);
-    let user: ContractAddress = 'test user'.try_into().unwrap();
-    let yang = mainnet::ETH;
-    let yang_amount: u128 = 100000000000000000;
-    let forge_amount: Wad = 50000000_u128.into();
-    let max_forge_fee_pct: Wad = 1_u128.into();
-
-    let abbot = IAbbotDispatcher { contract_address: test_config.prior.contract_address };
-
-    // Setup
-    prior_utils::fund_user_eth(user, yang_amount.into());
-    prior_utils::approve_gate_for_user(test_config.eth_gate, yang, user);
-    prior_utils::approve_for_user(test_config.prior.contract_address, yang, user);
-
-    // Open trove
-    cheat_caller_address(test_config.prior.contract_address, user, CheatSpan::TargetCalls(1));
-    let trove_id = abbot
-        .open_trove(
-            array![AssetBalance { address: yang, amount: yang_amount }].span(),
-            forge_amount,
-            max_forge_fee_pct,
-        );
-
-    // Get trove_id by index (1-indexed)
-    let retrieved_id = test_config.prior.get_trove_id_by_index(1);
-    assert(retrieved_id == trove_id, 'trove_id mismatch');
-}

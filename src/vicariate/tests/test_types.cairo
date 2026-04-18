@@ -3,7 +3,7 @@ use opus_compose::vicariate::contracts::rites::dca::types::{
 };
 use opus_compose::vicariate::contracts::rites::topup::types::TopupConditions;
 use opus_compose::vicariate::contracts::rites::types::EkuboPoolParams;
-use opus_compose::vicariate::types::SmartTroveConfig;
+use opus_compose::vicariate::types::TroveConfig;
 use starknet::storage_access::StorePacking;
 use wadray::{RAY_ONE, RAY_PERCENT, Ray, WAD_ONE, Wad};
 
@@ -92,13 +92,13 @@ fn test_dca_order_packing_all_types() {
     assert_dca_order_roundtrip(0x8000040000000000_u64, 1_u128, 100_u64, OrderType::SellAsset);
 }
 
-// --- SmartTroveConfig packing tests ---
+// --- TroveConfig packing tests ---
 
 fn assert_smart_trove_config_roundtrip(
     relative_threshold: Ray, max_forge_fee_pct: Wad, incentive: Wad,
 ) {
-    let config = SmartTroveConfig { relative_threshold, max_forge_fee_pct, incentive };
-    let unpacked: SmartTroveConfig = StorePacking::unpack(StorePacking::pack(config));
+    let config = TroveConfig { relative_threshold, max_forge_fee_pct, incentive };
+    let unpacked: TroveConfig = StorePacking::unpack(StorePacking::pack(config));
     assert_eq!(config, unpacked, "smart trove config roundtrip failed");
 }
 

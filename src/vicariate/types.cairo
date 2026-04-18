@@ -13,7 +13,7 @@ pub enum Action {
     Withdraw: AssetBalance,
 }
 
-// Packing constants for SmartTroveConfig
+// Packing constants for TroveConfig
 // Layout: [incentive_amount (bits 152–250, 99 bits) | max_forge_fee_pct (bits 90–151, 62 bits)
 // | relative_threshold (bits 0–89, 90 bits)]
 // `relative_threshold` is capped at RAY_ONE (10^27, requires 90 bits)
@@ -33,7 +33,7 @@ const MASK_99: u256 = 0x7FFFFFFFFFFFFFFFFFFFFFFFF;
 // `max_forge_fee_pct` is capped at 4 * WAD_ONE (4 * 10^18)
 // `incentive` is capped at 2^99 - 1
 #[derive(Copy, Drop, Debug, Default, PartialEq, Serde)]
-pub struct SmartTroveConfig {
+pub struct TroveConfig {
     // Maximum LTV = relative threshold * threshold
     pub relative_threshold: Ray,
     pub max_forge_fee_pct: Wad,
@@ -41,8 +41,8 @@ pub struct SmartTroveConfig {
     pub incentive: Wad,
 }
 
-impl SmartTroveConfigPacking of StorePacking<SmartTroveConfig, felt252> {
-    fn pack(value: SmartTroveConfig) -> felt252 {
+impl TroveConfigPacking of StorePacking<TroveConfig, felt252> {
+    fn pack(value: TroveConfig) -> felt252 {
         let relative_threshold: u256 = value.relative_threshold.into();
         let max_forge_fee_pct: u256 = value.max_forge_fee_pct.into();
         let incentive: u256 = value.incentive.into();
@@ -51,12 +51,12 @@ impl SmartTroveConfigPacking of StorePacking<SmartTroveConfig, felt252> {
             .unwrap()
     }
 
-    fn unpack(value: felt252) -> SmartTroveConfig {
+    fn unpack(value: felt252) -> TroveConfig {
         let value: u256 = value.into();
         let relative_threshold: u128 = (value & MASK_90).try_into().unwrap();
         let max_forge_fee_pct: u128 = ((value / TWO_POW_90) & MASK_62).try_into().unwrap();
         let incentive: u128 = ((value / TWO_POW_152) & MASK_99).try_into().unwrap();
-        SmartTroveConfig {
+        TroveConfig {
             relative_threshold: relative_threshold.into(),
             max_forge_fee_pct: max_forge_fee_pct.into(),
             incentive: incentive.into(),
@@ -81,17 +81,20 @@ pub enum ModifyLeverAction {
 #[derive(Serde, Drop)]
 pub struct LeverUpParams {
     pub trove_id: u64,
+    // Revert if LTV exceeds this value at the end
+    pub max_ltv: Ray,
     pub yang: ContractAddress,
-    pub swaps: Array<Swap>,
+    pub max_forge_fee_pct: Wad,
     pub min_asset_amount: u128,
+    pub swaps: Array<Swap>,
 }
 
 #[derive(Serde, Drop)]
 pub struct LeverDownParams {
     pub trove_id: u64,
-    // The asset amount to withdraw from the trove should be an
-    // upper bound taking slippage into account. Excess asset
-    // amount will be deposited back into the trove.
-    pub yang_asset: AssetBalance,
+    // Revert if LTV exceeds this value at the end
+    pub max_ltv: Ray,
+    pub yang: ContractAddress,
+    pub yang_amt: Wad,
     pub swaps: Array<Swap>,
 }

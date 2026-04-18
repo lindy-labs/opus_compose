@@ -1,4 +1,5 @@
 pub mod prior_utils {
+    use access_control::{IAccessControlDispatcher, IAccessControlDispatcherTrait};
     use core::num::traits::Zero;
     use ekubo::interfaces::erc20::{IERC20Dispatcher, IERC20DispatcherTrait};
     use opus::interfaces::{
@@ -8,7 +9,7 @@ pub mod prior_utils {
     use opus::types::AssetBalance;
     use opus_compose::addresses::mainnet;
     use opus_compose::vicariate::interfaces::prior::IPriorDispatcher;
-    use opus_compose::vicariate::types::SmartTroveConfig;
+    use opus_compose::vicariate::types::TroveConfig;
     use snforge_std::{
         CheatSpan, ContractClass, ContractClassTrait, DeclareResultTrait, cheat_caller_address,
         declare, start_cheat_caller_address, stop_cheat_caller_address,
@@ -19,8 +20,8 @@ pub mod prior_utils {
     pub const USER: ContractAddress = 'user'.try_into().unwrap();
     pub const BAD_GUY: ContractAddress = 'bad guy'.try_into().unwrap();
 
-    pub fn BASE_TROVE_CONFIG() -> SmartTroveConfig {
-        SmartTroveConfig {
+    pub fn BASE_TROVE_CONFIG() -> TroveConfig {
+        TroveConfig {
             relative_threshold: RAY_ONE.into(),
             max_forge_fee_pct: Zero::zero(),
             incentive: Zero::zero(),
@@ -62,12 +63,22 @@ pub mod prior_utils {
             mainnet::SHRINE.into(),
             mainnet::SENTINEL.into(),
             mainnet::ABBOT.into(),
-            mainnet::CARETAKER.into(),
             mainnet::FLASH_MINT.into(),
             mainnet::EKUBO_ROUTER.into(),
         ];
         let (prior_addr, _) = classes.prior.unwrap().deploy(@calldata).expect('prior deploy fail');
         let prior_dispatcher = IPriorDispatcher { contract_address: prior_addr };
+
+        // Grant access control to Prior
+        cheat_caller_address(mainnet::SHRINE, mainnet::MULTISIG, CheatSpan::TargetCalls(1));
+        // Deposit + Forge + Melt + Withdraw
+        let abbot_role_for_shrine: u128 = 8 + 32 + 256 + 524288;
+        IAccessControlDispatcher { contract_address: mainnet::SHRINE  }.grant_role(abbot_role_for_shrine, prior_addr);
+
+        cheat_caller_address(mainnet::SENTINEL, mainnet::MULTISIG, CheatSpan::TargetCalls(1));
+        // Enter + Exit
+        let abbot_role_for_sentinel: u128 = 2 + 4;
+        IAccessControlDispatcher { contract_address: mainnet::SENTINEL  }.grant_role(abbot_role_for_sentinel, prior_addr);
 
         PriorTestConfig {
             prior: prior_dispatcher, abbot, sentinel, shrine, usdc_token: mainnet::USDC, eth_gate,
