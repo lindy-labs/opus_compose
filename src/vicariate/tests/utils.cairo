@@ -103,16 +103,6 @@ pub mod prior_utils {
         stop_cheat_caller_address(token);
     }
 
-    // Helper to approve contract for token
-    pub fn approve_for_user(
-        contract_addr: ContractAddress, token: ContractAddress, user: ContractAddress,
-    ) {
-        let token_contract = IERC20Dispatcher { contract_address: token };
-        start_cheat_caller_address(token, user);
-        token_contract.approve(contract_addr, 0xFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFF);
-        stop_cheat_caller_address(token);
-    }
-
     pub fn open_trove_for_user(prior_abbot: IAbbotDispatcher, user: ContractAddress) -> u64 {
         let yang = mainnet::ETH;
         let yang_amount: u128 = WAD_ONE;
@@ -121,8 +111,7 @@ pub mod prior_utils {
 
         // Setup
         fund_user_eth(user, yang_amount.into());
-        approve_gate_for_user(IGateDispatcher { contract_address: mainnet::ETH }, yang, user);
-        approve_for_user(prior_abbot.contract_address, yang, user);
+        approve_gate_for_user(IGateDispatcher { contract_address: mainnet::ETH_GATE }, yang, user);
 
         // Open trove as user
         cheat_caller_address(prior_abbot.contract_address, user, CheatSpan::TargetCalls(1));

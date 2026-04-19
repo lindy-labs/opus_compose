@@ -9,6 +9,10 @@ pub mod mainnet {
         0x00Ca40fCa4208A0c2a38fc81a66C171623aAC3B913A4365F7f0BC0EB3296573C
         .try_into()
         .unwrap();
+    pub const EXISTING_TROVE_OWNER: ContractAddress =
+        0x010e05784f5734bb497f1f48666cf71f7c372b07a81fe147e40d42ea4c01914f
+        .try_into()
+        .unwrap();
 
     // Binance's address
     pub const WHALE: ContractAddress =

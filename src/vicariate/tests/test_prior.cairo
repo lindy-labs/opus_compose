@@ -15,6 +15,8 @@ use snforge_std::{CheatSpan, cheat_caller_address};
 use starknet::ContractAddress;
 use wadray::{RAY_ONE, Ray, WAD_ONE, Wad};
 
+const EXISTING_TROVE_ID: u64 = 1;
+
 //
 // Deployment
 //
@@ -51,7 +53,6 @@ fn test_open_trove_success() {
 
     prior_utils::fund_user_eth(user, yang_amount.into());
     prior_utils::approve_gate_for_user(test_config.eth_gate, yang, user);
-    prior_utils::approve_for_user(test_config.prior.contract_address, yang, user);
 
     let before_yin_balance = test_config.shrine.get_yin(user);
 
@@ -105,7 +106,6 @@ fn test_close_trove_success() {
     // Setup
     prior_utils::fund_user_eth(user, yang_amount.into());
     prior_utils::approve_gate_for_user(test_config.eth_gate, yang, user);
-    prior_utils::approve_for_user(test_config.prior.contract_address, yang, user);
 
     // Open trove
     cheat_caller_address(test_config.prior.contract_address, user, CheatSpan::TargetCalls(1));
@@ -137,7 +137,7 @@ fn test_close_trove_success() {
 
 #[test]
 #[fork("MAINNET_VICARIATE")]
-#[should_panic(expected: "PRI: Not owner")]
+#[should_panic(expected: "PRI: Not trove owner")]
 fn test_close_trove_not_owner_reverts() {
     let test_config = prior_utils::prior_deploy(None);
     let user: ContractAddress = prior_utils::USER;
@@ -181,7 +181,7 @@ fn test_deposit_success() {
 
 #[test]
 #[fork("MAINNET_VICARIATE")]
-#[should_panic(expected: "PRI: Not owner")]
+#[should_panic(expected: "PRI: Not trove owner")]
 fn test_deposit_not_owner_reverts() {
     let test_config = prior_utils::prior_deploy(None);
     let user: ContractAddress = prior_utils::USER;
@@ -229,7 +229,7 @@ fn test_withdraw_success() {
 
 #[test]
 #[fork("MAINNET_VICARIATE")]
-#[should_panic(expected: "PRI: Not owner")]
+#[should_panic(expected: "PRI: Not trove owner")]
 fn test_withdraw_not_owner_reverts() {
     let test_config = prior_utils::prior_deploy(None);
     let user: ContractAddress = prior_utils::USER;
@@ -371,7 +371,7 @@ fn test_set_config_exact_max_values() {
 
 #[test]
 #[fork("MAINNET_VICARIATE")]
-#[should_panic(expected: "PRI: Not owner")]
+#[should_panic(expected: "PRI: Not trove owner")]
 fn test_set_config_not_owner() {
     let test_config = prior_utils::prior_deploy(None);
     let user: ContractAddress = prior_utils::USER;
