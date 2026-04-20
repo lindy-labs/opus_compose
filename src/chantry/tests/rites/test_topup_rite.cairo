@@ -231,7 +231,7 @@ fn test_set_trove_config_max_slippage() {
     let mut stored_iter = stored_span;
     let stored: TopupConfig = Serde::<TopupConfig>::deserialize(ref stored_iter).unwrap();
     let stored_slippage: u128 = stored.conditions.slippage.into();
-    assert(stored_slippage == MAX_SLIPPAGE, 'slippage should be max');
+    assert_eq!(stored_slippage, MAX_SLIPPAGE, "slippage should be max");
 }
 
 #[test]
@@ -356,7 +356,7 @@ fn test_is_ready_returns_false_when_no_config() {
     let rite = IRiteDispatcher { contract_address: rite_addr };
 
     let ready = rite.is_ready(999);
-    assert(!ready, 'should not be ready no config');
+    assert!(!ready, "should not be ready no config");
 }
 
 #[test]

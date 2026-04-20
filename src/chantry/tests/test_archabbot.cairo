@@ -123,15 +123,15 @@ fn test_close_trove_success() {
     archabbot.close_trove(trove_id);
 
     let owner = archabbot.get_trove_owner(trove_id);
-    assert(owner.is_some(), 'owner should still exist');
+    assert!(owner.is_some(), "owner should still exist");
 
     // Verify trove deposit is zero after close
     let deposit = test_config.shrine.get_deposit(yang, trove_id);
-    assert(deposit.is_zero(), 'deposit should be zero');
+    assert!(deposit.is_zero(), "deposit should be zero");
 
     // Verify trove debt is zero after close
     let trove_health: Health = test_config.shrine.get_trove_health(trove_id);
-    assert(trove_health.debt.is_zero(), 'debt should be zero');
+    assert!(trove_health.debt.is_zero(), "debt should be zero");
 }
 
 #[test]
@@ -392,7 +392,7 @@ fn test_can_execute_rite_invalid_trove() {
     // No trove created - can_execute_rite should return false
     // (no rite attached, so is_ready would revert or return false)
     let can_execute = test_config.archabbot.can_execute_rite(1);
-    assert(!can_execute, 'can_execute should be false');
+    assert!(!can_execute, "can_execute should be false");
 }
 
 // ---------------------------------------------------------------------------
