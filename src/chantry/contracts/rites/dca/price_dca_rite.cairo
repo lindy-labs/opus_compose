@@ -5,14 +5,14 @@ pub mod price_dca_rite {
     use opus_compose::constants;
     use opus_compose::interfaces::erc20::IERC20Dispatcher;
     use opus_compose::shared::components::src5::SRC5Component;
-    use opus_compose::vicariate::contracts::rites::dca::ekubo_dca_component::EkuboDcaComponent;
-    use opus_compose::vicariate::contracts::rites::dca::ekubo_oracle_component::EkuboOracleComponent;
-    use opus_compose::vicariate::contracts::rites::dca::types::{
+    use opus_compose::chantry::contracts::rites::dca::ekubo_dca_component::EkuboDcaComponent;
+    use opus_compose::chantry::contracts::rites::dca::ekubo_oracle_component::EkuboOracleComponent;
+    use opus_compose::chantry::contracts::rites::dca::types::{
         DcaOrder, OrderStatus, OrderType, PriceDcaConfig,
     };
-    use opus_compose::vicariate::contracts::rites::utils::rites_utils;
-    use opus_compose::vicariate::interfaces::prior::IPriorDispatcher;
-    use opus_compose::vicariate::interfaces::rite::{IRITE_ID, IRite};
+    use opus_compose::chantry::contracts::rites::utils::rites_utils;
+    use opus_compose::chantry::interfaces::archabbot::IArchabbotDispatcher;
+    use opus_compose::chantry::interfaces::rite::{IRITE_ID, IRite};
 
     component!(path: SRC5Component, storage: src5, event: SRC5Event);
     component!(path: EkuboDcaComponent, storage: ekubo_dca, event: EkuboDcaEvent);
@@ -42,7 +42,7 @@ pub mod price_dca_rite {
         #[substorage(v0)]
         ekubo_oracle: EkuboOracleComponent::Storage,
         yin: IERC20Dispatcher,
-        prior: IPriorDispatcher,
+        archabbot: IArchabbotDispatcher,
         price_dca_configs: Map<u64, PriceDcaConfig>,
     }
 
@@ -71,12 +71,12 @@ pub mod price_dca_rite {
     fn constructor(
         ref self: ContractState,
         yin: ContractAddress,
-        prior: ContractAddress,
+        archabbot: ContractAddress,
         ekubo_oracle: ContractAddress,
         ekubo_positions: ContractAddress,
     ) {
         self.yin.write(IERC20Dispatcher { contract_address: yin });
-        self.prior.write(IPriorDispatcher { contract_address: prior });
+        self.archabbot.write(IArchabbotDispatcher { contract_address: archabbot });
 
         self.ekubo_oracle.set_ekubo_oracle(ekubo_oracle);
         self.ekubo_dca.set_ekubo_positions(ekubo_positions);
@@ -117,11 +117,11 @@ pub mod price_dca_rite {
             );
 
             let user = get_caller_address();
-            let prior_abbot = IAbbotDispatcher {
-                contract_address: self.prior.read().contract_address,
+            let archabbot_abbot = IAbbotDispatcher {
+                contract_address: self.archabbot.read().contract_address,
             };
             assert!(
-                prior_abbot.get_trove_owner(trove_id).expect('PRICE_DCA: Trove not found') == user,
+                archabbot_abbot.get_trove_owner(trove_id).expect('PRICE_DCA: Trove not found') == user,
                 "{}: Not owner",
                 RITE_ID(),
             );
@@ -169,24 +169,24 @@ pub mod price_dca_rite {
         }
 
         fn perform(ref self: ContractState, trove_id: u64) {
-            let prior = self.prior.read();
+            let archabbot = self.archabbot.read();
             let caller: ContractAddress = get_caller_address();
-            // Prior should have checked that the rite can be executed
-            rites_utils::assert_caller_is_prior(caller, prior.contract_address, RITE_ID());
+            // Archabbot should have checked that the rite can be executed
+            rites_utils::assert_caller_is_archabbot(caller, archabbot.contract_address, RITE_ID());
 
             // Close existing + complete order if any
             // Reverts if existing + ongoing order
             let config = self.price_dca_configs.read(trove_id);
             let order: DcaOrder = self.ekubo_dca.get_order(trove_id);
             let yin: IERC20Dispatcher = self.yin.read();
-            self.ekubo_dca.close_order(yin, prior, trove_id, config.asset, order, false, RITE_ID());
+            self.ekubo_dca.close_order(yin, archabbot, trove_id, config.asset, order, false, RITE_ID());
 
             let order_type = self.get_order_type(config);
             let order_amount: u128 = match order_type {
                 OrderType::BuyAsset => { config.price_conditions.buy_amount.into() },
                 OrderType::SellAsset => { config.price_conditions.sell_amount },
                 OrderType::None => {
-                    // Should be unreachable because Prior already checked if
+                    // Should be unreachable because Archabbot already checked if
                     // rite is ready for execution
                     Zero::zero()
                 },
@@ -196,7 +196,7 @@ pub mod price_dca_rite {
                 .ekubo_dca
                 .create_order(
                     yin,
-                    prior,
+                    archabbot,
                     trove_id,
                     config.asset,
                     config.pool_params,
@@ -208,16 +208,16 @@ pub mod price_dca_rite {
         }
 
         fn end(ref self: ContractState, trove_id: u64) {
-            let prior = self.prior.read();
+            let archabbot = self.archabbot.read();
             let caller: ContractAddress = get_caller_address();
-            rites_utils::assert_caller_is_prior(caller, prior.contract_address, RITE_ID());
+            rites_utils::assert_caller_is_archabbot(caller, archabbot.contract_address, RITE_ID());
 
             let config = self.price_dca_configs.read(trove_id);
             let order: DcaOrder = self.ekubo_dca.get_order(trove_id);
             self
                 .ekubo_dca
                 .close_order(
-                    self.yin.read(), prior, trove_id, config.asset, order, true, RITE_ID(),
+                    self.yin.read(), archabbot, trove_id, config.asset, order, true, RITE_ID(),
                 );
         }
     }

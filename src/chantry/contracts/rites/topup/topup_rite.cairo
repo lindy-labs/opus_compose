@@ -1,4 +1,4 @@
-use opus_compose::vicariate::contracts::rites::topup::types::SwapParams;
+use opus_compose::chantry::contracts::rites::topup::types::SwapParams;
 
 #[starknet::interface]
 pub trait ITopupRite<TContractState> {
@@ -20,14 +20,14 @@ pub mod topup_rite {
     use opus::interfaces::{IAbbotDispatcher, IAbbotDispatcherTrait};
     use opus_compose::interfaces::erc20::{IERC20Dispatcher, IERC20DispatcherTrait};
     use opus_compose::shared::components::src5::SRC5Component;
-    use opus_compose::vicariate::contracts::rites::topup::constants::MAX_SLIPPAGE;
-    use opus_compose::vicariate::contracts::rites::topup::types::{SwapParams, TopupConfig};
-    use opus_compose::vicariate::contracts::rites::types::{EkuboPoolParams, EkuboPoolParamsTrait};
-    use opus_compose::vicariate::contracts::rites::utils::rites_utils;
-    use opus_compose::vicariate::interfaces::prior::{IPriorDispatcher, IPriorDispatcherTrait};
-    use opus_compose::vicariate::interfaces::rite::{IRITE_ID, IRite};
-    use opus_compose::vicariate::types::Action;
-    use opus_compose::vicariate::utils::sqrt_ratio_limit::calculate_sqrt_ratio_limit;
+    use opus_compose::chantry::contracts::rites::topup::constants::MAX_SLIPPAGE;
+    use opus_compose::chantry::contracts::rites::topup::types::{SwapParams, TopupConfig};
+    use opus_compose::chantry::contracts::rites::types::{EkuboPoolParams, EkuboPoolParamsTrait};
+    use opus_compose::chantry::contracts::rites::utils::rites_utils;
+    use opus_compose::chantry::interfaces::archabbot::{IArchabbotDispatcher, IArchabbotDispatcherTrait};
+    use opus_compose::chantry::interfaces::rite::{IRITE_ID, IRite};
+    use opus_compose::chantry::types::Action;
+    use opus_compose::chantry::utils::sqrt_ratio_limit::calculate_sqrt_ratio_limit;
     use starknet::storage::{
         Map, StorageMapReadAccess, StorageMapWriteAccess, StoragePointerReadAccess,
         StoragePointerWriteAccess,
@@ -48,7 +48,7 @@ pub mod topup_rite {
         #[substorage(v0)]
         src5: SRC5Component::Storage,
         yin: IERC20Dispatcher,
-        prior: IPriorDispatcher,
+        archabbot: IArchabbotDispatcher,
         ekubo_core: ICoreDispatcher,
         ekubo_router: IRouterDispatcher,
         topup_configs: Map<u64, TopupConfig> // ATU trove ID -> config
@@ -87,12 +87,12 @@ pub mod topup_rite {
     fn constructor(
         ref self: ContractState,
         yin: ContractAddress,
-        prior: ContractAddress,
+        archabbot: ContractAddress,
         ekubo_router: ContractAddress,
         ekubo_core: ContractAddress,
     ) {
         self.yin.write(IERC20Dispatcher { contract_address: yin });
-        self.prior.write(IPriorDispatcher { contract_address: prior });
+        self.archabbot.write(IArchabbotDispatcher { contract_address: archabbot });
 
         self.ekubo_core.write(ICoreDispatcher { contract_address: ekubo_core });
         self.ekubo_router.write(IRouterDispatcher { contract_address: ekubo_router });
@@ -119,11 +119,11 @@ pub mod topup_rite {
                 .expect('TOPUP: Invalid config');
 
             let user = get_caller_address();
-            let prior_abbot = IAbbotDispatcher {
-                contract_address: self.prior.read().contract_address,
+            let archabbot_abbot = IAbbotDispatcher {
+                contract_address: self.archabbot.read().contract_address,
             };
             assert!(
-                prior_abbot.get_trove_owner(trove_id).expect('TOPUP: Trove not found') == user,
+                archabbot_abbot.get_trove_owner(trove_id).expect('TOPUP: Trove not found') == user,
                 "{}: Not owner",
                 RITE_ID(),
             );
@@ -178,10 +178,10 @@ pub mod topup_rite {
         }
 
         fn perform(ref self: ContractState, trove_id: u64) {
-            let prior = self.prior.read();
+            let archabbot = self.archabbot.read();
             let caller: ContractAddress = get_caller_address();
-            // Prior should have checked that the rite can be executed
-            rites_utils::assert_caller_is_prior(caller, prior.contract_address, self.get_rite_id());
+            // Archabbot should have checked that the rite can be executed
+            rites_utils::assert_caller_is_archabbot(caller, archabbot.contract_address, self.get_rite_id());
 
             let config = self.topup_configs.read(trove_id);
             let yin = self.yin.read();
@@ -201,7 +201,7 @@ pub mod topup_rite {
                 swap_params.forge_amount
             };
 
-            prior.on_rite_actions(trove_id, array![Action::Forge(adjusted_forge_amount)].span());
+            archabbot.on_rite_actions(trove_id, array![Action::Forge(adjusted_forge_amount)].span());
 
             let mut refunded: u256 = Zero::zero();
             if let Some((route_node, token_amount)) = swap_params.swap_data {
@@ -222,10 +222,10 @@ pub mod topup_rite {
                     .clear_minimum_to_recipient(
                         EkuboERC20Dispatcher { contract_address: yin.contract_address },
                         0,
-                        prior.contract_address,
+                        archabbot.contract_address,
                     );
                 if refunded.is_non_zero() {
-                    prior
+                    archabbot
                         .on_rite_actions(
                             trove_id, array![Action::Melt(refunded.try_into().unwrap())].span(),
                         );
@@ -248,11 +248,11 @@ pub mod topup_rite {
         }
 
         fn end(ref self: ContractState, trove_id: u64) {
-            let prior = self.prior.read();
+            let archabbot = self.archabbot.read();
             let caller: ContractAddress = get_caller_address();
-            rites_utils::assert_caller_is_prior(caller, prior.contract_address, self.get_rite_id());
+            rites_utils::assert_caller_is_archabbot(caller, archabbot.contract_address, self.get_rite_id());
 
-            prior.on_rite_actions(trove_id, array![Action::None].span());
+            archabbot.on_rite_actions(trove_id, array![Action::None].span());
         }
     }
 

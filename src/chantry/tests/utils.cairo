@@ -1,4 +1,4 @@
-pub mod prior_utils {
+pub mod archabbot_utils {
     use access_control::{IAccessControlDispatcher, IAccessControlDispatcherTrait};
     use core::num::traits::Zero;
     use ekubo::interfaces::erc20::{IERC20Dispatcher, IERC20DispatcherTrait};
@@ -8,8 +8,8 @@ pub mod prior_utils {
     };
     use opus::types::AssetBalance;
     use opus_compose::addresses::mainnet;
-    use opus_compose::vicariate::interfaces::prior::IPriorDispatcher;
-    use opus_compose::vicariate::types::TroveConfig;
+    use opus_compose::chantry::interfaces::archabbot::IArchabbotDispatcher;
+    use opus_compose::chantry::types::TroveConfig;
     use snforge_std::{
         CheatSpan, ContractClass, ContractClassTrait, DeclareResultTrait, cheat_caller_address,
         declare, start_cheat_caller_address, stop_cheat_caller_address,
@@ -29,13 +29,13 @@ pub mod prior_utils {
     }
 
     #[derive(Copy, Drop)]
-    pub struct PriorTestClasses {
-        pub prior: Option<ContractClass>,
+    pub struct ArchabbotTestClasses {
+        pub archabbot: Option<ContractClass>,
     }
 
     #[derive(Copy, Drop)]
-    pub struct PriorTestConfig {
-        pub prior: IPriorDispatcher,
+    pub struct ArchabbotTestConfig {
+        pub archabbot: IArchabbotDispatcher,
         pub abbot: IAbbotDispatcher,
         pub sentinel: ISentinelDispatcher,
         pub shrine: IShrineDispatcher,
@@ -43,13 +43,13 @@ pub mod prior_utils {
         pub eth_gate: IGateDispatcher,
     }
 
-    // Declare the test contracts required for Prior tests
-    pub fn declare_contracts() -> PriorTestClasses {
-        PriorTestClasses { prior: Some(*declare("prior").unwrap().contract_class()) }
+    // Declare the test contracts required for Archabbot tests
+    pub fn declare_contracts() -> ArchabbotTestClasses {
+        ArchabbotTestClasses { archabbot: Some(*declare("archabbot").unwrap().contract_class()) }
     }
 
-    // Deploy Prior on forked mainnet using existing infrastructure
-    pub fn prior_deploy(classes: Option<PriorTestClasses>) -> PriorTestConfig {
+    // Deploy Archabbot on forked mainnet using existing infrastructure
+    pub fn archabbot_deploy(classes: Option<ArchabbotTestClasses>) -> ArchabbotTestConfig {
         let classes = classes.unwrap_or(declare_contracts());
 
         // Use existing mainnet contracts
@@ -58,7 +58,7 @@ pub mod prior_utils {
         let abbot = IAbbotDispatcher { contract_address: mainnet::ABBOT };
         let eth_gate = IGateDispatcher { contract_address: mainnet::ETH_GATE };
 
-        // Deploy Prior
+        // Deploy Archabbot
         let calldata: Array<felt252> = array![
             mainnet::SHRINE.into(),
             mainnet::SENTINEL.into(),
@@ -66,22 +66,22 @@ pub mod prior_utils {
             mainnet::FLASH_MINT.into(),
             mainnet::EKUBO_ROUTER.into(),
         ];
-        let (prior_addr, _) = classes.prior.unwrap().deploy(@calldata).expect('prior deploy fail');
-        let prior_dispatcher = IPriorDispatcher { contract_address: prior_addr };
+        let (archabbot_addr, _) = classes.archabbot.unwrap().deploy(@calldata).expect('archabbot deploy fail');
+        let archabbot_dispatcher = IArchabbotDispatcher { contract_address: archabbot_addr };
 
-        // Grant access control to Prior
+        // Grant access control to Archabbot
         cheat_caller_address(mainnet::SHRINE, mainnet::MULTISIG, CheatSpan::TargetCalls(1));
         // Deposit + Forge + Melt + Withdraw
         let abbot_role_for_shrine: u128 = 8 + 32 + 256 + 524288;
-        IAccessControlDispatcher { contract_address: mainnet::SHRINE  }.grant_role(abbot_role_for_shrine, prior_addr);
+        IAccessControlDispatcher { contract_address: mainnet::SHRINE  }.grant_role(abbot_role_for_shrine, archabbot_addr);
 
         cheat_caller_address(mainnet::SENTINEL, mainnet::MULTISIG, CheatSpan::TargetCalls(1));
         // Enter + Exit
         let abbot_role_for_sentinel: u128 = 2 + 4;
-        IAccessControlDispatcher { contract_address: mainnet::SENTINEL  }.grant_role(abbot_role_for_sentinel, prior_addr);
+        IAccessControlDispatcher { contract_address: mainnet::SENTINEL  }.grant_role(abbot_role_for_sentinel, archabbot_addr);
 
-        PriorTestConfig {
-            prior: prior_dispatcher, abbot, sentinel, shrine, usdc_token: mainnet::USDC, eth_gate,
+        ArchabbotTestConfig {
+            archabbot: archabbot_dispatcher, abbot, sentinel, shrine, usdc_token: mainnet::USDC, eth_gate,
         }
     }
 
@@ -103,7 +103,7 @@ pub mod prior_utils {
         stop_cheat_caller_address(token);
     }
 
-    pub fn open_trove_for_user(prior_abbot: IAbbotDispatcher, user: ContractAddress) -> u64 {
+    pub fn open_trove_for_user(archabbot: IAbbotDispatcher, user: ContractAddress) -> u64 {
         let yang = mainnet::ETH;
         let yang_amount: u128 = WAD_ONE;
         let forge_amount: Wad = (5 * WAD_ONE).into();
@@ -114,8 +114,8 @@ pub mod prior_utils {
         approve_gate_for_user(IGateDispatcher { contract_address: mainnet::ETH_GATE }, yang, user);
 
         // Open trove as user
-        cheat_caller_address(prior_abbot.contract_address, user, CheatSpan::TargetCalls(1));
-        prior_abbot
+        cheat_caller_address(archabbot.contract_address, user, CheatSpan::TargetCalls(1));
+        archabbot
             .open_trove(
                 array![AssetBalance { address: yang, amount: yang_amount }].span(),
                 forge_amount,

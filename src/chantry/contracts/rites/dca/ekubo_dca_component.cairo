@@ -6,13 +6,13 @@ pub mod EkuboDcaComponent {
     use ekubo::types::keys::PoolKey;
     use opus::types::AssetBalance;
     use opus_compose::interfaces::erc20::{IERC20Dispatcher, IERC20DispatcherTrait};
-    use opus_compose::vicariate::contracts::rites::dca::types::{
+    use opus_compose::chantry::contracts::rites::dca::types::{
         ConsolidatedOrderData, DcaDurationTrait, DcaOrder, DcaOrderDuration, OrderStatus, OrderType,
     };
-    use opus_compose::vicariate::contracts::rites::dca::utils::dca_utils;
-    use opus_compose::vicariate::contracts::rites::types::{EkuboPoolParams, EkuboPoolParamsTrait};
-    use opus_compose::vicariate::interfaces::prior::{IPriorDispatcher, IPriorDispatcherTrait};
-    use opus_compose::vicariate::types::Action;
+    use opus_compose::chantry::contracts::rites::dca::utils::dca_utils;
+    use opus_compose::chantry::contracts::rites::types::{EkuboPoolParams, EkuboPoolParamsTrait};
+    use opus_compose::chantry::interfaces::archabbot::{IArchabbotDispatcher, IArchabbotDispatcherTrait};
+    use opus_compose::chantry::types::Action;
     use starknet::storage::{
         Map, StorageMapReadAccess, StorageMapWriteAccess, StoragePointerReadAccess,
         StoragePointerWriteAccess,
@@ -114,11 +114,11 @@ pub mod EkuboDcaComponent {
             }
         }
 
-        // Closes a TWAMM order and withdraws the proceeds to Prior directly.
+        // Closes a TWAMM order and withdraws the proceeds to Archabbot directly.
         fn close_order(
             ref self: ComponentState<TContractState>,
             yin: IERC20Dispatcher,
-            prior: IPriorDispatcher,
+            archabbot: IArchabbotDispatcher,
             trove_id: u64,
             asset: ContractAddress,
             order: DcaOrder,
@@ -138,7 +138,7 @@ pub mod EkuboDcaComponent {
                 OrderStatus::None |
                 OrderStatus::CompletedAndWithdrawn => {
                     let action = Action::None;
-                    prior.on_rite_actions(trove_id, array![action].span());
+                    archabbot.on_rite_actions(trove_id, array![action].span());
                     return;
                 },
                 OrderStatus::CompletedNotWithdrawn => {},
@@ -152,16 +152,16 @@ pub mod EkuboDcaComponent {
                             order.position_id,
                             order_key,
                             order_info.sale_rate,
-                            prior.contract_address,
+                            archabbot.contract_address,
                         );
                 },
             }
 
-            // Withdraw purchased tokens directly to Prior
+            // Withdraw purchased tokens directly to Archabbot
             let order_key = order_key.unwrap();
             purchased_buy_token = ekubo_positions
                 .withdraw_proceeds_from_sale_to(
-                    order.position_id, order_key, prior.contract_address,
+                    order.position_id, order_key, archabbot.contract_address,
                 );
 
             let mut actions: Array<Action> = Default::default();
@@ -195,7 +195,7 @@ pub mod EkuboDcaComponent {
                 };
             }
 
-            prior.on_rite_actions(trove_id, actions.span());
+            archabbot.on_rite_actions(trove_id, actions.span());
 
             self.twamm_orders.write(trove_id, Default::default());
 
@@ -215,7 +215,7 @@ pub mod EkuboDcaComponent {
         fn create_order(
             ref self: ComponentState<TContractState>,
             yin: IERC20Dispatcher,
-            prior: IPriorDispatcher,
+            archabbot: IArchabbotDispatcher,
             trove_id: u64,
             asset: ContractAddress,
             pool_params: EkuboPoolParams,
@@ -238,7 +238,7 @@ pub mod EkuboDcaComponent {
             match order_type {
                 OrderType::BuyAsset => {
                     let action = Action::Forge(order_amount.into());
-                    prior.on_rite_actions(trove_id, array![action].span());
+                    archabbot.on_rite_actions(trove_id, array![action].span());
                     yin.transfer(ekubo_positions.contract_address, order_amount.into());
 
                     sell_token = yin.contract_address;
@@ -248,7 +248,7 @@ pub mod EkuboDcaComponent {
                     let action = Action::Withdraw(
                         AssetBalance { address: asset, amount: order_amount },
                     );
-                    prior.on_rite_actions(trove_id, array![action].span());
+                    archabbot.on_rite_actions(trove_id, array![action].span());
                     IERC20Dispatcher { contract_address: asset }
                         .transfer(ekubo_positions.contract_address, order_amount.into());
 
@@ -256,7 +256,7 @@ pub mod EkuboDcaComponent {
                     buy_token = yin.contract_address;
                 },
                 OrderType::None => {
-                    // Should be unreachable because Prior already checked if
+                    // Should be unreachable because Archabbot already checked if
                     // rite is ready for execution
                     return;
                 },

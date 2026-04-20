@@ -1,5 +1,5 @@
 #[starknet::contract]
-pub mod prior {
+pub mod archabbot {
     use core::cmp::min;
     use core::num::traits::{Bounded, Zero};
     use core::option::OptionTrait;
@@ -16,12 +16,12 @@ pub mod prior {
     use opus_compose::interfaces::erc20::{IERC20Dispatcher, IERC20DispatcherTrait};
     use opus_compose::shared::components::reentrancy_guard::reentrancy_guard_component;
     use opus_compose::shared::components::src5::{ISRC5Dispatcher, ISRC5DispatcherTrait};
-    use opus_compose::vicariate::interfaces::lever::ILever;
-    use opus_compose::vicariate::interfaces::prior::IPrior;
-    use opus_compose::vicariate::interfaces::rite::{
+    use opus_compose::chantry::interfaces::lever::ILever;
+    use opus_compose::chantry::interfaces::archabbot::IArchabbot;
+    use opus_compose::chantry::interfaces::rite::{
         IRITE_ID, IRiteDispatcher, IRiteDispatcherTrait,
     };
-    use opus_compose::vicariate::types::{
+    use opus_compose::chantry::types::{
         Action, LeverDownParams, LeverUpParams, ModifyLeverAction, ModifyLeverParams,
         TroveConfig,
     };
@@ -57,7 +57,7 @@ pub mod prior {
     // Storage
     //
 
-    // Note that Prior does not keep track of troves created by Abbot previously in
+    // Note that Archabbot does not keep track of troves created by Abbot previously in
     // its storage, except for `troves_count`.
     #[storage]
     struct Storage {
@@ -111,11 +111,12 @@ pub mod prior {
         Withdraw: Withdraw,
         TroveOpened: TroveOpened,
         TroveClosed: TroveClosed,
-        // Prior events
+        // Rite events
         ConfigUpdated: ConfigUpdated,
         RiteSet: RiteSet,
         RiteExecuted: RiteExecuted,
         RiteEnded: RiteEnded,
+        // Lever events
         LeverUp: LeverUp,
         LeverDown: LeverDown,
     }
@@ -292,8 +293,8 @@ pub mod prior {
         fn open_trove(
             ref self: ContractState, yang_assets: Span<AssetBalance>, forge_amount: Wad, max_forge_fee_pct: Wad,
         ) -> u64 {
-            assert!(yang_assets.len().is_non_zero(), "PRI: No yangs");
-            assert!(forge_amount.is_non_zero(), "PRI: No debt forged");
+            assert!(yang_assets.len().is_non_zero(), "ARC: No yangs");
+            assert!(forge_amount.is_non_zero(), "ARC: No debt forged");
 
             let new_troves_count: u64 = self.troves_count.read() + 1;
             self.troves_count.write(new_troves_count);
@@ -383,7 +384,7 @@ pub mod prior {
     }
 
     #[abi(embed_v0)]
-    impl IPriorImpl of IPrior<ContractState> {
+    impl IArchabbotImpl of IArchabbot<ContractState> {
         //
         // Config
         //
@@ -424,7 +425,7 @@ pub mod prior {
             self.assert_trove_owner(caller, trove_id);
 
             let rite_src5 = ISRC5Dispatcher { contract_address: rite };
-            assert!(rite_src5.supports_interface(IRITE_ID), "PRI: Rite interface not supported");
+            assert!(rite_src5.supports_interface(IRITE_ID), "ARC: Rite interface not supported");
 
             self.rites.write(trove_id, IRiteDispatcher { contract_address: rite });
 
@@ -442,9 +443,9 @@ pub mod prior {
         // Can be called by anyone
         fn execute_rite(ref self: ContractState, trove_id: u64) {
             let rite = self.rites.read(trove_id);
-            assert!(self.can_execute_rite_helper(rite, trove_id), "PRI: Cannot execute rite");
+            assert!(self.can_execute_rite_helper(rite, trove_id), "ARC: Cannot execute rite");
 
-            assert!(self.transient_trove_id.read().is_zero(), "PRI: Another trove in execution");
+            assert!(self.transient_trove_id.read().is_zero(), "ARC: Another trove in execution");
             self.transient_trove_id.write(trove_id);
 
             rite.perform(trove_id);
@@ -461,7 +462,7 @@ pub mod prior {
             if config.relative_threshold != RAY_ONE.into() {
                 let trove_health: Health = shrine.get_trove_health(trove_id);
                 let stop_ltv: Ray = trove_health.threshold * config.relative_threshold;
-                assert!(trove_health.ltv <= stop_ltv, "PRI: LTV exceeds relative threshold");
+                assert!(trove_health.ltv <= stop_ltv, "ARC: LTV exceeds relative threshold");
             }
 
             self.assert_callback();
@@ -485,7 +486,7 @@ pub mod prior {
             let caller = get_caller_address();
             self.assert_trove_owner(caller, trove_id);
 
-            assert!(self.transient_trove_id.read().is_zero(), "PRI: Another trove in execution");
+            assert!(self.transient_trove_id.read().is_zero(), "ARC: Another trove in execution");
             self.transient_trove_id.write(trove_id);
 
             let rite = self.rites.read(trove_id);
@@ -508,15 +509,15 @@ pub mod prior {
         fn on_rite_actions(ref self: ContractState, trove_id: u64, actions: Span<Action>) {
             let caller: ContractAddress = get_caller_address();
             let rite = self.rites.read(trove_id);
-            assert!(caller == rite.contract_address, "PRI: Caller not rite");
-            assert!(self.transient_trove_id.read() == trove_id, "PRI: Execution not started");
+            assert!(caller == rite.contract_address, "ARC: Caller not rite");
+            assert!(self.transient_trove_id.read() == trove_id, "ARC: Execution not started");
 
             let shrine = self.shrine.read();
             let sentinel = self.sentinel.read();
-            let trove_owner: ContractAddress = self.get_trove_owner(trove_id).expect('PRI: No trove owner');
-            let prior: ContractAddress = get_contract_address();
+            let trove_owner: ContractAddress = self.get_trove_owner(trove_id).expect('ARC: No trove owner');
+            let archabbot: ContractAddress = get_contract_address();
             for action in actions {
-                self.execute_action(shrine, sentinel, trove_id, trove_owner, prior, rite.contract_address, *action);
+                self.execute_action(shrine, sentinel, trove_id, trove_owner, archabbot, rite.contract_address, *action);
             }
 
             let current_nonce = self.transient_callback_nonce.read();
@@ -597,10 +598,10 @@ pub mod prior {
         ) -> u256 {
             assert!(
                 get_caller_address() == self.flash_mint.read().contract_address,
-                "PRI: Illegal callback",
+                "ARC: Illegal callback",
             );
-            let prior: ContractAddress = get_contract_address();
-            assert!(initiator == prior, "PRI: Initiator must be Prior");
+            let archabbot: ContractAddress = get_contract_address();
+            assert!(initiator == archabbot, "ARC: Initiator must be Archabbot");
 
             let ModifyLeverParams {
                 user, action,
@@ -637,7 +638,7 @@ pub mod prior {
                         .forge(initiator, trove_id, amount.try_into().unwrap(), max_forge_fee_pct);
 
                     let trove_health: Health = shrine.get_trove_health(trove_id);
-                    assert!(trove_health.ltv <= max_ltv, "PRI: Exceeds max LTV");
+                    assert!(trove_health.ltv <= max_ltv, "ARC: Exceeds max LTV");
 
                     self
                         .emit(
@@ -676,19 +677,19 @@ pub mod prior {
                     // Re-deposit any remainder collateral
                     let remainder_asset: u128 = router_clear
                         .clear_minimum_to_recipient(
-                            EkuboERC20Dispatcher { contract_address: yang }, 0, prior,
+                            EkuboERC20Dispatcher { contract_address: yang }, 0, archabbot,
                         )
                         .try_into()
                         .unwrap();
                     if remainder_asset.is_non_zero() {
                         self.approve_token_for_gate(sentinel, yang, remainder_asset.into());
-                        self.deposit_helper(shrine, sentinel, trove_id, user, prior, AssetBalance {
+                        self.deposit_helper(shrine, sentinel, trove_id, user, archabbot, AssetBalance {
                             address: yang, amount: remainder_asset,
                         });
                     }
 
                     let trove_health: Health = shrine.get_trove_health(trove_id);
-                    assert!(trove_health.ltv <= max_ltv, "PRI: Exceeds max LTV");
+                    assert!(trove_health.ltv <= max_ltv, "ARC: Exceeds max LTV");
 
                     self
                         .emit(
@@ -709,13 +710,13 @@ pub mod prior {
     }
 
     #[generate_trait]
-    impl PriorHelpers of PriorHelpersTrait {
+    impl ArchabbotHelpers of ArchabbotHelpersTrait {
         //
         // Abbot helpers
         //
         
         fn assert_trove_owner(self: @ContractState, user: ContractAddress, trove_id: u64) {
-            assert!(self.get_trove_owner(trove_id) == Option::Some(user), "PRI: Not trove owner")
+            assert!(self.get_trove_owner(trove_id) == Option::Some(user), "ARC: Not trove owner")
         }
 
         // Modifications from Abbot:
@@ -776,7 +777,7 @@ pub mod prior {
 
         fn assert_callback(self: @ContractState) {
             // Guarantee that at least one callback was executed
-            assert!(!self.transient_callback_nonce.read().is_zero(), "PRI: Callback not executed");
+            assert!(!self.transient_callback_nonce.read().is_zero(), "ARC: Callback not executed");
         }
 
         fn can_execute_rite_helper(
@@ -800,7 +801,7 @@ pub mod prior {
             sentinel: ISentinelDispatcher,
             trove_id: u64,
             trove_owner: ContractAddress,
-            prior: ContractAddress,
+            archabbot: ContractAddress,
             rite_address: ContractAddress,
             action: Action,
         ) {
@@ -811,18 +812,18 @@ pub mod prior {
                     shrine.forge(rite_address, trove_id, amount, config.max_forge_fee_pct);
                 },
                 Action::Melt(amount) => { 
-                    // Melt from Prior
-                    shrine.melt(prior, trove_id, amount);
+                    // Melt from Archabbot
+                    shrine.melt(archabbot, trove_id, amount);
                 },
                 Action::Deposit(asset_balance) => {
-                    // Deposit collateral already sent by Rite to Prior
+                    // Deposit collateral already sent by Rite to Archabbot
                     self
                         .approve_token_for_gate(
                             sentinel,
                             asset_balance.address,
                             asset_balance.amount.into(),
                         );
-                    self.deposit_helper(shrine, sentinel, trove_id, trove_owner, prior, asset_balance);
+                    self.deposit_helper(shrine, sentinel, trove_id, trove_owner, archabbot, asset_balance);
                 },
                 Action::Withdraw(asset_balance) => {
                     // Withdraw collateral to Rite directly

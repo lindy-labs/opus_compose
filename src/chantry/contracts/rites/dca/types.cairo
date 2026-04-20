@@ -1,5 +1,5 @@
 use ekubo::interfaces::extensions::twamm::{OrderInfo, OrderKey};
-use opus_compose::vicariate::contracts::rites::types::EkuboPoolParams;
+use opus_compose::chantry::contracts::rites::types::EkuboPoolParams;
 use starknet::ContractAddress;
 use starknet::storage_access::StorePacking;
 use wadray::Wad;

@@ -4,16 +4,16 @@ use opus::types::Health;
 use opus_compose::addresses::mainnet;
 use opus_compose::interfaces::erc20::{IERC20Dispatcher, IERC20DispatcherTrait};
 use opus_compose::shared::components::src5::{ISRC5Dispatcher, ISRC5DispatcherTrait};
-use opus_compose::vicariate::contracts::prior::prior as prior_contract;
-use opus_compose::vicariate::contracts::rites::topup::constants::MAX_SLIPPAGE;
-use opus_compose::vicariate::contracts::rites::topup::topup_rite::{
+use opus_compose::chantry::contracts::archabbot::archabbot as archabbot_contract;
+use opus_compose::chantry::contracts::rites::topup::constants::MAX_SLIPPAGE;
+use opus_compose::chantry::contracts::rites::topup::topup_rite::{
     ITopupRiteDispatcher, ITopupRiteDispatcherTrait, topup_rite as topup_rite_contract,
 };
-use opus_compose::vicariate::contracts::rites::topup::types::{TopupConditions, TopupConfig};
-use opus_compose::vicariate::contracts::rites::types::EkuboPoolParams;
-use opus_compose::vicariate::interfaces::prior::{IPriorDispatcher, IPriorDispatcherTrait};
-use opus_compose::vicariate::interfaces::rite::{IRITE_ID, IRiteDispatcher, IRiteDispatcherTrait};
-use opus_compose::vicariate::tests::utils::prior_utils;
+use opus_compose::chantry::contracts::rites::topup::types::{TopupConditions, TopupConfig};
+use opus_compose::chantry::contracts::rites::types::EkuboPoolParams;
+use opus_compose::chantry::interfaces::archabbot::{IArchabbotDispatcher, IArchabbotDispatcherTrait};
+use opus_compose::chantry::interfaces::rite::{IRITE_ID, IRiteDispatcher, IRiteDispatcherTrait};
+use opus_compose::chantry::tests::utils::archabbot_utils;
 use snforge_std::{
     CheatSpan, ContractClassTrait, DeclareResultTrait, EventSpyAssertionsTrait,
     cheat_caller_address, declare, spy_events,
@@ -26,11 +26,11 @@ use wadray::{RAY_PERCENT, Ray, WAD_ONE, Wad, rmul_wr};
 // Helpers
 //
 
-fn deploy_topup_rite(prior_address: ContractAddress) -> ContractAddress {
+fn deploy_topup_rite(archabbot_address: ContractAddress) -> ContractAddress {
     let topup_class = declare("topup_rite").unwrap().contract_class();
     let calldata: Array<felt252> = array![
         mainnet::SHRINE.into(), // yin (CASH = Shrine address)
-        prior_address.into(),
+        archabbot_address.into(),
         mainnet::EKUBO_ROUTER.into(),
         mainnet::EKUBO_CORE.into(),
     ];
@@ -60,22 +60,22 @@ fn serialize_config(config: TopupConfig) -> Span<felt252> {
     serialized.span()
 }
 
-// Open a trove via Prior, deploy a topup rite, and attach it.
-fn setup_trove_with_topup_rite() -> (IPriorDispatcher, u64, ContractAddress) {
-    let test_config = prior_utils::prior_deploy(None);
-    let user = prior_utils::USER;
+// Open a trove via Archabbot, deploy a topup rite, and attach it.
+fn setup_trove_with_topup_rite() -> (IArchabbotDispatcher, u64, ContractAddress) {
+    let test_config = archabbot_utils::archabbot_deploy(None);
+    let user = archabbot_utils::USER;
 
-    let prior_abbot = IAbbotDispatcher { contract_address: test_config.prior.contract_address };
-    let trove_id = prior_utils::open_trove_for_user(prior_abbot, user);
+    let archabbot_abbot = IAbbotDispatcher { contract_address: test_config.archabbot.contract_address };
+    let trove_id = archabbot_utils::open_trove_for_user(archabbot_abbot, user);
 
-    let rite_addr = deploy_topup_rite(test_config.prior.contract_address);
+    let rite_addr = deploy_topup_rite(test_config.archabbot.contract_address);
 
     // Attach rite to trove
-    cheat_caller_address(test_config.prior.contract_address, user, CheatSpan::TargetCalls(2));
-    test_config.prior.set_rite(trove_id, rite_addr);
-    test_config.prior.set_trove_config(trove_id, prior_utils::BASE_TROVE_CONFIG());
+    cheat_caller_address(test_config.archabbot.contract_address, user, CheatSpan::TargetCalls(2));
+    test_config.archabbot.set_rite(trove_id, rite_addr);
+    IArchabbotDispatcherTrait::set_trove_config(test_config.archabbot, trove_id, archabbot_utils::BASE_TROVE_CONFIG());
 
-    (test_config.prior, trove_id, rite_addr)
+    (test_config.archabbot, trove_id, rite_addr)
 }
 
 //
@@ -83,10 +83,10 @@ fn setup_trove_with_topup_rite() -> (IPriorDispatcher, u64, ContractAddress) {
 //
 
 #[test]
-#[fork("MAINNET_VICARIATE")]
+#[fork("MAINNET_CHANTRY")]
 fn test_topup_rite_constructor() {
-    let test_config = prior_utils::prior_deploy(None);
-    let rite_addr = deploy_topup_rite(test_config.prior.contract_address);
+    let test_config = archabbot_utils::archabbot_deploy(None);
+    let rite_addr = deploy_topup_rite(test_config.archabbot.contract_address);
     let rite = IRiteDispatcher { contract_address: rite_addr };
 
     assert!(rite.get_rite_id() == "TOPUP", "wrong rite id");
@@ -97,10 +97,10 @@ fn test_topup_rite_constructor() {
 }
 
 #[test]
-#[fork("MAINNET_VICARIATE")]
+#[fork("MAINNET_CHANTRY")]
 fn test_set_trove_config_cash_asset_success() {
-    let (_prior, trove_id, rite_addr) = setup_trove_with_topup_rite();
-    let user = prior_utils::USER;
+    let (_archabbot, trove_id, rite_addr) = setup_trove_with_topup_rite();
+    let user = archabbot_utils::USER;
     let rite = IRiteDispatcher { contract_address: rite_addr };
 
     let asset = mainnet::SHRINE;
@@ -125,10 +125,10 @@ fn test_set_trove_config_cash_asset_success() {
 }
 
 #[test]
-#[fork("MAINNET_VICARIATE")]
+#[fork("MAINNET_CHANTRY")]
 fn test_balance_above_minimum_asset_balance() {
-    let (prior, trove_id, rite_addr) = setup_trove_with_topup_rite();
-    let user = prior_utils::USER;
+    let (archabbot, trove_id, rite_addr) = setup_trove_with_topup_rite();
+    let user = archabbot_utils::USER;
     let rite = IRiteDispatcher { contract_address: rite_addr };
 
     let mut spy = spy_events();
@@ -138,15 +138,15 @@ fn test_balance_above_minimum_asset_balance() {
     let user_cash_balance: u128 = cash.balance_of(user).try_into().unwrap();
     config.conditions.min_asset_balance = user_cash_balance - 1;
 
-    cheat_caller_address(prior.contract_address, user, CheatSpan::TargetCalls(1));
-    prior.set_rite(trove_id, rite_addr);
+    cheat_caller_address(archabbot.contract_address, user, CheatSpan::TargetCalls(1));
+    archabbot.set_rite(trove_id, rite_addr);
 
-    assert_eq!(prior.get_rite(trove_id), rite_addr, "Rite not set");
+    assert_eq!(archabbot.get_rite(trove_id), rite_addr, "Rite not set");
 
     cheat_caller_address(rite_addr, user, CheatSpan::TargetCalls(1));
     rite.set_trove_config(trove_id, serialize_config(config));
 
-    assert!(!prior.can_execute_rite(trove_id), "Rite should not be ready");
+    assert!(!archabbot.can_execute_rite(trove_id), "Rite should not be ready");
     assert!(!rite.is_ready(trove_id), "Rite should not be ready #2");
     assert!(rite.has_ended(trove_id), "Rite should have ended");
 
@@ -165,9 +165,9 @@ fn test_balance_above_minimum_asset_balance() {
         .assert_emitted(
             @array![
                 (
-                    prior.contract_address,
-                    prior_contract::Event::RiteSet(
-                        prior_contract::RiteSet { user, trove_id, rite: rite_addr },
+                    archabbot.contract_address,
+                    archabbot_contract::Event::RiteSet(
+                        archabbot_contract::RiteSet { user, trove_id, rite: rite_addr },
                     ),
                 ),
             ],
@@ -175,10 +175,10 @@ fn test_balance_above_minimum_asset_balance() {
 }
 
 #[test]
-#[fork("MAINNET_VICARIATE")]
+#[fork("MAINNET_CHANTRY")]
 fn test_disable_trove_config() {
-    let (prior, trove_id, rite_addr) = setup_trove_with_topup_rite();
-    let user = prior_utils::USER;
+    let (archabbot, trove_id, rite_addr) = setup_trove_with_topup_rite();
+    let user = archabbot_utils::USER;
     let rite = IRiteDispatcher { contract_address: rite_addr };
 
     let mut spy = spy_events();
@@ -193,7 +193,7 @@ fn test_disable_trove_config() {
     let stored: TopupConfig = Serde::<TopupConfig>::deserialize(ref stored_iter).unwrap();
     assert!(stored.topup_amount.is_zero(), "should be zero");
 
-    assert!(!prior.can_execute_rite(trove_id), "Rite should not be ready");
+    assert!(!archabbot.can_execute_rite(trove_id), "Rite should not be ready");
     assert!(!rite.is_ready(trove_id), "Rite should not be ready #2");
     assert!(rite.has_ended(trove_id), "Rite should have ended");
 
@@ -211,10 +211,10 @@ fn test_disable_trove_config() {
 }
 
 #[test]
-#[fork("MAINNET_VICARIATE")]
+#[fork("MAINNET_CHANTRY")]
 fn test_set_trove_config_max_slippage() {
-    let (_prior, trove_id, rite_addr) = setup_trove_with_topup_rite();
-    let user = prior_utils::USER;
+    let (_archabbot, trove_id, rite_addr) = setup_trove_with_topup_rite();
+    let user = archabbot_utils::USER;
     let rite = IRiteDispatcher { contract_address: rite_addr };
 
     let config = TopupConfig {
@@ -235,11 +235,11 @@ fn test_set_trove_config_max_slippage() {
 }
 
 #[test]
-#[fork("MAINNET_VICARIATE")]
+#[fork("MAINNET_CHANTRY")]
 #[should_panic(expected: "TOPUP: Slippage out of acceptable range")]
 fn test_set_trove_config_zero_slippage_reverts() {
-    let (_prior, trove_id, rite_addr) = setup_trove_with_topup_rite();
-    let user = prior_utils::USER;
+    let (_archabbot, trove_id, rite_addr) = setup_trove_with_topup_rite();
+    let user = archabbot_utils::USER;
     let rite = IRiteDispatcher { contract_address: rite_addr };
 
     let config = TopupConfig {
@@ -254,11 +254,11 @@ fn test_set_trove_config_zero_slippage_reverts() {
 }
 
 #[test]
-#[fork("MAINNET_VICARIATE")]
+#[fork("MAINNET_CHANTRY")]
 #[should_panic(expected: "TOPUP: Slippage out of acceptable range")]
 fn test_set_trove_config_slippage_exceeds_max_reverts() {
-    let (_prior, trove_id, rite_addr) = setup_trove_with_topup_rite();
-    let user = prior_utils::USER;
+    let (_archabbot, trove_id, rite_addr) = setup_trove_with_topup_rite();
+    let user = archabbot_utils::USER;
     let rite = IRiteDispatcher { contract_address: rite_addr };
 
     let config = TopupConfig {
@@ -273,24 +273,24 @@ fn test_set_trove_config_slippage_exceeds_max_reverts() {
 }
 
 #[test]
-#[fork("MAINNET_VICARIATE")]
+#[fork("MAINNET_CHANTRY")]
 #[should_panic(expected: "TOPUP: Not owner")]
 fn test_set_trove_config_not_owner_reverts() {
-    let (_prior, trove_id, rite_addr) = setup_trove_with_topup_rite();
+    let (_archabbot, trove_id, rite_addr) = setup_trove_with_topup_rite();
     let rite = IRiteDispatcher { contract_address: rite_addr };
 
-    let config = default_topup_config(prior_utils::BAD_GUY);
+    let config = default_topup_config(archabbot_utils::BAD_GUY);
 
-    cheat_caller_address(rite_addr, prior_utils::BAD_GUY, CheatSpan::TargetCalls(1));
+    cheat_caller_address(rite_addr, archabbot_utils::BAD_GUY, CheatSpan::TargetCalls(1));
     rite.set_trove_config(trove_id, serialize_config(config));
 }
 
 #[test]
-#[fork("MAINNET_VICARIATE")]
+#[fork("MAINNET_CHANTRY")]
 #[should_panic(expected: "TOPUP: Invalid asset")]
 fn test_set_trove_config_zero_asset_reverts() {
-    let (_prior, trove_id, rite_addr) = setup_trove_with_topup_rite();
-    let user = prior_utils::USER;
+    let (_archabbot, trove_id, rite_addr) = setup_trove_with_topup_rite();
+    let user = archabbot_utils::USER;
     let rite = IRiteDispatcher { contract_address: rite_addr };
 
     let config = TopupConfig { asset: Zero::zero(), ..default_topup_config(user) };
@@ -300,11 +300,11 @@ fn test_set_trove_config_zero_asset_reverts() {
 }
 
 #[test]
-#[fork("MAINNET_VICARIATE")]
+#[fork("MAINNET_CHANTRY")]
 #[should_panic(expected: "TOPUP: Invalid pool params")]
 fn test_set_trove_config_no_swap_path_reverts() {
-    let (_prior, trove_id, rite_addr) = setup_trove_with_topup_rite();
-    let user = prior_utils::USER;
+    let (_archabbot, trove_id, rite_addr) = setup_trove_with_topup_rite();
+    let user = archabbot_utils::USER;
     let rite = IRiteDispatcher { contract_address: rite_addr };
 
     let config = TopupConfig {
@@ -318,11 +318,11 @@ fn test_set_trove_config_no_swap_path_reverts() {
 }
 
 #[test]
-#[fork("MAINNET_VICARIATE")]
+#[fork("MAINNET_CHANTRY")]
 #[should_panic(expected: "TOPUP: Topup amount less than minimum")]
 fn test_set_trove_config_topup_amount_below_min_balance_reverts() {
-    let (_prior, trove_id, rite_addr) = setup_trove_with_topup_rite();
-    let user = prior_utils::USER;
+    let (_archabbot, trove_id, rite_addr) = setup_trove_with_topup_rite();
+    let user = archabbot_utils::USER;
     let rite = IRiteDispatcher { contract_address: rite_addr };
 
     let config = TopupConfig {
@@ -335,11 +335,11 @@ fn test_set_trove_config_topup_amount_below_min_balance_reverts() {
 }
 
 #[test]
-#[fork("MAINNET_VICARIATE")]
+#[fork("MAINNET_CHANTRY")]
 #[should_panic(expected: "TOPUP: Invalid destination")]
 fn test_set_trove_config_zero_destination_reverts() {
-    let (_prior, trove_id, rite_addr) = setup_trove_with_topup_rite();
-    let user = prior_utils::USER;
+    let (_archabbot, trove_id, rite_addr) = setup_trove_with_topup_rite();
+    let user = archabbot_utils::USER;
     let rite = IRiteDispatcher { contract_address: rite_addr };
 
     let config = TopupConfig { destination: Zero::zero(), ..default_topup_config(user) };
@@ -349,10 +349,10 @@ fn test_set_trove_config_zero_destination_reverts() {
 }
 
 #[test]
-#[fork("MAINNET_VICARIATE")]
+#[fork("MAINNET_CHANTRY")]
 fn test_is_ready_returns_false_when_no_config() {
-    let test_config = prior_utils::prior_deploy(None);
-    let rite_addr = deploy_topup_rite(test_config.prior.contract_address);
+    let test_config = archabbot_utils::archabbot_deploy(None);
+    let rite_addr = deploy_topup_rite(test_config.archabbot.contract_address);
     let rite = IRiteDispatcher { contract_address: rite_addr };
 
     let ready = rite.is_ready(999);
@@ -360,11 +360,11 @@ fn test_is_ready_returns_false_when_no_config() {
 }
 
 #[test]
-#[fork("MAINNET_VICARIATE")]
-#[should_panic(expected: "TOPUP: Caller is not Prior")]
-fn test_perform_non_prior_caller_reverts() {
-    let (_prior, trove_id, rite_addr) = setup_trove_with_topup_rite();
-    let user = prior_utils::USER;
+#[fork("MAINNET_CHANTRY")]
+#[should_panic(expected: "TOPUP: Caller is not Archabbot")]
+fn test_perform_non_archabbot_caller_reverts() {
+    let (_archabbot, trove_id, rite_addr) = setup_trove_with_topup_rite();
+    let user = archabbot_utils::USER;
     let rite = IRiteDispatcher { contract_address: rite_addr };
 
     let config = default_topup_config(user);
@@ -376,11 +376,11 @@ fn test_perform_non_prior_caller_reverts() {
 }
 
 #[test]
-#[fork("MAINNET_VICARIATE")]
-#[should_panic(expected: "TOPUP: Caller is not Prior")]
-fn test_end_non_prior_caller_reverts() {
-    let (_prior, trove_id, rite_addr) = setup_trove_with_topup_rite();
-    let user = prior_utils::USER;
+#[fork("MAINNET_CHANTRY")]
+#[should_panic(expected: "TOPUP: Caller is not Archabbot")]
+fn test_end_non_archabbot_caller_reverts() {
+    let (_archabbot, trove_id, rite_addr) = setup_trove_with_topup_rite();
+    let user = archabbot_utils::USER;
     let rite = IRiteDispatcher { contract_address: rite_addr };
 
     let config = default_topup_config(user);
@@ -392,10 +392,10 @@ fn test_end_non_prior_caller_reverts() {
 }
 
 #[test]
-#[fork("MAINNET_VICARIATE")]
+#[fork("MAINNET_CHANTRY")]
 fn test_cash_topup() {
-    let (prior, trove_id, rite_addr) = setup_trove_with_topup_rite();
-    let user = prior_utils::USER;
+    let (archabbot, trove_id, rite_addr) = setup_trove_with_topup_rite();
+    let user = archabbot_utils::USER;
     let rite = IRiteDispatcher { contract_address: rite_addr };
 
     let mut spy = spy_events();
@@ -411,8 +411,8 @@ fn test_cash_topup() {
     cheat_caller_address(rite_addr, user, CheatSpan::TargetCalls(1));
     rite.set_trove_config(trove_id, serialize_config(config));
 
-    assert_eq!(prior.get_rite(trove_id), rite_addr, "Rite not set");
-    assert!(prior.can_execute_rite(trove_id), "Rite should be ready");
+    assert_eq!(archabbot.get_rite(trove_id), rite_addr, "Rite not set");
+    assert!(archabbot.can_execute_rite(trove_id), "Rite should be ready");
     assert!(rite.is_ready(trove_id), "Rite should be ready #2");
     assert!(rite.has_ended(trove_id), "Rite should have ended");
 
@@ -423,8 +423,8 @@ fn test_cash_topup() {
     assert_eq!(forge_amount, config.topup_amount, "Wrong forge amonut");
     assert!(swap_params.swap_data.is_none(), "Wrong swap data");
 
-    cheat_caller_address(prior.contract_address, user, CheatSpan::TargetCalls(1));
-    prior.execute_rite(trove_id);
+    cheat_caller_address(archabbot.contract_address, user, CheatSpan::TargetCalls(1));
+    archabbot.execute_rite(trove_id);
 
     let after_user_cash_balance: u128 = cash.balance_of(user).try_into().unwrap();
     let expected_user_cash_balance: u128 = before_user_cash_balance + config.topup_amount;
@@ -434,7 +434,7 @@ fn test_cash_topup() {
     let expected_trove_debt: Wad = before_trove_health.debt + config.topup_amount.into();
     assert_eq!(after_trove_health.debt, expected_trove_debt, "Wrong trove debt");
 
-    assert!(!prior.can_execute_rite(trove_id), "Rite should not be ready");
+    assert!(!archabbot.can_execute_rite(trove_id), "Rite should not be ready");
     assert!(!rite.is_ready(trove_id), "Rite should not be ready #2");
     assert!(rite.has_ended(trove_id), "Rite should have ended #2");
 
@@ -460,9 +460,9 @@ fn test_cash_topup() {
         .assert_emitted(
             @array![
                 (
-                    prior.contract_address,
-                    prior_contract::Event::RiteExecuted(
-                        prior_contract::RiteExecuted {
+                    archabbot.contract_address,
+                    archabbot_contract::Event::RiteExecuted(
+                        archabbot_contract::RiteExecuted {
                             caller: user, trove_id, rite: rite_addr, incentive: Zero::zero(),
                         },
                     ),
@@ -472,10 +472,10 @@ fn test_cash_topup() {
 }
 
 #[test]
-#[fork("MAINNET_VICARIATE")]
+#[fork("MAINNET_CHANTRY")]
 fn test_usdc_topup() {
-    let (prior, trove_id, rite_addr) = setup_trove_with_topup_rite();
-    let user = prior_utils::USER;
+    let (archabbot, trove_id, rite_addr) = setup_trove_with_topup_rite();
+    let user = archabbot_utils::USER;
     let rite = IRiteDispatcher { contract_address: rite_addr };
 
     let mut spy = spy_events();
@@ -495,8 +495,8 @@ fn test_usdc_topup() {
     cheat_caller_address(rite_addr, user, CheatSpan::TargetCalls(1));
     rite.set_trove_config(trove_id, serialize_config(config));
 
-    assert_eq!(prior.get_rite(trove_id), rite_addr, "Rite not set");
-    assert!(prior.can_execute_rite(trove_id), "Rite should be ready");
+    assert_eq!(archabbot.get_rite(trove_id), rite_addr, "Rite not set");
+    assert!(archabbot.can_execute_rite(trove_id), "Rite should be ready");
     assert!(rite.is_ready(trove_id), "Rite should be ready #2");
     assert!(rite.has_ended(trove_id), "Rite should have ended");
 
@@ -512,8 +512,8 @@ fn test_usdc_topup() {
     assert!(forge_amount.is_non_zero(), "Wrong forge amonut");
     assert!(swap_params.swap_data.is_some(), "Wrong swap data");
 
-    cheat_caller_address(prior.contract_address, user, CheatSpan::TargetCalls(1));
-    prior.execute_rite(trove_id);
+    cheat_caller_address(archabbot.contract_address, user, CheatSpan::TargetCalls(1));
+    archabbot.execute_rite(trove_id);
 
     let after_user_usdc_balance: u128 = usdc.balance_of(user).try_into().unwrap();
     let expected_user_usdc_balance: u128 = before_user_usdc_balance + config.topup_amount;
@@ -523,7 +523,7 @@ fn test_usdc_topup() {
     let expected_trove_debt: Wad = before_trove_health.debt + forge_amount.into();
     assert_eq!(after_trove_health.debt, expected_trove_debt, "Wrong trove debt");
 
-    assert!(!prior.can_execute_rite(trove_id), "Rite should not be ready");
+    assert!(!archabbot.can_execute_rite(trove_id), "Rite should not be ready");
     assert!(!rite.is_ready(trove_id), "Rite should not be ready #2");
     assert!(rite.has_ended(trove_id), "Rite should have ended #2");
 
@@ -551,9 +551,9 @@ fn test_usdc_topup() {
         .assert_emitted(
             @array![
                 (
-                    prior.contract_address,
-                    prior_contract::Event::RiteExecuted(
-                        prior_contract::RiteExecuted {
+                    archabbot.contract_address,
+                    archabbot_contract::Event::RiteExecuted(
+                        archabbot_contract::RiteExecuted {
                             caller: user, trove_id, rite: rite_addr, incentive: Zero::zero(),
                         },
                     ),

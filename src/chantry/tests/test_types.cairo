@@ -1,9 +1,9 @@
-use opus_compose::vicariate::contracts::rites::dca::types::{
+use opus_compose::chantry::contracts::rites::dca::types::{
     DcaOrder, DcaOrderDuration, OrderType, PriceConditions, PriceDcaDurations, TimeDcaConditions,
 };
-use opus_compose::vicariate::contracts::rites::topup::types::TopupConditions;
-use opus_compose::vicariate::contracts::rites::types::EkuboPoolParams;
-use opus_compose::vicariate::types::TroveConfig;
+use opus_compose::chantry::contracts::rites::topup::types::TopupConditions;
+use opus_compose::chantry::contracts::rites::types::EkuboPoolParams;
+use opus_compose::chantry::types::TroveConfig;
 use starknet::storage_access::StorePacking;
 use wadray::{RAY_ONE, RAY_PERCENT, Ray, WAD_ONE, Wad};
 
@@ -122,7 +122,7 @@ fn test_smart_trove_config_packing_max_fee_pct() {
 #[test]
 fn test_smart_trove_config_packing_max_incentive() {
     // incentive capped at 2^99 - 1 (99 bits) — the maximum that fits in the packing layout
-    // Note: prior.cairo MAX_INCENTIVE = 0x7FFFFFFFFFFFFFFFFFFFFFFFFFFF (2^111-1) exceeds
+    // Note: archabbot.cairo MAX_INCENTIVE = 0x7FFFFFFFFFFFFFFFFFFFFFFFFFFF (2^111-1) exceeds
     // the 99-bit allocation and would not roundtrip correctly through packing.
     let max_incentive: u128 = 0x7FFFFFFFFFFFFFFFFFFFFFFFF; // 2^99 - 1
     assert_smart_trove_config_roundtrip(0_u128.into(), 0_u128.into(), max_incentive.into());

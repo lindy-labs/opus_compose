@@ -12,7 +12,7 @@ pub trait IRite<TContractState> {
     // Returns whether the rite has ended
     // Always returns true for rites that end within a single call
     fn has_ended(self: @TContractState, trove_id: u64) -> bool;
-    // Must include a callback to `prior.on_execute_rite(...)`
+    // Must include a callback to `archabbot.on_rite_actions(...)`
     fn perform(ref self: TContractState, trove_id: u64);
     // Ends a rite that runs for longer than the initial `perform` call e.g. DCA orders.
     // This may include stopping a long-running rite before it is completed.

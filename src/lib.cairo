@@ -48,9 +48,9 @@ pub mod stabilizer {
     }
 }
 
-pub mod vicariate {
+pub mod chantry {
     pub mod contracts {
-        pub mod prior;
+        pub mod archabbot;
         pub mod rites {
             pub mod interfaces;
             pub mod types;
@@ -72,7 +72,7 @@ pub mod vicariate {
     }
     pub mod interfaces {
         pub mod lever;
-        pub mod prior;
+        pub mod archabbot;
         pub mod rite;
     }
     pub mod types;
@@ -82,7 +82,7 @@ pub mod vicariate {
 
     #[cfg(test)]
     pub mod tests {
-        pub mod test_prior;
+        pub mod test_archabbot;
         pub mod test_types;
         pub mod utils;
         pub mod rites {
