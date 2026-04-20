@@ -80,8 +80,6 @@ pub mod archabbot {
         user_troves: Map<(ContractAddress, u64), u64>,
         // Smart trove ID -> owner
         trove_owner: Map<u64, ContractAddress>,
-        // Write-once during deployment
-        legacy_troves_count: u64,
         //
         // Rite storage
         //
@@ -239,28 +237,20 @@ pub mod archabbot {
     ) {
         self.shrine.write(IShrineDispatcher { contract_address: shrine });
         self.sentinel.write(ISentinelDispatcher { contract_address: sentinel });
-        let abbot = IAbbotDispatcher { contract_address: abbot };
-        self.abbot.write(abbot);
+        self.abbot.write(IAbbotDispatcher { contract_address: abbot });
         self.flash_mint.write(IFlashMintDispatcher { contract_address: flash_mint });
         self.ekubo_router.write(IRouterDispatcher { contract_address: ekubo_router });
-
-        let legacy_troves_count: u64 = abbot.get_troves_count();
-        self.troves_count.write(legacy_troves_count);
-        self.legacy_troves_count.write(legacy_troves_count);
     }
 
     #[abi(embed_v0)]
     impl IAbbotImpl of IAbbot<ContractState> {
         fn get_trove_owner(self: @ContractState, trove_id: u64) -> Option<ContractAddress> {
-            if trove_id <= self.legacy_troves_count.read() {
-                return self.abbot.read().get_trove_owner(trove_id);
-            }
             let owner = self.trove_owner.read(trove_id);
             if owner.is_non_zero() {
-                Option::Some(owner)
-            } else {
-                Option::None
+                return Option::Some(owner);
             }
+            // Delegate to legacy Abbot
+            self.abbot.read().get_trove_owner(trove_id)
         }
 
         fn get_user_trove_ids(self: @ContractState, user: ContractAddress) -> Span<u64> {
