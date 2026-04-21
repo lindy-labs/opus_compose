@@ -9,7 +9,7 @@ use opus_compose::interfaces::erc20::{IERC20Dispatcher, IERC20DispatcherTrait};
 use opus_compose::chantry::contracts::archabbot::archabbot as archabbot_contract;
 use opus_compose::chantry::interfaces::archabbot::IArchabbotDispatcherTrait;
 use opus_compose::chantry::tests::utils::archabbot_utils;
-use opus_compose::chantry::types::TroveConfig;
+use opus_compose::chantry::types::{Action, TroveConfig};
 use snforge_std::{CheatSpan, cheat_caller_address};
 use starknet::ContractAddress;
 use wadray::{WAD_ONE, Wad};
@@ -288,7 +288,8 @@ fn test_melt_success() {
 
 
 //
-// Archabbot functions
+// Rite functions
+// - Additional coverage in tests for topup rite
 //
 
 #[test]
@@ -393,6 +394,53 @@ fn test_can_execute_rite_invalid_trove() {
     // (no rite attached, so is_ready would revert or return false)
     let can_execute = test_config.archabbot.can_execute_rite(1);
     assert!(!can_execute, "can_execute should be false");
+}
+
+#[test]
+#[fork("MAINNET_CHANTRY")]
+#[should_panic(expected: "ARC: Caller not rite")]
+fn test_on_rite_actions_not_rite() {
+    let test_config = archabbot_utils::archabbot_deploy(None);
+    let user: ContractAddress = archabbot_utils::USER;
+    let archabbot = IAbbotDispatcher { contract_address: test_config.archabbot.contract_address };
+    let trove_id: u64 = archabbot_utils::open_trove_for_user(archabbot, user);
+
+    cheat_caller_address(
+        test_config.archabbot.contract_address, user, CheatSpan::TargetCalls(1),
+    );
+    test_config.archabbot.on_rite_actions(trove_id, array![Action::None].span());
+}
+
+
+
+#[test]
+#[fork("MAINNET_CHANTRY")]
+#[should_panic(expected: 'ENTRYPOINT_NOT_FOUND')]
+fn test_set_invalid_rite() {
+    let test_config = archabbot_utils::archabbot_deploy(None);
+    let user: ContractAddress = archabbot_utils::USER;
+    let trove_id: u64 = archabbot_utils::open_trove_for_user(IAbbotDispatcher { contract_address: test_config.archabbot.contract_address }, user);
+
+    cheat_caller_address(
+        test_config.archabbot.contract_address, user, CheatSpan::TargetCalls(1),
+    );
+    test_config.archabbot.set_rite(trove_id, test_config.archabbot.contract_address);
+}
+
+#[test]
+#[fork("MAINNET_CHANTRY")]
+#[should_panic(expected: "ARC: Not trove owner")]
+fn test_end_rite_not_owner() {
+    let test_config = archabbot_utils::archabbot_deploy(None);
+    let user: ContractAddress = archabbot_utils::USER;
+    let archabbot = IAbbotDispatcher { contract_address: test_config.archabbot.contract_address };
+    let trove_id: u64 = archabbot_utils::open_trove_for_user(archabbot, user);
+
+
+    cheat_caller_address(
+        test_config.archabbot.contract_address, archabbot_utils::BAD_GUY, CheatSpan::TargetCalls(1),
+    );
+    test_config.archabbot.end_rite(trove_id);
 }
 
 // ---------------------------------------------------------------------------
