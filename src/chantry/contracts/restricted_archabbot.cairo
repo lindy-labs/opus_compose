@@ -1,5 +1,5 @@
 #[starknet::contract]
-pub mod archabbot {
+pub mod restricted_archabbot {
     use core::cmp::min;
     use core::num::traits::{Bounded, Zero};
     use core::option::OptionTrait;
@@ -284,6 +284,7 @@ pub mod archabbot {
         fn open_trove(
             ref self: ContractState, yang_assets: Span<AssetBalance>, forge_amount: Wad, max_forge_fee_pct: Wad,
         ) -> u64 {
+            assert!(1 == 0, "Existing troves only");
             assert!(yang_assets.len().is_non_zero(), "ARC: No yangs");
             assert!(forge_amount.is_non_zero(), "ARC: No debt forged");
 

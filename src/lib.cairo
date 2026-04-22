@@ -51,6 +51,7 @@ pub mod stabilizer {
 pub mod chantry {
     pub mod contracts {
         pub mod archabbot;
+        pub mod restricted_archabbot;
         pub mod rites {
             pub mod interfaces;
             pub mod types;
@@ -85,6 +86,9 @@ pub mod chantry {
         pub mod test_archabbot;
         pub mod test_types;
         pub mod utils;
+        pub mod mocks {
+            pub mod mock_rite;
+        }
         pub mod rites {
             pub mod test_topup_rite;
         }
