@@ -79,7 +79,11 @@ fn setup_trove_with_topup_rite() -> (IArchabbotDispatcher, u64, ContractAddress)
 }
 
 //
-// Tests
+// Archabbot Rite-related tests
+//
+
+//
+// Rite Tests
 //
 
 #[test]
@@ -393,6 +397,39 @@ fn test_end_non_archabbot_caller_reverts() {
 
 #[test]
 #[fork("MAINNET_CHANTRY")]
+fn test_end_rite() {
+    let (archabbot, trove_id, rite_addr) = setup_trove_with_topup_rite();
+    let user = archabbot_utils::USER;
+    let rite = IRiteDispatcher { contract_address: rite_addr };
+
+    let mut spy = spy_events();
+
+    let mut config = default_topup_config(user);
+
+    cheat_caller_address(rite_addr, user, CheatSpan::TargetCalls(1));
+    rite.set_trove_config(trove_id, serialize_config(config));
+
+    
+    cheat_caller_address(archabbot.contract_address, user, CheatSpan::TargetCalls(1));
+    archabbot.end_rite(trove_id);
+
+    spy
+        .assert_emitted(
+            @array![
+                (
+                    archabbot.contract_address,
+                    archabbot_contract::Event::RiteEnded(
+                        archabbot_contract::RiteEnded {
+                            caller: user, trove_id, rite: rite_addr, 
+                        },
+                    ),
+                ),
+            ],
+        );
+}
+
+#[test]
+#[fork("MAINNET_CHANTRY")]
 fn test_cash_topup() {
     let (archabbot, trove_id, rite_addr) = setup_trove_with_topup_rite();
     let user = archabbot_utils::USER;
@@ -473,12 +510,19 @@ fn test_cash_topup() {
 
 #[test]
 #[fork("MAINNET_CHANTRY")]
-fn test_usdc_topup() {
+fn test_usdc_topup_with_incentive() {
     let (archabbot, trove_id, rite_addr) = setup_trove_with_topup_rite();
     let user = archabbot_utils::USER;
     let rite = IRiteDispatcher { contract_address: rite_addr };
 
     let mut spy = spy_events();
+
+    let mut trove_config = archabbot.get_trove_config(trove_id);
+    let incentive: Wad = WAD_ONE.into();
+    trove_config.incentive = incentive; 
+
+    cheat_caller_address(archabbot.contract_address, user, CheatSpan::TargetCalls(1));
+    archabbot.set_trove_config(trove_id, trove_config);
 
     let slippage: Ray = RAY_PERCENT.into();
     let config = TopupConfig {
@@ -501,7 +545,9 @@ fn test_usdc_topup() {
     assert!(rite.has_ended(trove_id), "Rite should have ended");
 
     let usdc = IERC20Dispatcher { contract_address: mainnet::USDC };
+    let cash = IERC20Dispatcher { contract_address: mainnet::SHRINE };
     let shrine = IShrineDispatcher { contract_address: mainnet::SHRINE };
+    let before_user_cash_balance: u128 = cash.balance_of(user).try_into().unwrap();
     let before_user_usdc_balance: u128 = usdc.balance_of(user).try_into().unwrap();
     let before_trove_health: Health = shrine.get_trove_health(trove_id);
 
@@ -514,13 +560,17 @@ fn test_usdc_topup() {
 
     cheat_caller_address(archabbot.contract_address, user, CheatSpan::TargetCalls(1));
     archabbot.execute_rite(trove_id);
+    
+    let after_user_cash_balance: u128 = cash.balance_of(user).try_into().unwrap();
+    let expected_user_cash_balance: u128 = before_user_cash_balance + incentive.into();
+    assert_eq!(after_user_cash_balance, expected_user_cash_balance, "Wrong incentive");
 
     let after_user_usdc_balance: u128 = usdc.balance_of(user).try_into().unwrap();
     let expected_user_usdc_balance: u128 = before_user_usdc_balance + config.topup_amount;
     assert_eq!(after_user_usdc_balance, expected_user_usdc_balance, "Topup did not happen");
 
     let after_trove_health: Health = shrine.get_trove_health(trove_id);
-    let expected_trove_debt: Wad = before_trove_health.debt + forge_amount.into();
+    let expected_trove_debt: Wad = before_trove_health.debt + forge_amount.into() + incentive;
     assert_eq!(after_trove_health.debt, expected_trove_debt, "Wrong trove debt");
 
     assert!(!archabbot.can_execute_rite(trove_id), "Rite should not be ready");
@@ -554,7 +604,7 @@ fn test_usdc_topup() {
                     archabbot.contract_address,
                     archabbot_contract::Event::RiteExecuted(
                         archabbot_contract::RiteExecuted {
-                            caller: user, trove_id, rite: rite_addr, incentive: Zero::zero(),
+                            caller: user, trove_id, rite: rite_addr, incentive
                         },
                     ),
                 ),
