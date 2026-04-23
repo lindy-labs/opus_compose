@@ -88,6 +88,8 @@ pub mod chantry {
         pub mod utils;
         pub mod mocks {
             pub mod mock_rite;
+            pub mod no_callback_rite;
+            pub mod reentrant_rite;
         }
         pub mod rites {
             pub mod test_topup_rite;
