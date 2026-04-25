@@ -84,9 +84,11 @@ pub mod chantry {
     #[cfg(test)]
     pub mod tests {
         pub mod test_archabbot;
+        pub mod test_archabbot_lever;
         pub mod test_types;
         pub mod utils;
         pub mod mocks {
+            pub mod malicious_lever;
             pub mod mock_rite;
             pub mod no_callback_rite;
             pub mod reentrant_rite;

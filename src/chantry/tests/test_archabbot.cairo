@@ -1,6 +1,6 @@
 use core::num::traits::Zero;
 use opus::interfaces::{
-    IAbbotDispatcher, IAbbotDispatcherTrait, IShrineDispatcherTrait,
+    IAbbotDispatcher, IAbbotDispatcherTrait, IShrineDispatcher, IShrineDispatcherTrait,
 };
 use opus::types::{AssetBalance, Health};
 use opus::utils::assertions::assert_equalish;
@@ -19,9 +19,12 @@ use opus_compose::chantry::tests::mocks::reentrant_rite::{
 use opus_compose::chantry::tests::utils::archabbot_utils;
 use opus_compose::chantry::types::{Action, TroveConfig};
 use opus_compose::shared::components::src5::{ISRC5Dispatcher, ISRC5DispatcherTrait};
-use snforge_std::{CheatSpan, ContractClassTrait, DeclareResultTrait, cheat_caller_address, declare};
+use snforge_std::{
+    CheatSpan, ContractClassTrait, DeclareResultTrait, EventSpyAssertionsTrait,
+    cheat_caller_address, declare, spy_events,
+};
 use starknet::ContractAddress;
-use wadray::{WAD_ONE, Wad};
+use wadray::{RAY_ONE, Ray, WAD_ONE, Wad};
 
 const EXISTING_TROVE_ID: u64 = 1;
 
