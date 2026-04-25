@@ -237,9 +237,12 @@ pub mod archabbot {
     ) {
         self.shrine.write(IShrineDispatcher { contract_address: shrine });
         self.sentinel.write(ISentinelDispatcher { contract_address: sentinel });
-        self.abbot.write(IAbbotDispatcher { contract_address: abbot });
+        let abbot = IAbbotDispatcher { contract_address: abbot };
+        self.abbot.write(abbot);
         self.flash_mint.write(IFlashMintDispatcher { contract_address: flash_mint });
         self.ekubo_router.write(IRouterDispatcher { contract_address: ekubo_router });
+
+        self.troves_count.write(abbot.get_troves_count());
     }
 
     // Replicates existing Abbot's implementation
@@ -647,7 +650,7 @@ pub mod archabbot {
                     let yang_erc20 = IERC20Dispatcher { contract_address: yang };
 
                     // Use the flash minted yin to repay the trove's debt
-                    self.melt(trove_id, amount.try_into().unwrap());
+                    shrine.melt(archabbot, trove_id, amount.try_into().unwrap());
 
                     // Withdraw collateral to this contract
                     let asset_amt: u128 = self.withdraw_helper(shrine, sentinel, trove_id, user, initiator, yang, yang_amt);
