@@ -645,6 +645,35 @@ fn test_lever_up_below_min_asset_amount_fail() {
     lever.up(debt.into(), lever_up_params);
 }
 
+// Similar to the test for `up` in `test_lever_up_and_down`
+#[test]
+#[fork("MAINNET_LEVER")]
+#[should_panic(expected: 'SH: forge_fee% > max_forge_fee%')]
+fn test_lever_up_exceeds_max_forge_fee_pct_fail() {
+    let test_config = archabbot_utils::archabbot_deploy(None);
+    let lever = ILeverDispatcher { contract_address: test_config.archabbot.contract_address };
+
+    let shrine = test_config.shrine;
+
+    let whale = mainnet::WHALE;
+    let eth = mainnet::ETH;
+
+    let eth_capital: u128 = WAD_ONE * 2;
+    let (test_config, trove_id) = lever_open_trove_helper(test_config, whale, eth_capital);
+
+    let (eth_price, _, _) = shrine.get_current_yang_price(eth);
+    let debt: u128 = eth_price.into() * 2;
+
+    let max_ltv: Ray = RAY_ONE.into();
+    let max_forge_fee_pct: Wad = Zero::zero();
+    let lever_up_params = LeverUpParams {
+        trove_id, max_ltv, yang: eth, max_forge_fee_pct, min_asset_amount: 1, swaps: lever_up_swaps(),
+    };
+
+    cheat_caller_address(test_config.archabbot.contract_address, whale, CheatSpan::TargetCalls(1));
+    lever.up(debt.into(), lever_up_params);
+}
+
 #[test]
 #[fork("MAINNET_LEVER")]
 #[should_panic(expected: "ARC: Not trove owner")]

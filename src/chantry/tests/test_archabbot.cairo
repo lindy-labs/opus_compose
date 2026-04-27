@@ -1,6 +1,6 @@
 use core::num::traits::Zero;
 use opus::interfaces::{
-    IAbbotDispatcher, IAbbotDispatcherTrait, IShrineDispatcherTrait,
+    IAbbotDispatcher, IAbbotDispatcherTrait, ISentinelDispatcherTrait, IShrineDispatcherTrait,
 };
 use opus::types::{AssetBalance, Health};
 use opus::utils::assertions::assert_equalish;
@@ -732,11 +732,15 @@ fn test_mock_rite_has_ended() {
 
 #[test]
 #[fork("MAINNET_CHANTRY")]
-fn test_mock_rite_execute_deposit() {
+#[test_case(true)]
+#[test_case(false)]
+fn test_mock_rite_deposit(is_perform: bool) {
     let (test_config, trove_id, rite_addr) = setup_trove_with_mock_rite();
     let user = archabbot_utils::USER;
     let rite = IRiteDispatcher { contract_address: rite_addr };
     let yang = mainnet::ETH;
+
+    let mut spy = spy_events();
 
     let num_calls = 3;
     let amount_per_call: u128 = WAD_ONE / 10;
@@ -754,22 +758,45 @@ fn test_mock_rite_execute_deposit() {
     assert!(rite.is_ready(trove_id), "Rite should be ready #2");
 
     cheat_caller_address(test_config.archabbot.contract_address, user, CheatSpan::TargetCalls(1));
-    test_config.archabbot.execute_rite(trove_id);
+    if is_perform {
+        test_config.archabbot.execute_rite(trove_id);
+    } else {
+        test_config.archabbot.end_rite(trove_id);
+    }
 
     let after_deposit: Wad = test_config.shrine.get_deposit(yang, trove_id);
     let expected_deposit: Wad = before_deposit + total_deposit_amount.into();
     let error_margin: Wad = 50_u128.into();
     assert_equalish(after_deposit, expected_deposit, error_margin, 'Wrong deposit amount');
+
+    let yang_amount = test_config.sentinel.convert_to_yang(yang, amount_per_call);
+    let expected_deposit_event = (
+            test_config.archabbot.contract_address,
+            archabbot_contract::Event::Deposit (
+                archabbot_contract::Deposit {
+                    user, trove_id, yang, yang_amt: yang_amount, asset_amt: amount_per_call,
+                },
+            ),
+        );
+
+    let expected_events = array![
+        expected_deposit_event, expected_deposit_event, expected_deposit_event
+            ];
+    spy.assert_emitted(@expected_events);
 }
 
 #[test]
 #[fork("MAINNET_CHANTRY")]
-fn test_mock_rite_execute_withdraw() {
+#[test_case(true)]
+#[test_case(false)]
+fn test_mock_rite_withdraw(is_perform: bool) {
     let (test_config, trove_id, rite_addr) = setup_trove_with_mock_rite();
     let user = archabbot_utils::USER;
     let rite = IRiteDispatcher { contract_address: rite_addr };
     let yang = mainnet::ETH;
     let yang_erc20 = IERC20Dispatcher { contract_address: yang };
+
+    let mut spy = spy_events();
 
     let deposit_amount: u128 = WAD_ONE;
     archabbot_utils::fund_user_eth(user, deposit_amount.into());
@@ -786,13 +813,21 @@ fn test_mock_rite_execute_withdraw() {
     };
     rite.set_trove_config(trove_id, serialize_mock_config(config));
 
+    // Compute yang amount, and then asset amount again for loss of precision.
+    let yang_amount = test_config.sentinel.convert_to_yang(yang, amount_per_call);
+    let asset_amount_per_call = test_config.sentinel.convert_to_assets(yang, yang_amount);
+
     let before_deposit: Wad = test_config.shrine.get_deposit(yang, trove_id);
     let before_rite_balance: u256 = yang_erc20.balance_of(rite_addr);
     assert!(test_config.archabbot.can_execute_rite(trove_id), "Rite should be ready");
     assert!(rite.is_ready(trove_id), "Rite should be ready #2");
 
     cheat_caller_address(test_config.archabbot.contract_address, user, CheatSpan::TargetCalls(1));
-    test_config.archabbot.execute_rite(trove_id);
+    if is_perform {
+        test_config.archabbot.execute_rite(trove_id);
+    } else {
+        test_config.archabbot.end_rite(trove_id);
+    }
 
     let total_withdraw_amount: u128 = num_calls.into() * amount_per_call;
     let after_deposit: Wad = test_config.shrine.get_deposit(yang, trove_id);
@@ -804,20 +839,20 @@ fn test_mock_rite_execute_withdraw() {
     let expected_rite_balance: u256 = before_rite_balance + total_withdraw_amount.into();
     let error_margin: u256 = 50;
     assert_equalish(after_rite_balance, expected_rite_balance, error_margin, 'Wrong user balance');
-}
 
-#[test]
-#[fork("MAINNET_CHANTRY")]
-fn test_mock_rite_end() {
-    let (test_config, trove_id, rite_addr) = setup_trove_with_mock_rite();
-    let user = archabbot_utils::USER;
-    let rite = IRiteDispatcher { contract_address: rite_addr };
+    let expected_withdraw_event = (
+            test_config.archabbot.contract_address,
+            archabbot_contract::Event::Withdraw (
+                archabbot_contract::Withdraw {
+                    user, trove_id, yang, yang_amt: yang_amount, asset_amt: asset_amount_per_call,
+                },
+            ),
+        );
 
-    let config = default_mock_config();
-    rite.set_trove_config(trove_id, serialize_mock_config(config));
-
-    cheat_caller_address(test_config.archabbot.contract_address, user, CheatSpan::TargetCalls(1));
-    test_config.archabbot.end_rite(trove_id);
+    let expected_events = array![
+        expected_withdraw_event, expected_withdraw_event, expected_withdraw_event, expected_withdraw_event, 
+            ];
+    spy.assert_emitted(@expected_events);
 }
 
 #[test]

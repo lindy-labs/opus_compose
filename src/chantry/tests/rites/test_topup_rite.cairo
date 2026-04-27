@@ -16,7 +16,7 @@ use opus_compose::interfaces::erc20::{IERC20Dispatcher, IERC20DispatcherTrait};
 use opus_compose::shared::components::src5::{ISRC5Dispatcher, ISRC5DispatcherTrait};
 use snforge_std::{
     CheatSpan, ContractClassTrait, DeclareResultTrait, EventSpyAssertionsTrait,
-    cheat_caller_address, declare, spy_events,
+    cheat_caller_address, declare, spy_events, 
 };
 use starknet::{ContractAddress, SyscallResultTrait};
 use wadray::{RAY_PERCENT, Ray, WAD_ONE, Wad, rmul_wr};
@@ -612,3 +612,41 @@ fn test_usdc_topup_with_incentive() {
             ],
         );
 }
+
+#[test]
+#[fork("MAINNET_CHANTRY")]
+#[should_panic(expected: 'SH: forge_fee% > max_forge_fee%')]
+fn test_cash_topup_exceeds_max_forge_fee_pct_fail() {
+    let (archabbot, trove_id, rite_addr) = setup_trove_with_topup_rite();
+    let user = archabbot_utils::USER;
+    let rite = IRiteDispatcher { contract_address: rite_addr };
+
+    let mut config = default_topup_config(user);
+    let cash = IERC20Dispatcher { contract_address: mainnet::SHRINE };
+    let before_user_cash_balance: u128 = cash.balance_of(user).try_into().unwrap();
+
+    config.conditions.min_asset_balance = before_user_cash_balance + 1;
+
+    cheat_caller_address(rite_addr, user, CheatSpan::TargetCalls(1));
+    rite.set_trove_config(trove_id, serialize_config(config));
+
+    assert_eq!(archabbot.get_rite(trove_id), rite_addr, "Rite not set");
+    assert!(archabbot.can_execute_rite(trove_id), "Rite should be ready");
+    assert!(rite.is_ready(trove_id), "Rite should be ready #2");
+    assert!(rite.has_ended(trove_id), "Rite should have ended");
+
+    let topup = ITopupRiteDispatcher { contract_address: rite_addr };
+    let swap_params = topup.get_swap_params(trove_id);
+
+    let forge_amount: u128 = swap_params.forge_amount.into();
+    assert_eq!(forge_amount, config.topup_amount, "Wrong forge amonut");
+    assert!(swap_params.swap_data.is_none(), "Wrong swap data");
+
+    cheat_caller_address(mainnet::SHRINE, mainnet::RECEPTOR, CheatSpan::TargetCalls(1));
+    let depegged_price: Wad = (WAD_ONE - WAD_ONE / 10).into(); // 0.9
+    IShrineDispatcher { contract_address: mainnet::SHRINE }.update_yin_spot_price(depegged_price);
+
+    cheat_caller_address(archabbot.contract_address, user, CheatSpan::TargetCalls(1));
+    archabbot.execute_rite(trove_id);
+}
+

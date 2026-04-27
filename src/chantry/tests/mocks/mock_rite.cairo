@@ -98,15 +98,7 @@ pub mod mock_rite {
                 caller, archabbot.contract_address, self.get_rite_id(),
             );
 
-            self.end(trove_id);
-        }
-
-        fn end(ref self: ContractState, trove_id: u64) {
-            let archabbot = self.archabbot.read();
             let config = self.configs.read(trove_id);
-            assert!(config.num_calls > 0, "{}: No calls configured", RITE_ID());
-            assert!(config.amount > 0, "{}: Zero amount", RITE_ID());
-
             let asset_balance = AssetBalance { address: config.asset, amount: config.amount };
             let action = if config.is_deposit {
                 let total_asset_amount: u128 = config.num_calls.into() * config.amount;
@@ -126,6 +118,14 @@ pub mod mock_rite {
             for _ in 0..config.num_calls {
                 archabbot.on_rite_actions(target_trove_id, array![action].span());
             };
+        }
+
+        fn end(ref self: ContractState, trove_id: u64) {
+            let config = self.configs.read(trove_id);
+            assert!(config.num_calls > 0, "{}: No calls configured", RITE_ID());
+            assert!(config.amount > 0, "{}: Zero amount", RITE_ID());
+
+            self.perform(trove_id);
         }
     }
 

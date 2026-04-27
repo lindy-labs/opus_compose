@@ -76,6 +76,10 @@ pub mod mainnet {
         0x05e57a033bb3a03e8ac919cbb4e826faf8f3d6a58e76ff7a13854ffc78264681
         .try_into()
         .unwrap();
+    pub const RECEPTOR: ContractAddress =
+        0x059c159d9a87a34f17c4991e81b0d937aaf86a29f682ce0951536265bd6a1678
+        .try_into()
+        .unwrap();
     pub const SENTINEL: ContractAddress =
         0x06428ec3221f369792df13e7d59580902f1bfabd56a81d30224f4f282ba380cd
         .try_into()
