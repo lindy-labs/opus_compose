@@ -5,14 +5,16 @@ pub mod EkuboDcaComponent {
     use ekubo::interfaces::positions::{IPositionsDispatcher, IPositionsDispatcherTrait};
     use ekubo::types::keys::PoolKey;
     use opus::types::AssetBalance;
-    use opus_compose::interfaces::erc20::{IERC20Dispatcher, IERC20DispatcherTrait};
     use opus_compose::chantry::contracts::rites::dca::types::{
         ConsolidatedOrderData, DcaDurationTrait, DcaOrder, DcaOrderDuration, OrderStatus, OrderType,
     };
     use opus_compose::chantry::contracts::rites::dca::utils::dca_utils;
     use opus_compose::chantry::contracts::rites::types::{EkuboPoolParams, EkuboPoolParamsTrait};
-    use opus_compose::chantry::interfaces::archabbot::{IArchabbotDispatcher, IArchabbotDispatcherTrait};
+    use opus_compose::chantry::interfaces::archabbot::{
+        IArchabbotDispatcher, IArchabbotDispatcherTrait,
+    };
     use opus_compose::chantry::types::Action;
+    use opus_compose::interfaces::erc20::{IERC20Dispatcher, IERC20DispatcherTrait};
     use starknet::storage::{
         Map, StorageMapReadAccess, StorageMapWriteAccess, StoragePointerReadAccess,
         StoragePointerWriteAccess,

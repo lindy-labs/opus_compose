@@ -2,9 +2,6 @@
 pub mod price_dca_rite {
     use core::num::traits::Zero;
     use opus::interfaces::{IAbbotDispatcher, IAbbotDispatcherTrait};
-    use opus_compose::constants;
-    use opus_compose::interfaces::erc20::IERC20Dispatcher;
-    use opus_compose::shared::components::src5::SRC5Component;
     use opus_compose::chantry::contracts::rites::dca::ekubo_dca_component::EkuboDcaComponent;
     use opus_compose::chantry::contracts::rites::dca::ekubo_oracle_component::EkuboOracleComponent;
     use opus_compose::chantry::contracts::rites::dca::types::{
@@ -13,6 +10,9 @@ pub mod price_dca_rite {
     use opus_compose::chantry::contracts::rites::utils::rites_utils;
     use opus_compose::chantry::interfaces::archabbot::IArchabbotDispatcher;
     use opus_compose::chantry::interfaces::rite::{IRITE_ID, IRite};
+    use opus_compose::constants;
+    use opus_compose::interfaces::erc20::IERC20Dispatcher;
+    use opus_compose::shared::components::src5::SRC5Component;
 
     component!(path: SRC5Component, storage: src5, event: SRC5Event);
     component!(path: EkuboDcaComponent, storage: ekubo_dca, event: EkuboDcaEvent);
@@ -121,7 +121,9 @@ pub mod price_dca_rite {
                 contract_address: self.archabbot.read().contract_address,
             };
             assert!(
-                archabbot_abbot.get_trove_owner(trove_id).expect('PRICE_DCA: Trove not found') == user,
+                archabbot_abbot
+                    .get_trove_owner(trove_id)
+                    .expect('PRICE_DCA: Trove not found') == user,
                 "{}: Not owner",
                 RITE_ID(),
             );
@@ -179,7 +181,9 @@ pub mod price_dca_rite {
             let config = self.price_dca_configs.read(trove_id);
             let order: DcaOrder = self.ekubo_dca.get_order(trove_id);
             let yin: IERC20Dispatcher = self.yin.read();
-            self.ekubo_dca.close_order(yin, archabbot, trove_id, config.asset, order, false, RITE_ID());
+            self
+                .ekubo_dca
+                .close_order(yin, archabbot, trove_id, config.asset, order, false, RITE_ID());
 
             let order_type = self.get_order_type(config);
             let order_amount: u128 = match order_type {

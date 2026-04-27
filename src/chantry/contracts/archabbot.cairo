@@ -8,23 +8,20 @@ pub mod archabbot {
     use ekubo::interfaces::router::{IRouterDispatcher, IRouterDispatcherTrait};
     use opus::interfaces::abbot::IAbbot;
     use opus::interfaces::{
-        IAbbotDispatcher, IAbbotDispatcherTrait, 
-        IFlashBorrower, IFlashMintDispatcher, IFlashMintDispatcherTrait, ISentinelDispatcher,
-        ISentinelDispatcherTrait, IShrineDispatcher, IShrineDispatcherTrait,
+        IAbbotDispatcher, IAbbotDispatcherTrait, IFlashBorrower, IFlashMintDispatcher,
+        IFlashMintDispatcherTrait, ISentinelDispatcher, ISentinelDispatcherTrait, IShrineDispatcher,
+        IShrineDispatcherTrait,
     };
     use opus::types::{AssetBalance, Health};
+    use opus_compose::chantry::interfaces::archabbot::IArchabbot;
+    use opus_compose::chantry::interfaces::lever::ILever;
+    use opus_compose::chantry::interfaces::rite::{IRITE_ID, IRiteDispatcher, IRiteDispatcherTrait};
+    use opus_compose::chantry::types::{
+        Action, LeverDownParams, LeverUpParams, ModifyLeverAction, ModifyLeverParams, TroveConfig,
+    };
     use opus_compose::interfaces::erc20::{IERC20Dispatcher, IERC20DispatcherTrait};
     use opus_compose::shared::components::reentrancy_guard::reentrancy_guard_component;
     use opus_compose::shared::components::src5::{ISRC5Dispatcher, ISRC5DispatcherTrait};
-    use opus_compose::chantry::interfaces::lever::ILever;
-    use opus_compose::chantry::interfaces::archabbot::IArchabbot;
-    use opus_compose::chantry::interfaces::rite::{
-        IRITE_ID, IRiteDispatcher, IRiteDispatcherTrait,
-    };
-    use opus_compose::chantry::types::{
-        Action, LeverDownParams, LeverUpParams, ModifyLeverAction, ModifyLeverParams,
-        TroveConfig,
-    };
     use starknet::storage::{
         Map, StorageMapReadAccess, StorageMapWriteAccess, StoragePointerReadAccess,
         StoragePointerWriteAccess,
@@ -36,7 +33,9 @@ pub mod archabbot {
     // Components
     //
 
-    component!(path: reentrancy_guard_component, storage: reentrancy_guard, event: ReentrancyGuardEvent);
+    component!(
+        path: reentrancy_guard_component, storage: reentrancy_guard, event: ReentrancyGuardEvent,
+    );
 
     impl ReentrancyGuardHelpers = reentrancy_guard_component::ReentrancyGuardHelpers<ContractState>;
 
@@ -278,14 +277,20 @@ pub mod archabbot {
         fn get_trove_asset_balance(
             self: @ContractState, trove_id: u64, yang: ContractAddress,
         ) -> u128 {
-            self.sentinel.read().convert_to_assets(yang, self.shrine.read().get_deposit(yang, trove_id))
+            self
+                .sentinel
+                .read()
+                .convert_to_assets(yang, self.shrine.read().get_deposit(yang, trove_id))
         }
 
         // Create a new trove in the system with Yang deposits
         // Note that since the forge amount must be greater than zero, the Shrine would also enforce
         // that the minimum trove value has been deposited.
         fn open_trove(
-            ref self: ContractState, yang_assets: Span<AssetBalance>, forge_amount: Wad, max_forge_fee_pct: Wad,
+            ref self: ContractState,
+            yang_assets: Span<AssetBalance>,
+            forge_amount: Wad,
+            max_forge_fee_pct: Wad,
         ) -> u64 {
             assert!(yang_assets.len().is_non_zero(), "ARC: No yangs");
             assert!(forge_amount.is_non_zero(), "ARC: No debt forged");
@@ -347,7 +352,10 @@ pub mod archabbot {
             let user = get_caller_address();
             self.assert_trove_owner(user, trove_id);
 
-            self.deposit_helper(self.shrine.read(), self.sentinel.read(), trove_id, user, user, yang_asset);
+            self
+                .deposit_helper(
+                    self.shrine.read(), self.sentinel.read(), trove_id, user, user, yang_asset,
+                );
         }
 
         // remove Yang (an asset) from a trove
@@ -360,7 +368,16 @@ pub mod archabbot {
 
             let sentinel = self.sentinel.read();
             let yang_amt: Wad = sentinel.convert_to_yang(yang_asset.address, yang_asset.amount);
-            self.withdraw_helper(self.shrine.read(), sentinel, trove_id, user, user, yang_asset.address, yang_amt);
+            self
+                .withdraw_helper(
+                    self.shrine.read(),
+                    sentinel,
+                    trove_id,
+                    user,
+                    user,
+                    yang_asset.address,
+                    yang_amt,
+                );
         }
 
         // create Yin in a trove
@@ -465,10 +482,7 @@ pub mod archabbot {
             self
                 .emit(
                     RiteExecuted {
-                        caller,
-                        trove_id,
-                        rite: rite.contract_address,
-                        incentive: config.incentive,
+                        caller, trove_id, rite: rite.contract_address, incentive: config.incentive,
                     },
                 );
         }
@@ -508,10 +522,21 @@ pub mod archabbot {
 
             let shrine = self.shrine.read();
             let sentinel = self.sentinel.read();
-            let trove_owner: ContractAddress = self.get_trove_owner(trove_id).expect('ARC: No trove owner');
+            let trove_owner: ContractAddress = self
+                .get_trove_owner(trove_id)
+                .expect('ARC: No trove owner');
             let archabbot: ContractAddress = get_contract_address();
             for action in actions {
-                self.execute_action(shrine, sentinel, trove_id, trove_owner, archabbot, rite.contract_address, *action);
+                self
+                    .execute_action(
+                        shrine,
+                        sentinel,
+                        trove_id,
+                        trove_owner,
+                        archabbot,
+                        rite.contract_address,
+                        *action,
+                    );
             }
 
             let current_nonce = self.transient_callback_nonce.read();
@@ -609,7 +634,9 @@ pub mod archabbot {
 
             match action {
                 ModifyLeverAction::LeverUp(params) => {
-                    let LeverUpParams { trove_id, max_ltv, yang, max_forge_fee_pct, min_asset_amount, swaps } = params;
+                    let LeverUpParams {
+                        trove_id, max_ltv, yang, max_forge_fee_pct, min_asset_amount, swaps,
+                    } = params;
 
                     // Transfer yin to Ekubo's router and swap for collateral
                     yin.transfer(router.contract_address, amount);
@@ -625,7 +652,15 @@ pub mod archabbot {
                     // Deposit purchased collateral to trove
                     self.approve_token_for_gate(sentinel, yang, asset_amt);
                     let asset_amt_128: u128 = asset_amt.try_into().unwrap();
-                    self.deposit_helper(shrine, sentinel, trove_id, user, initiator, AssetBalance { address: yang, amount: asset_amt_128 });
+                    self
+                        .deposit_helper(
+                            shrine,
+                            sentinel,
+                            trove_id,
+                            user,
+                            initiator,
+                            AssetBalance { address: yang, amount: asset_amt_128 },
+                        );
 
                     // Borrow yin from trove and send to this contract to repay the flash mint
                     shrine
@@ -653,7 +688,10 @@ pub mod archabbot {
                     shrine.melt(archabbot, trove_id, amount.try_into().unwrap());
 
                     // Withdraw collateral to this contract
-                    let asset_amt: u128 = self.withdraw_helper(shrine, sentinel, trove_id, user, initiator, yang, yang_amt);
+                    let asset_amt: u128 = self
+                        .withdraw_helper(
+                            shrine, sentinel, trove_id, user, initiator, yang, yang_amt,
+                        );
 
                     // Transfer collateral to Ekubo's router and swap for yin
                     yang_erc20.transfer(router.contract_address, asset_amt.into());
@@ -677,9 +715,15 @@ pub mod archabbot {
                         .unwrap();
                     if remainder_asset.is_non_zero() {
                         self.approve_token_for_gate(sentinel, yang, remainder_asset.into());
-                        self.deposit_helper(shrine, sentinel, trove_id, user, archabbot, AssetBalance {
-                            address: yang, amount: remainder_asset,
-                        });
+                        self
+                            .deposit_helper(
+                                shrine,
+                                sentinel,
+                                trove_id,
+                                user,
+                                archabbot,
+                                AssetBalance { address: yang, amount: remainder_asset },
+                            );
                     }
 
                     let trove_health: Health = shrine.get_trove_health(trove_id);
@@ -708,24 +752,24 @@ pub mod archabbot {
         //
         // Abbot helpers
         //
-        
+
         fn assert_trove_owner(self: @ContractState, user: ContractAddress, trove_id: u64) {
             assert!(self.get_trove_owner(trove_id) == Option::Some(user), "ARC: Not trove owner")
         }
 
         // Modifications from Abbot:
-        // - `depositor` has been added as a call arg to distinguish from the trove owner 
+        // - `depositor` has been added as a call arg to distinguish from the trove owner
         //   for lever and rite actions
         // - Sentinel and Shrine dispatchers are passed as calldata to save gas when called
         //   multiple times in the same transaction
         fn deposit_helper(
-            ref self: ContractState, 
+            ref self: ContractState,
             shrine: IShrineDispatcher,
             sentinel: ISentinelDispatcher,
-            trove_id: u64, 
-            user: ContractAddress, 
-            depositor: ContractAddress, 
-            yang_asset: AssetBalance
+            trove_id: u64,
+            user: ContractAddress,
+            depositor: ContractAddress,
+            yang_asset: AssetBalance,
         ) {
             // reentrancy guard is used as a precaution
             self.reentrancy_guard.start();
@@ -733,24 +777,33 @@ pub mod archabbot {
             let yang_amt: Wad = sentinel.enter(yang_asset.address, depositor, yang_asset.amount);
             shrine.deposit(yang_asset.address, trove_id, yang_amt);
 
-            self.emit(Deposit { user, trove_id, yang: yang_asset.address, yang_amt, asset_amt: yang_asset.amount });
+            self
+                .emit(
+                    Deposit {
+                        user,
+                        trove_id,
+                        yang: yang_asset.address,
+                        yang_amt,
+                        asset_amt: yang_asset.amount,
+                    },
+                );
 
             self.reentrancy_guard.end();
         }
 
         // Modifications from Abbot:
-        // - `recipient` has been added as a call arg to distinguish from the trove owner 
+        // - `recipient` has been added as a call arg to distinguish from the trove owner
         //   for lever and rite actions
         // - Sentinel and Shrine dispatchers are passed as calldata to save gas when called
         //   multiple times in the same transaction
         fn withdraw_helper(
-            ref self: ContractState, 
+            ref self: ContractState,
             shrine: IShrineDispatcher,
             sentinel: ISentinelDispatcher,
-            trove_id: u64, 
-            user: ContractAddress, 
-            recipient: ContractAddress, 
-            yang: ContractAddress, 
+            trove_id: u64,
+            user: ContractAddress,
+            recipient: ContractAddress,
+            yang: ContractAddress,
             yang_amt: Wad,
         ) -> u128 {
             // reentrancy guard is used as a precaution
@@ -805,7 +858,7 @@ pub mod archabbot {
                     let config: TroveConfig = self.trove_configs.read(trove_id);
                     shrine.forge(rite_address, trove_id, amount, config.max_forge_fee_pct);
                 },
-                Action::Melt(amount) => { 
+                Action::Melt(amount) => {
                     // Melt from Archabbot
                     shrine.melt(archabbot, trove_id, amount);
                 },
@@ -813,16 +866,27 @@ pub mod archabbot {
                     // Deposit collateral already sent by Rite to Archabbot
                     self
                         .approve_token_for_gate(
-                            sentinel,
-                            asset_balance.address,
-                            asset_balance.amount.into(),
+                            sentinel, asset_balance.address, asset_balance.amount.into(),
                         );
-                    self.deposit_helper(shrine, sentinel, trove_id, trove_owner, archabbot, asset_balance);
+                    self
+                        .deposit_helper(
+                            shrine, sentinel, trove_id, trove_owner, archabbot, asset_balance,
+                        );
                 },
                 Action::Withdraw(asset_balance) => {
                     // Withdraw collateral to Rite directly
-                    let yang_amt: Wad = sentinel.convert_to_yang(asset_balance.address, asset_balance.amount);
-                    self.withdraw_helper(shrine, sentinel, trove_id, trove_owner, rite_address, asset_balance.address, yang_amt);
+                    let yang_amt: Wad = sentinel
+                        .convert_to_yang(asset_balance.address, asset_balance.amount);
+                    self
+                        .withdraw_helper(
+                            shrine,
+                            sentinel,
+                            trove_id,
+                            trove_owner,
+                            rite_address,
+                            asset_balance.address,
+                            yang_amt,
+                        );
                 },
                 Action::None => (),
             };

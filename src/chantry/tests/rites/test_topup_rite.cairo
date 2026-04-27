@@ -2,8 +2,6 @@ use core::num::traits::Zero;
 use opus::interfaces::{IAbbotDispatcher, IShrineDispatcher, IShrineDispatcherTrait};
 use opus::types::Health;
 use opus_compose::addresses::mainnet;
-use opus_compose::interfaces::erc20::{IERC20Dispatcher, IERC20DispatcherTrait};
-use opus_compose::shared::components::src5::{ISRC5Dispatcher, ISRC5DispatcherTrait};
 use opus_compose::chantry::contracts::archabbot::archabbot as archabbot_contract;
 use opus_compose::chantry::contracts::rites::topup::constants::MAX_SLIPPAGE;
 use opus_compose::chantry::contracts::rites::topup::topup_rite::{
@@ -14,11 +12,13 @@ use opus_compose::chantry::contracts::rites::types::EkuboPoolParams;
 use opus_compose::chantry::interfaces::archabbot::{IArchabbotDispatcher, IArchabbotDispatcherTrait};
 use opus_compose::chantry::interfaces::rite::{IRITE_ID, IRiteDispatcher, IRiteDispatcherTrait};
 use opus_compose::chantry::tests::utils::archabbot_utils;
+use opus_compose::interfaces::erc20::{IERC20Dispatcher, IERC20DispatcherTrait};
+use opus_compose::shared::components::src5::{ISRC5Dispatcher, ISRC5DispatcherTrait};
 use snforge_std::{
     CheatSpan, ContractClassTrait, DeclareResultTrait, EventSpyAssertionsTrait,
     cheat_caller_address, declare, spy_events,
 };
-use starknet::ContractAddress;
+use starknet::{ContractAddress, SyscallResultTrait};
 use wadray::{RAY_PERCENT, Ray, WAD_ONE, Wad, rmul_wr};
 
 
@@ -27,7 +27,7 @@ use wadray::{RAY_PERCENT, Ray, WAD_ONE, Wad, rmul_wr};
 //
 
 fn deploy_topup_rite(archabbot_address: ContractAddress) -> ContractAddress {
-    let topup_class = declare("topup_rite").unwrap().contract_class();
+    let topup_class = declare("topup_rite").unwrap_syscall().contract_class();
     let calldata: Array<felt252> = array![
         mainnet::SHRINE.into(), // yin (CASH = Shrine address)
         archabbot_address.into(),
@@ -65,7 +65,9 @@ fn setup_trove_with_topup_rite() -> (IArchabbotDispatcher, u64, ContractAddress)
     let test_config = archabbot_utils::archabbot_deploy(None);
     let user = archabbot_utils::USER;
 
-    let archabbot_abbot = IAbbotDispatcher { contract_address: test_config.archabbot.contract_address };
+    let archabbot_abbot = IAbbotDispatcher {
+        contract_address: test_config.archabbot.contract_address,
+    };
     let trove_id = archabbot_utils::open_trove_for_user(archabbot_abbot, user);
 
     let rite_addr = deploy_topup_rite(test_config.archabbot.contract_address);
@@ -73,7 +75,9 @@ fn setup_trove_with_topup_rite() -> (IArchabbotDispatcher, u64, ContractAddress)
     // Attach rite to trove
     cheat_caller_address(test_config.archabbot.contract_address, user, CheatSpan::TargetCalls(2));
     test_config.archabbot.set_rite(trove_id, rite_addr);
-    IArchabbotDispatcherTrait::set_trove_config(test_config.archabbot, trove_id, archabbot_utils::BASE_TROVE_CONFIG());
+    IArchabbotDispatcherTrait::set_trove_config(
+        test_config.archabbot, trove_id, archabbot_utils::BASE_TROVE_CONFIG(),
+    );
 
     (test_config.archabbot, trove_id, rite_addr)
 }
@@ -409,7 +413,6 @@ fn test_end_rite() {
     cheat_caller_address(rite_addr, user, CheatSpan::TargetCalls(1));
     rite.set_trove_config(trove_id, serialize_config(config));
 
-    
     cheat_caller_address(archabbot.contract_address, user, CheatSpan::TargetCalls(1));
     archabbot.end_rite(trove_id);
 
@@ -419,9 +422,7 @@ fn test_end_rite() {
                 (
                     archabbot.contract_address,
                     archabbot_contract::Event::RiteEnded(
-                        archabbot_contract::RiteEnded {
-                            caller: user, trove_id, rite: rite_addr, 
-                        },
+                        archabbot_contract::RiteEnded { caller: user, trove_id, rite: rite_addr },
                     ),
                 ),
             ],
@@ -519,7 +520,7 @@ fn test_usdc_topup_with_incentive() {
 
     let mut trove_config = archabbot.get_trove_config(trove_id);
     let incentive: Wad = WAD_ONE.into();
-    trove_config.incentive = incentive; 
+    trove_config.incentive = incentive;
 
     cheat_caller_address(archabbot.contract_address, user, CheatSpan::TargetCalls(1));
     archabbot.set_trove_config(trove_id, trove_config);
@@ -560,7 +561,7 @@ fn test_usdc_topup_with_incentive() {
 
     cheat_caller_address(archabbot.contract_address, user, CheatSpan::TargetCalls(1));
     archabbot.execute_rite(trove_id);
-    
+
     let after_user_cash_balance: u128 = cash.balance_of(user).try_into().unwrap();
     let expected_user_cash_balance: u128 = before_user_cash_balance + incentive.into();
     assert_eq!(after_user_cash_balance, expected_user_cash_balance, "Wrong incentive");
@@ -604,7 +605,7 @@ fn test_usdc_topup_with_incentive() {
                     archabbot.contract_address,
                     archabbot_contract::Event::RiteExecuted(
                         archabbot_contract::RiteExecuted {
-                            caller: user, trove_id, rite: rite_addr, incentive
+                            caller: user, trove_id, rite: rite_addr, incentive,
                         },
                     ),
                 ),

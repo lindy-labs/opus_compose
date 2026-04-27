@@ -72,8 +72,8 @@ pub mod chantry {
         }
     }
     pub mod interfaces {
-        pub mod lever;
         pub mod archabbot;
+        pub mod lever;
         pub mod rite;
     }
     pub mod types;

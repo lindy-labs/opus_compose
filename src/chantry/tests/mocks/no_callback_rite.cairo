@@ -1,13 +1,10 @@
 #[starknet::contract]
 pub mod no_callback_rite {
-    use opus_compose::shared::components::src5::SRC5Component;
     use opus_compose::chantry::contracts::rites::utils::rites_utils;
     use opus_compose::chantry::interfaces::archabbot::IArchabbotDispatcher;
     use opus_compose::chantry::interfaces::rite::{IRITE_ID, IRite};
-    use starknet::storage::{
-        StoragePointerReadAccess,
-        StoragePointerWriteAccess,
-    };
+    use opus_compose::shared::components::src5::SRC5Component;
+    use starknet::storage::{StoragePointerReadAccess, StoragePointerWriteAccess};
     use starknet::{ContractAddress, get_caller_address};
 
     component!(path: SRC5Component, storage: src5, event: SRC5Event);
@@ -47,8 +44,7 @@ pub mod no_callback_rite {
             array![].span()
         }
 
-        fn set_trove_config(ref self: ContractState, trove_id: u64, config: Span<felt252>) {
-            // No-op: no config needed
+        fn set_trove_config(ref self: ContractState, trove_id: u64, config: Span<felt252>) {// No-op: no config needed
         }
 
         fn is_ready(self: @ContractState, trove_id: u64) -> bool {
@@ -62,16 +58,18 @@ pub mod no_callback_rite {
         fn perform(ref self: ContractState, trove_id: u64) {
             let archabbot = self.archabbot.read();
             let caller: ContractAddress = get_caller_address();
-            rites_utils::assert_caller_is_archabbot(caller, archabbot.contract_address, self.get_rite_id());
-
+            rites_utils::assert_caller_is_archabbot(
+                caller, archabbot.contract_address, self.get_rite_id(),
+            );
             // Intentionally does NOT call archabbot.on_rite_actions(...)
         }
 
         fn end(ref self: ContractState, trove_id: u64) {
             let archabbot = self.archabbot.read();
             let caller: ContractAddress = get_caller_address();
-            rites_utils::assert_caller_is_archabbot(caller, archabbot.contract_address, self.get_rite_id());
-
+            rites_utils::assert_caller_is_archabbot(
+                caller, archabbot.contract_address, self.get_rite_id(),
+            );
             // Intentionally does NOT call archabbot.on_rite_actions(...)
         }
     }
@@ -80,5 +78,4 @@ pub mod no_callback_rite {
         "NO_CALLBACK_RITE"
     }
 }
-
 

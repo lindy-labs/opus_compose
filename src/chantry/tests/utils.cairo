@@ -14,7 +14,7 @@ pub mod archabbot_utils {
         CheatSpan, ContractClass, ContractClassTrait, DeclareResultTrait, cheat_caller_address,
         declare, start_cheat_caller_address, stop_cheat_caller_address,
     };
-    use starknet::ContractAddress;
+    use starknet::{ContractAddress, SyscallResultTrait};
     use wadray::{RAY_ONE, WAD_ONE, Wad};
 
     pub const USER: ContractAddress = 'user'.try_into().unwrap();
@@ -45,12 +45,12 @@ pub mod archabbot_utils {
 
     // Declare the test contracts required for Archabbot tests
     pub fn declare_contracts() -> ArchabbotTestClasses {
-        ArchabbotTestClasses { archabbot: Some(*declare("archabbot").unwrap().contract_class()) }
+        ArchabbotTestClasses { archabbot: Some(*declare("archabbot").unwrap_syscall().contract_class()) }
     }
 
     // Deploy Archabbot on forked mainnet using existing infrastructure
     pub fn archabbot_deploy(classes: Option<ArchabbotTestClasses>) -> ArchabbotTestConfig {
-        let classes = classes.unwrap_or(declare_contracts());
+        let classes = classes.unwrap_or_else(|| declare_contracts());
 
         // Use existing mainnet contracts
         let shrine = IShrineDispatcher { contract_address: mainnet::SHRINE };
@@ -66,22 +66,33 @@ pub mod archabbot_utils {
             mainnet::FLASH_MINT.into(),
             mainnet::EKUBO_ROUTER.into(),
         ];
-        let (archabbot_addr, _) = classes.archabbot.unwrap().deploy(@calldata).expect('archabbot deploy fail');
+        let (archabbot_addr, _) = classes
+            .archabbot
+            .unwrap()
+            .deploy(@calldata)
+            .expect('archabbot deploy fail');
         let archabbot_dispatcher = IArchabbotDispatcher { contract_address: archabbot_addr };
 
         // Grant access control to Archabbot
         cheat_caller_address(mainnet::SHRINE, mainnet::MULTISIG, CheatSpan::TargetCalls(1));
         // Deposit + Forge + Melt + Withdraw
         let abbot_role_for_shrine: u128 = 8 + 32 + 256 + 524288;
-        IAccessControlDispatcher { contract_address: mainnet::SHRINE  }.grant_role(abbot_role_for_shrine, archabbot_addr);
+        IAccessControlDispatcher { contract_address: mainnet::SHRINE }
+            .grant_role(abbot_role_for_shrine, archabbot_addr);
 
         cheat_caller_address(mainnet::SENTINEL, mainnet::MULTISIG, CheatSpan::TargetCalls(1));
         // Enter + Exit
         let abbot_role_for_sentinel: u128 = 2 + 4;
-        IAccessControlDispatcher { contract_address: mainnet::SENTINEL  }.grant_role(abbot_role_for_sentinel, archabbot_addr);
+        IAccessControlDispatcher { contract_address: mainnet::SENTINEL }
+            .grant_role(abbot_role_for_sentinel, archabbot_addr);
 
         ArchabbotTestConfig {
-            archabbot: archabbot_dispatcher, abbot, sentinel, shrine, usdc_token: mainnet::USDC, eth_gate,
+            archabbot: archabbot_dispatcher,
+            abbot,
+            sentinel,
+            shrine,
+            usdc_token: mainnet::USDC,
+            eth_gate,
         }
     }
 

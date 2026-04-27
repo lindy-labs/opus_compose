@@ -18,16 +18,18 @@ pub mod topup_rite {
     use ekubo::types::keys::PoolKey;
     use ekubo::types::pool_price::PoolPrice;
     use opus::interfaces::{IAbbotDispatcher, IAbbotDispatcherTrait};
-    use opus_compose::interfaces::erc20::{IERC20Dispatcher, IERC20DispatcherTrait};
-    use opus_compose::shared::components::src5::SRC5Component;
     use opus_compose::chantry::contracts::rites::topup::constants::MAX_SLIPPAGE;
     use opus_compose::chantry::contracts::rites::topup::types::{SwapParams, TopupConfig};
     use opus_compose::chantry::contracts::rites::types::{EkuboPoolParams, EkuboPoolParamsTrait};
     use opus_compose::chantry::contracts::rites::utils::rites_utils;
-    use opus_compose::chantry::interfaces::archabbot::{IArchabbotDispatcher, IArchabbotDispatcherTrait};
+    use opus_compose::chantry::interfaces::archabbot::{
+        IArchabbotDispatcher, IArchabbotDispatcherTrait,
+    };
     use opus_compose::chantry::interfaces::rite::{IRITE_ID, IRite};
     use opus_compose::chantry::types::Action;
     use opus_compose::chantry::utils::sqrt_ratio_limit::calculate_sqrt_ratio_limit;
+    use opus_compose::interfaces::erc20::{IERC20Dispatcher, IERC20DispatcherTrait};
+    use opus_compose::shared::components::src5::SRC5Component;
     use starknet::storage::{
         Map, StorageMapReadAccess, StorageMapWriteAccess, StoragePointerReadAccess,
         StoragePointerWriteAccess,
@@ -181,7 +183,9 @@ pub mod topup_rite {
             let archabbot = self.archabbot.read();
             let caller: ContractAddress = get_caller_address();
             // Archabbot should have checked that the rite can be executed
-            rites_utils::assert_caller_is_archabbot(caller, archabbot.contract_address, self.get_rite_id());
+            rites_utils::assert_caller_is_archabbot(
+                caller, archabbot.contract_address, self.get_rite_id(),
+            );
 
             let config = self.topup_configs.read(trove_id);
             let yin = self.yin.read();
@@ -201,7 +205,8 @@ pub mod topup_rite {
                 swap_params.forge_amount
             };
 
-            archabbot.on_rite_actions(trove_id, array![Action::Forge(adjusted_forge_amount)].span());
+            archabbot
+                .on_rite_actions(trove_id, array![Action::Forge(adjusted_forge_amount)].span());
 
             let mut refunded: u256 = Zero::zero();
             if let Some((route_node, token_amount)) = swap_params.swap_data {
@@ -250,7 +255,9 @@ pub mod topup_rite {
         fn end(ref self: ContractState, trove_id: u64) {
             let archabbot = self.archabbot.read();
             let caller: ContractAddress = get_caller_address();
-            rites_utils::assert_caller_is_archabbot(caller, archabbot.contract_address, self.get_rite_id());
+            rites_utils::assert_caller_is_archabbot(
+                caller, archabbot.contract_address, self.get_rite_id(),
+            );
 
             archabbot.on_rite_actions(trove_id, array![Action::None].span());
         }

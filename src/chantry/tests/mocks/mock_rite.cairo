@@ -18,12 +18,14 @@ pub struct MockRiteConfig {
 #[starknet::contract]
 pub mod mock_rite {
     use opus::types::AssetBalance;
-    use opus_compose::shared::components::src5::SRC5Component;
     use opus_compose::chantry::contracts::rites::utils::rites_utils;
-    use opus_compose::chantry::interfaces::archabbot::{IArchabbotDispatcher, IArchabbotDispatcherTrait};
+    use opus_compose::chantry::interfaces::archabbot::{
+        IArchabbotDispatcher, IArchabbotDispatcherTrait,
+    };
     use opus_compose::chantry::interfaces::rite::{IRITE_ID, IRite};
     use opus_compose::chantry::types::Action;
     use opus_compose::interfaces::erc20::{IERC20Dispatcher, IERC20DispatcherTrait};
+    use opus_compose::shared::components::src5::SRC5Component;
     use starknet::storage::{
         Map, StorageMapReadAccess, StorageMapWriteAccess, StoragePointerReadAccess,
         StoragePointerWriteAccess,
@@ -43,7 +45,7 @@ pub mod mock_rite {
         #[substorage(v0)]
         src5: SRC5Component::Storage,
         archabbot: IArchabbotDispatcher,
-        configs: Map<u64, MockRiteConfig>, // trove_id -> config
+        configs: Map<u64, MockRiteConfig> // trove_id -> config
     }
 
     #[event]
@@ -92,9 +94,11 @@ pub mod mock_rite {
         fn perform(ref self: ContractState, trove_id: u64) {
             let archabbot = self.archabbot.read();
             let caller: ContractAddress = get_caller_address();
-            rites_utils::assert_caller_is_archabbot(caller, archabbot.contract_address, self.get_rite_id());
+            rites_utils::assert_caller_is_archabbot(
+                caller, archabbot.contract_address, self.get_rite_id(),
+            );
 
-            self.end(trove_id); 
+            self.end(trove_id);
         }
 
         fn end(ref self: ContractState, trove_id: u64) {
@@ -106,14 +110,19 @@ pub mod mock_rite {
             let asset_balance = AssetBalance { address: config.asset, amount: config.amount };
             let action = if config.is_deposit {
                 let total_asset_amount: u128 = config.num_calls.into() * config.amount;
-                IERC20Dispatcher { contract_address: config.asset }.transfer(archabbot.contract_address, total_asset_amount.into());
+                IERC20Dispatcher { contract_address: config.asset }
+                    .transfer(archabbot.contract_address, total_asset_amount.into());
 
                 Action::Deposit(asset_balance)
             } else {
                 Action::Withdraw(asset_balance)
             };
 
-            let target_trove_id = if config.is_malicious { trove_id + 1 } else { trove_id };
+            let target_trove_id = if config.is_malicious {
+                trove_id + 1
+            } else {
+                trove_id
+            };
             for _ in 0..config.num_calls {
                 archabbot.on_rite_actions(target_trove_id, array![action].span());
             };

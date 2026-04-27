@@ -22,11 +22,13 @@ use snforge_std::{
     CheatSpan, ContractClassTrait, DeclareResultTrait, EventSpyAssertionsTrait,
     cheat_caller_address, declare, spy_events,
 };
-use starknet::ContractAddress;
+use starknet::{ContractAddress, SyscallResultTrait};
 use wadray::{RAY_ONE, Ray, WAD_ONE, Wad};
 
 // Helper function to open a trove via archabbot with the given ETH amount.
-fn lever_open_trove_helper(test_config: archabbot_utils::ArchabbotTestConfig, user: ContractAddress, eth_asset_amt: u128) -> (archabbot_utils::ArchabbotTestConfig, u64) {
+fn lever_open_trove_helper(
+    test_config: archabbot_utils::ArchabbotTestConfig, user: ContractAddress, eth_asset_amt: u128,
+) -> (archabbot_utils::ArchabbotTestConfig, u64) {
     let archabbot = IAbbotDispatcher { contract_address: test_config.archabbot.contract_address };
 
     let yang = mainnet::ETH;
@@ -64,7 +66,12 @@ fn lever_open_trove_and_lever_up(
     let max_ltv: Ray = RAY_ONE.into();
     let max_forge_fee_pct: Wad = WAD_ONE.into();
     let lever_up_params = LeverUpParams {
-        trove_id, max_ltv, yang: eth, max_forge_fee_pct, min_asset_amount: 1, swaps: lever_up_swaps(),
+        trove_id,
+        max_ltv,
+        yang: eth,
+        max_forge_fee_pct,
+        min_asset_amount: 1,
+        swaps: lever_up_swaps(),
     };
 
     cheat_caller_address(test_config.archabbot.contract_address, user, CheatSpan::TargetCalls(1));
@@ -75,13 +82,13 @@ fn lever_open_trove_and_lever_up(
 
 // Deploy a malicious lever mock that targets the archabbot's on_flash_loan
 fn deploy_malicious_lever(archabbot_address: ContractAddress) -> IMaliciousLeverDispatcher {
-    let malicious_lever_class = declare("malicious_lever").unwrap().contract_class();
+    let malicious_lever_class = declare("malicious_lever").unwrap_syscall().contract_class();
 
     let calldata: Array<felt252> = array![
         mainnet::SHRINE.into(), mainnet::FLASH_MINT.into(), archabbot_address.into(),
     ];
 
-    let (malicious_lever_addr, _) = malicious_lever_class.deploy(@calldata).unwrap();
+    let (malicious_lever_addr, _) = malicious_lever_class.deploy(@calldata).unwrap_syscall();
 
     IMaliciousLeverDispatcher { contract_address: malicious_lever_addr }
 }
@@ -414,7 +421,9 @@ fn test_lever_up_and_down() {
 
     // Deposit 2 ETH and leverage to 4 ETH-ish
     let eth_capital: u128 = 2 * WAD_ONE;
-    let (test_config, trove_id, debt) = lever_open_trove_and_lever_up(test_config, whale, eth_capital);
+    let (test_config, trove_id, debt) = lever_open_trove_and_lever_up(
+        test_config, whale, eth_capital,
+    );
     let lever = ILeverDispatcher { contract_address: test_config.archabbot.contract_address };
 
     let trove_health: Health = shrine.get_trove_health(trove_id);
@@ -433,11 +442,7 @@ fn test_lever_up_and_down() {
                 test_config.archabbot.contract_address,
                 archabbot_contract::Event::LeverUp(
                     archabbot_contract::LeverUp {
-                        user: whale,
-                        trove_id,
-                        yang: eth,
-                        amount: debt,
-                        min_asset_amount: 1,
+                        user: whale, trove_id, yang: eth, amount: debt, min_asset_amount: 1,
                     },
                 ),
             ),
@@ -462,7 +467,7 @@ fn test_lever_up_and_down() {
     let after_eth_asset_amt: u128 = abbot.get_trove_asset_balance(trove_id, eth);
     let eth_balance_diff = eth_capital - after_eth_asset_amt;
 
-    // Check that the remainder collateral was redeposited 
+    // Check that the remainder collateral was redeposited
     // after round-tripping, minus the forge fees (and negligible swap fees)
     let (eth_price, _, _) = shrine.get_current_yang_price(eth);
     let expected_eth_paid_to_forge_fee = forge_fee_pct * debt / eth_price;
@@ -481,7 +486,9 @@ fn test_lever_up_and_down() {
     let expected_eth_deposited_value: Wad = (eth_capital - eth_balance_diff).into() * eth_price;
     let expected_shrine_value: Wad = before_shrine_health.value + expected_eth_deposited_value;
     let error_margin: Wad = WAD_ONE.into();
-    assert_equalish(after_shrine_health.value, expected_shrine_value, error_margin, 'Wrong total value');
+    assert_equalish(
+        after_shrine_health.value, expected_shrine_value, error_margin, 'Wrong total value',
+    );
 
     expected_events
         .append(
@@ -524,7 +531,12 @@ fn test_lever_up_unhealthy_fail() {
     let max_ltv: Ray = RAY_ONE.into();
     let max_forge_fee_pct: Wad = WAD_ONE.into();
     let lever_up_params = LeverUpParams {
-        trove_id, max_ltv, yang: eth, max_forge_fee_pct, min_asset_amount: 1, swaps: lever_up_swaps(),
+        trove_id,
+        max_ltv,
+        yang: eth,
+        max_forge_fee_pct,
+        min_asset_amount: 1,
+        swaps: lever_up_swaps(),
     };
 
     cheat_caller_address(test_config.archabbot.contract_address, whale, CheatSpan::TargetCalls(1));
@@ -555,14 +567,19 @@ fn test_lever_up_exceeds_max_ltv_fail() {
     let max_ltv: Ray = 514000000000000000000000000_u128.into();
     let max_forge_fee_pct: Wad = WAD_ONE.into();
     let lever_up_params = LeverUpParams {
-        trove_id, max_ltv, yang: eth, max_forge_fee_pct, min_asset_amount: 1, swaps: lever_up_swaps(),
+        trove_id,
+        max_ltv,
+        yang: eth,
+        max_forge_fee_pct,
+        min_asset_amount: 1,
+        swaps: lever_up_swaps(),
     };
 
     cheat_caller_address(test_config.archabbot.contract_address, whale, CheatSpan::TargetCalls(1));
     lever.up(debt.into(), lever_up_params);
 }
 
-// Similar to the test for `up` in `test_lever_up_and_down` 
+// Similar to the test for `up` in `test_lever_up_and_down`
 #[test]
 #[fork("MAINNET_LEVER")]
 #[should_panic(expected: 'CLEAR_AT_LEAST_MINIMUM')]
@@ -601,7 +618,9 @@ fn test_unauthorized_lever_up_fail() {
     let test_config = archabbot_utils::archabbot_deploy(None);
     let lever = ILeverDispatcher { contract_address: test_config.archabbot.contract_address };
 
-    cheat_caller_address(test_config.archabbot.contract_address, mainnet::WHALE, CheatSpan::TargetCalls(1));
+    cheat_caller_address(
+        test_config.archabbot.contract_address, mainnet::WHALE, CheatSpan::TargetCalls(1),
+    );
     let debt: Wad = 100_u128.into();
     let max_ltv: Ray = RAY_ONE.into();
     let lever_up_params = LeverUpParams {
@@ -618,7 +637,15 @@ fn test_unauthorized_lever_up_fail() {
 // No gate found in Sentinel, so approval is made to zero address
 #[test]
 #[fork("MAINNET_LEVER")]
-#[should_panic(expected: ('ERC20: approve to 0', 'ENTRYPOINT_FAILED', 'ENTRYPOINT_FAILED', 'ENTRYPOINT_FAILED', 'ENTRYPOINT_FAILED'))]
+#[should_panic(
+    expected: (
+        'ERC20: approve to 0',
+        'ENTRYPOINT_FAILED',
+        'ENTRYPOINT_FAILED',
+        'ENTRYPOINT_FAILED',
+        'ENTRYPOINT_FAILED',
+    ),
+)]
 fn test_lever_up_invalid_yang_fail() {
     let test_config = archabbot_utils::archabbot_deploy(None);
     let lever = ILeverDispatcher { contract_address: test_config.archabbot.contract_address };
@@ -629,8 +656,7 @@ fn test_lever_up_invalid_yang_fail() {
     let (test_config, trove_id) = lever_open_trove_helper(test_config, whale, eth_capital);
 
     let swap_amount: u128 = WAD_ONE;
-    let usdc_swap: Array<Swap> = 
-    array![
+    let usdc_swap: Array<Swap> = array![
         Swap {
             route: array![
                 RouteNode {
@@ -656,7 +682,12 @@ fn test_lever_up_invalid_yang_fail() {
     let max_ltv: Ray = RAY_ONE.into();
     let max_forge_fee_pct: Wad = WAD_ONE.into();
     let lever_up_params = LeverUpParams {
-        trove_id, max_ltv, yang: invalid_yang, max_forge_fee_pct, min_asset_amount: 1, swaps: usdc_swap,
+        trove_id,
+        max_ltv,
+        yang: invalid_yang,
+        max_forge_fee_pct,
+        min_asset_amount: 1,
+        swaps: usdc_swap,
     };
 
     cheat_caller_address(test_config.archabbot.contract_address, whale, CheatSpan::TargetCalls(1));
@@ -681,7 +712,9 @@ fn test_unauthorized_lever_down_fail() {
         swaps: lever_down_swaps(),
     };
 
-    cheat_caller_address(test_config.archabbot.contract_address, mainnet::WHALE, CheatSpan::TargetCalls(1));
+    cheat_caller_address(
+        test_config.archabbot.contract_address, mainnet::WHALE, CheatSpan::TargetCalls(1),
+    );
     lever.down(debt, lever_down_params);
 }
 
@@ -699,7 +732,9 @@ fn test_lever_down_unhealthy_fail() {
     let eth = mainnet::ETH;
 
     let eth_capital: u128 = 2 * WAD_ONE;
-    let (test_config, trove_id, _debt) = lever_open_trove_and_lever_up(test_config, whale, eth_capital);
+    let (test_config, trove_id, _debt) = lever_open_trove_and_lever_up(
+        test_config, whale, eth_capital,
+    );
 
     let trove_health: Health = shrine.get_trove_health(trove_id);
     assert!(trove_health.debt.is_non_zero(), "lever up failed");
@@ -723,7 +758,9 @@ fn test_lever_down_unhealthy_fail() {
 fn test_lever_down_exceeds_max_ltv_fail_3() {
     let test_config = archabbot_utils::archabbot_deploy(None);
     let shrine = test_config.shrine;
-    let archabbot_abbot = IAbbotDispatcher { contract_address: test_config.archabbot.contract_address };
+    let archabbot_abbot = IAbbotDispatcher {
+        contract_address: test_config.archabbot.contract_address,
+    };
 
     let whale = mainnet::WHALE;
     let eth = mainnet::ETH;
@@ -755,11 +792,7 @@ fn test_lever_down_exceeds_max_ltv_fail_3() {
 
     cheat_caller_address(test_config.archabbot.contract_address, whale, CheatSpan::TargetCalls(1));
     let lever_down_params = LeverDownParams {
-        trove_id,
-        max_ltv,
-        yang: eth,
-        yang_amt: eth_yang_amt,
-        swaps: modified_swaps,
+        trove_id, max_ltv, yang: eth, yang_amt: eth_yang_amt, swaps: modified_swaps,
     };
     let lever = ILeverDispatcher { contract_address: test_config.archabbot.contract_address };
     lever.down(debt_to_repay.into(), lever_down_params)
@@ -777,7 +810,9 @@ fn test_lever_down_insufficient_trove_yang_fail() {
     let eth = mainnet::ETH;
 
     let eth_capital: u128 = 2 * WAD_ONE;
-    let (test_config, trove_id, _debt) = lever_open_trove_and_lever_up(test_config, whale, eth_capital);
+    let (test_config, trove_id, _debt) = lever_open_trove_and_lever_up(
+        test_config, whale, eth_capital,
+    );
 
     let trove_health: Health = shrine.get_trove_health(trove_id);
     assert!(trove_health.debt.is_non_zero(), "lever up failed");
@@ -796,7 +831,15 @@ fn test_lever_down_insufficient_trove_yang_fail() {
 // Sentinel will catch invalid yangs
 #[test]
 #[fork("MAINNET_LEVER")]
-#[should_panic(expected: ('SE: Yang not added', 'ENTRYPOINT_FAILED', 'ENTRYPOINT_FAILED', 'ENTRYPOINT_FAILED', 'ENTRYPOINT_FAILED'))]
+#[should_panic(
+    expected: (
+        'SE: Yang not added',
+        'ENTRYPOINT_FAILED',
+        'ENTRYPOINT_FAILED',
+        'ENTRYPOINT_FAILED',
+        'ENTRYPOINT_FAILED',
+    ),
+)]
 fn test_lever_down_invalid_yang_fail() {
     let test_config = archabbot_utils::archabbot_deploy(None);
     let lever = ILeverDispatcher { contract_address: test_config.archabbot.contract_address };
@@ -805,7 +848,9 @@ fn test_lever_down_invalid_yang_fail() {
     let whale = mainnet::WHALE;
 
     let eth_capital: u128 = 2 * WAD_ONE;
-    let (test_config, trove_id, _debt) = lever_open_trove_and_lever_up(test_config, whale, eth_capital);
+    let (test_config, trove_id, _debt) = lever_open_trove_and_lever_up(
+        test_config, whale, eth_capital,
+    );
 
     let trove_health: Health = shrine.get_trove_health(trove_id);
     let max_ltv: Ray = RAY_ONE.into();
@@ -830,7 +875,9 @@ fn test_unauthorized_callback_fail() {
     let whale = mainnet::WHALE;
 
     let eth_capital: u128 = 2 * WAD_ONE;
-    let (test_config, trove_id, _debt) = lever_open_trove_and_lever_up(test_config, whale, eth_capital);
+    let (test_config, trove_id, _debt) = lever_open_trove_and_lever_up(
+        test_config, whale, eth_capital,
+    );
 
     let trove_health: Health = shrine.get_trove_health(trove_id);
     let eth_yang_amt: Wad = shrine.get_deposit(eth, trove_id);
@@ -845,7 +892,9 @@ fn test_unauthorized_callback_fail() {
     modify_lever_params.serialize(ref call_data);
 
     // Non-flash-mint caller calls the callback function
-    cheat_caller_address(test_config.archabbot.contract_address, mainnet::MULTISIG, CheatSpan::TargetCalls(1));
+    cheat_caller_address(
+        test_config.archabbot.contract_address, mainnet::MULTISIG, CheatSpan::TargetCalls(1),
+    );
     IFlashBorrowerDispatcher { contract_address: test_config.archabbot.contract_address }
         .on_flash_loan(
             test_config.archabbot.contract_address,
@@ -868,7 +917,9 @@ fn test_invalid_initiator_in_callback_fail() {
     let whale = mainnet::WHALE;
 
     let eth_capital: u128 = 2 * WAD_ONE;
-    let (test_config, trove_id, _debt) = lever_open_trove_and_lever_up(test_config, whale, eth_capital);
+    let (test_config, trove_id, _debt) = lever_open_trove_and_lever_up(
+        test_config, whale, eth_capital,
+    );
 
     let trove_health: Health = shrine.get_trove_health(trove_id);
     let eth_yang_amt: Wad = shrine.get_deposit(eth, trove_id);
@@ -884,7 +935,9 @@ fn test_invalid_initiator_in_callback_fail() {
 
     // Flash mint calls the callback function directly with the wrong initiator.
     // This is technically impossible.
-    cheat_caller_address(test_config.archabbot.contract_address, mainnet::FLASH_MINT, CheatSpan::TargetCalls(1));
+    cheat_caller_address(
+        test_config.archabbot.contract_address, mainnet::FLASH_MINT, CheatSpan::TargetCalls(1),
+    );
     IFlashBorrowerDispatcher { contract_address: test_config.archabbot.contract_address }
         .on_flash_loan(
             mainnet::MULTISIG, mainnet::SHRINE, trove_health.debt.into(), 0_256, call_data.span(),
@@ -899,7 +952,9 @@ fn test_lever_down_malicious_lever_fail() {
     let test_config = archabbot_utils::archabbot_deploy(None);
     let malicious_lever = deploy_malicious_lever(test_config.archabbot.contract_address);
 
-    let archabbot_abbot = IAbbotDispatcher { contract_address: test_config.archabbot.contract_address };
+    let archabbot_abbot = IAbbotDispatcher {
+        contract_address: test_config.archabbot.contract_address,
+    };
     let attacker: ContractAddress = 'attacker'.try_into().unwrap();
 
     let user = mainnet::WHALE;
@@ -940,7 +995,9 @@ fn test_trove_owner_callback_fail() {
     let whale = mainnet::WHALE;
 
     let eth_capital: u128 = 2 * WAD_ONE;
-    let (test_config, trove_id, _debt) = lever_open_trove_and_lever_up(test_config, whale, eth_capital);
+    let (test_config, trove_id, _debt) = lever_open_trove_and_lever_up(
+        test_config, whale, eth_capital,
+    );
 
     let trove_health: Health = shrine.get_trove_health(trove_id);
     let eth_yang_amt: Wad = shrine.get_deposit(eth, trove_id);
@@ -955,7 +1012,9 @@ fn test_trove_owner_callback_fail() {
     modify_lever_params.serialize(ref call_data);
 
     // Trove owner calls the callback function directly but is not the flash_mint
-    cheat_caller_address(test_config.archabbot.contract_address, mainnet::WHALE, CheatSpan::TargetCalls(1));
+    cheat_caller_address(
+        test_config.archabbot.contract_address, mainnet::WHALE, CheatSpan::TargetCalls(1),
+    );
     IFlashBorrowerDispatcher { contract_address: test_config.archabbot.contract_address }
         .on_flash_loan(
             test_config.archabbot.contract_address,

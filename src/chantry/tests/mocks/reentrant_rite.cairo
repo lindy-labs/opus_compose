@@ -8,10 +8,12 @@ pub struct ReentrantRiteConfig {
 
 #[starknet::contract]
 pub mod reentrant_rite {
-    use opus_compose::shared::components::src5::SRC5Component;
     use opus_compose::chantry::contracts::rites::utils::rites_utils;
-    use opus_compose::chantry::interfaces::archabbot::{IArchabbotDispatcher, IArchabbotDispatcherTrait};
+    use opus_compose::chantry::interfaces::archabbot::{
+        IArchabbotDispatcher, IArchabbotDispatcherTrait,
+    };
     use opus_compose::chantry::interfaces::rite::{IRITE_ID, IRite};
+    use opus_compose::shared::components::src5::SRC5Component;
     use starknet::storage::{
         Map, StorageMapReadAccess, StorageMapWriteAccess, StoragePointerReadAccess,
         StoragePointerWriteAccess,
@@ -79,7 +81,9 @@ pub mod reentrant_rite {
         fn perform(ref self: ContractState, trove_id: u64) {
             let archabbot = self.archabbot.read();
             let caller: ContractAddress = get_caller_address();
-            rites_utils::assert_caller_is_archabbot(caller, archabbot.contract_address, self.get_rite_id());
+            rites_utils::assert_caller_is_archabbot(
+                caller, archabbot.contract_address, self.get_rite_id(),
+            );
 
             // Reentrancy: attempt to call execute_rite on target trove while
             // transient_trove_id is already set by the outer execute_rite call.
@@ -90,7 +94,9 @@ pub mod reentrant_rite {
         fn end(ref self: ContractState, trove_id: u64) {
             let archabbot = self.archabbot.read();
             let caller: ContractAddress = get_caller_address();
-            rites_utils::assert_caller_is_archabbot(caller, archabbot.contract_address, self.get_rite_id());
+            rites_utils::assert_caller_is_archabbot(
+                caller, archabbot.contract_address, self.get_rite_id(),
+            );
 
             // Reentrancy: attempt to call end_rite on target trove while
             // transient_trove_id is already set by the outer end_rite call.
