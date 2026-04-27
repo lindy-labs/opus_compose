@@ -4,7 +4,7 @@ use ekubo::types::i129::i129;
 use ekubo::types::keys::PoolKey;
 use opus::interfaces::{
     IAbbotDispatcher, IAbbotDispatcherTrait, IFlashBorrowerDispatcher,
-    IFlashBorrowerDispatcherTrait, IShrineDispatcherTrait,
+    IFlashBorrowerDispatcherTrait, ISentinelDispatcherTrait, IShrineDispatcherTrait,
 };
 use opus::types::{AssetBalance, Health};
 use opus::utils::assertions::assert_equalish;
@@ -434,6 +434,8 @@ fn test_lever_up_and_down() {
     let before_eth_asset_amt: u128 = abbot.get_trove_asset_balance(trove_id, eth);
     // Check that yang amount does not exceed 4 ETH equivalent
     // The actual amount is likely lower due to pessimistic oracle and slippage
+    let eth_asset_amt_deposited = before_eth_asset_amt - eth_capital;
+    let eth_yang_amt_deposited = test_config.sentinel.convert_to_yang(eth, eth_asset_amt_deposited);
     assert!(before_eth_asset_amt <= 4 * WAD_ONE, "yang exceeds upper limit");
 
     expected_events
@@ -447,6 +449,16 @@ fn test_lever_up_and_down() {
                 ),
             ),
         );
+    expected_events.append(
+        (
+            test_config.archabbot.contract_address,
+            archabbot_contract::Event::Deposit(
+                archabbot_contract::Deposit {
+                    user: whale, trove_id, yang: eth, yang_amt: eth_yang_amt_deposited, asset_amt: eth_asset_amt_deposited 
+                }
+            ),
+        ),
+    );
 
     let max_ltv: Ray = RAY_ONE.into();
     let eth_yang_amt: Wad = shrine.get_deposit(eth, trove_id);
@@ -506,6 +518,28 @@ fn test_lever_up_and_down() {
                 ),
             ),
         );
+    expected_events.append(
+        (
+            test_config.archabbot.contract_address,
+            archabbot_contract::Event::Withdraw (
+                archabbot_contract::Withdraw {
+                    user: whale, trove_id, yang: eth, yang_amt: eth_yang_amt, asset_amt: before_eth_asset_amt
+                },
+            )
+        ),
+    );
+
+    let eth_yang_amt_redeposited: Wad = test_config.sentinel.convert_to_yang(eth, after_eth_asset_amt);
+    expected_events.append(
+        (
+            test_config.archabbot.contract_address,
+            archabbot_contract::Event::Deposit (
+                archabbot_contract::Deposit {
+                    user: whale, trove_id, yang: eth, yang_amt: eth_yang_amt_redeposited, asset_amt: after_eth_asset_amt
+                },
+            )
+        ),
+    );
     spy.assert_emitted(@expected_events);
 }
 
