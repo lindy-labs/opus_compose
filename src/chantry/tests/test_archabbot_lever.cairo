@@ -449,16 +449,21 @@ fn test_lever_up_and_down() {
                 ),
             ),
         );
-    expected_events.append(
-        (
-            test_config.archabbot.contract_address,
-            archabbot_contract::Event::Deposit(
-                archabbot_contract::Deposit {
-                    user: whale, trove_id, yang: eth, yang_amt: eth_yang_amt_deposited, asset_amt: eth_asset_amt_deposited 
-                }
+    expected_events
+        .append(
+            (
+                test_config.archabbot.contract_address,
+                archabbot_contract::Event::Deposit(
+                    archabbot_contract::Deposit {
+                        user: whale,
+                        trove_id,
+                        yang: eth,
+                        yang_amt: eth_yang_amt_deposited,
+                        asset_amt: eth_asset_amt_deposited,
+                    },
+                ),
             ),
-        ),
-    );
+        );
 
     let max_ltv: Ray = RAY_ONE.into();
     let eth_yang_amt: Wad = shrine.get_deposit(eth, trove_id);
@@ -518,28 +523,40 @@ fn test_lever_up_and_down() {
                 ),
             ),
         );
-    expected_events.append(
-        (
-            test_config.archabbot.contract_address,
-            archabbot_contract::Event::Withdraw (
-                archabbot_contract::Withdraw {
-                    user: whale, trove_id, yang: eth, yang_amt: eth_yang_amt, asset_amt: before_eth_asset_amt
-                },
-            )
-        ),
-    );
+    expected_events
+        .append(
+            (
+                test_config.archabbot.contract_address,
+                archabbot_contract::Event::Withdraw(
+                    archabbot_contract::Withdraw {
+                        user: whale,
+                        trove_id,
+                        yang: eth,
+                        yang_amt: eth_yang_amt,
+                        asset_amt: before_eth_asset_amt,
+                    },
+                ),
+            ),
+        );
 
-    let eth_yang_amt_redeposited: Wad = test_config.sentinel.convert_to_yang(eth, after_eth_asset_amt);
-    expected_events.append(
-        (
-            test_config.archabbot.contract_address,
-            archabbot_contract::Event::Deposit (
-                archabbot_contract::Deposit {
-                    user: whale, trove_id, yang: eth, yang_amt: eth_yang_amt_redeposited, asset_amt: after_eth_asset_amt
-                },
-            )
-        ),
-    );
+    let eth_yang_amt_redeposited: Wad = test_config
+        .sentinel
+        .convert_to_yang(eth, after_eth_asset_amt);
+    expected_events
+        .append(
+            (
+                test_config.archabbot.contract_address,
+                archabbot_contract::Event::Deposit(
+                    archabbot_contract::Deposit {
+                        user: whale,
+                        trove_id,
+                        yang: eth,
+                        yang_amt: eth_yang_amt_redeposited,
+                        asset_amt: after_eth_asset_amt,
+                    },
+                ),
+            ),
+        );
     spy.assert_emitted(@expected_events);
 }
 
@@ -667,7 +684,12 @@ fn test_lever_up_exceeds_max_forge_fee_pct_fail() {
     let max_ltv: Ray = RAY_ONE.into();
     let max_forge_fee_pct: Wad = Zero::zero();
     let lever_up_params = LeverUpParams {
-        trove_id, max_ltv, yang: eth, max_forge_fee_pct, min_asset_amount: 1, swaps: lever_up_swaps(),
+        trove_id,
+        max_ltv,
+        yang: eth,
+        max_forge_fee_pct,
+        min_asset_amount: 1,
+        swaps: lever_up_swaps(),
     };
 
     cheat_caller_address(test_config.archabbot.contract_address, whale, CheatSpan::TargetCalls(1));

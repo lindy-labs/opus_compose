@@ -44,7 +44,9 @@ pub mod no_callback_rite {
             array![].span()
         }
 
-        fn set_trove_config(ref self: ContractState, trove_id: u64, config: Span<felt252>) {// No-op: no config needed
+        fn set_trove_config(
+            ref self: ContractState, trove_id: u64, config: Span<felt252>,
+        ) { // No-op: no config needed
         }
 
         fn is_ready(self: @ContractState, trove_id: u64) -> bool {

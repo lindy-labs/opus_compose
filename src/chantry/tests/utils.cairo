@@ -45,7 +45,9 @@ pub mod archabbot_utils {
 
     // Declare the test contracts required for Archabbot tests
     pub fn declare_contracts() -> ArchabbotTestClasses {
-        ArchabbotTestClasses { archabbot: Some(*declare("archabbot").unwrap_syscall().contract_class()) }
+        ArchabbotTestClasses {
+            archabbot: Some(*declare("archabbot").unwrap_syscall().contract_class()),
+        }
     }
 
     // Deploy Archabbot on forked mainnet using existing infrastructure

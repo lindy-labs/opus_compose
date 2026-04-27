@@ -771,17 +771,17 @@ fn test_mock_rite_deposit(is_perform: bool) {
 
     let yang_amount = test_config.sentinel.convert_to_yang(yang, amount_per_call);
     let expected_deposit_event = (
-            test_config.archabbot.contract_address,
-            archabbot_contract::Event::Deposit (
-                archabbot_contract::Deposit {
-                    user, trove_id, yang, yang_amt: yang_amount, asset_amt: amount_per_call,
-                },
-            ),
-        );
+        test_config.archabbot.contract_address,
+        archabbot_contract::Event::Deposit(
+            archabbot_contract::Deposit {
+                user, trove_id, yang, yang_amt: yang_amount, asset_amt: amount_per_call,
+            },
+        ),
+    );
 
     let expected_events = array![
-        expected_deposit_event, expected_deposit_event, expected_deposit_event
-            ];
+        expected_deposit_event, expected_deposit_event, expected_deposit_event,
+    ];
     spy.assert_emitted(@expected_events);
 }
 
@@ -841,17 +841,20 @@ fn test_mock_rite_withdraw(is_perform: bool) {
     assert_equalish(after_rite_balance, expected_rite_balance, error_margin, 'Wrong user balance');
 
     let expected_withdraw_event = (
-            test_config.archabbot.contract_address,
-            archabbot_contract::Event::Withdraw (
-                archabbot_contract::Withdraw {
-                    user, trove_id, yang, yang_amt: yang_amount, asset_amt: asset_amount_per_call,
-                },
-            ),
-        );
+        test_config.archabbot.contract_address,
+        archabbot_contract::Event::Withdraw(
+            archabbot_contract::Withdraw {
+                user, trove_id, yang, yang_amt: yang_amount, asset_amt: asset_amount_per_call,
+            },
+        ),
+    );
 
     let expected_events = array![
-        expected_withdraw_event, expected_withdraw_event, expected_withdraw_event, expected_withdraw_event, 
-            ];
+        expected_withdraw_event,
+        expected_withdraw_event,
+        expected_withdraw_event,
+        expected_withdraw_event,
+    ];
     spy.assert_emitted(@expected_events);
 }
 

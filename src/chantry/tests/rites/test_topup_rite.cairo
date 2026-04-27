@@ -16,7 +16,7 @@ use opus_compose::interfaces::erc20::{IERC20Dispatcher, IERC20DispatcherTrait};
 use opus_compose::shared::components::src5::{ISRC5Dispatcher, ISRC5DispatcherTrait};
 use snforge_std::{
     CheatSpan, ContractClassTrait, DeclareResultTrait, EventSpyAssertionsTrait,
-    cheat_caller_address, declare, spy_events, 
+    cheat_caller_address, declare, spy_events,
 };
 use starknet::{ContractAddress, SyscallResultTrait};
 use wadray::{RAY_PERCENT, Ray, WAD_ONE, Wad, rmul_wr};
