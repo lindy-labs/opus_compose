@@ -121,10 +121,6 @@ pub mod mock_rite {
         }
 
         fn end(ref self: ContractState, trove_id: u64) {
-            let config = self.configs.read(trove_id);
-            assert!(config.num_calls > 0, "{}: No calls configured", RITE_ID());
-            assert!(config.amount > 0, "{}: Zero amount", RITE_ID());
-
             self.perform(trove_id);
         }
     }

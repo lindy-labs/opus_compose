@@ -893,8 +893,45 @@ fn test_execute_mock_rite_exceeds_relative_threshold_reverts() {
 
 #[test]
 #[fork("MAINNET_CHANTRY")]
+fn test_end_mock_rite_exceeds_relative_threshold_pass() {
+    let (test_config, trove_id, rite_addr) = setup_trove_with_mock_rite();
+    let user = archabbot_utils::USER;
+    let rite = IRiteDispatcher { contract_address: rite_addr };
+    let yang = mainnet::ETH;
+
+    let before_trove_health = test_config.shrine.get_trove_health(trove_id);
+    let relative_threshold = before_trove_health.ltv / before_trove_health.threshold;
+
+    // Set relative threshold to the current LTV / threshold so
+    // that a single withdrawal of collateral will cause the LTV
+    // to fall below the relative threshold
+    let trove_config = TroveConfig {
+        relative_threshold, max_forge_fee_pct: Zero::zero(), incentive: Zero::zero(),
+    };
+    cheat_caller_address(test_config.archabbot.contract_address, user, CheatSpan::TargetCalls(1));
+    test_config.archabbot.set_trove_config(trove_id, trove_config);
+
+    // Configure mock rite for a deposit
+    let withdraw_amount: u128 = WAD_ONE / 10;
+    let config = MockRiteConfig {
+        is_deposit: false, num_calls: 1, asset: yang, amount: withdraw_amount, is_malicious: false,
+    };
+    rite.set_trove_config(trove_id, serialize_mock_config(config));
+
+    assert!(test_config.archabbot.can_execute_rite(trove_id), "Rite should be ready");
+    cheat_caller_address(test_config.archabbot.contract_address, user, CheatSpan::TargetCalls(1));
+    test_config.archabbot.end_rite(trove_id);
+
+    let after_trove_health = test_config.shrine.get_trove_health(trove_id);
+    assert!(after_trove_health.ltv > before_trove_health.ltv, "LTV did not worsen");
+}
+
+#[test]
+#[fork("MAINNET_CHANTRY")]
 #[should_panic(expected: "ARC: Caller not rite")]
-fn test_mock_rite_malicious_perform_different_rite_reverts() {
+#[test_case(true)]
+#[test_case(false)]
+fn test_mock_rite_malicious_different_rite_reverts(is_perform: bool) {
     let (test_config, trove_id, rite_addr) = setup_trove_with_mock_rite();
     let user = archabbot_utils::USER;
     let rite = IRiteDispatcher { contract_address: rite_addr };
@@ -910,13 +947,19 @@ fn test_mock_rite_malicious_perform_different_rite_reverts() {
     rite.set_trove_config(trove_id, serialize_mock_config(config));
 
     cheat_caller_address(test_config.archabbot.contract_address, user, CheatSpan::TargetCalls(1));
-    test_config.archabbot.execute_rite(trove_id);
+    if is_perform {
+        test_config.archabbot.execute_rite(trove_id);
+    } else {
+        test_config.archabbot.end_rite(trove_id);
+    }
 }
 
 #[test]
 #[fork("MAINNET_CHANTRY")]
 #[should_panic(expected: "ARC: Execution not started")]
-fn test_mock_rite_malicious_perform_same_rite_reverts() {
+#[test_case(true)]
+#[test_case(false)]
+fn test_mock_rite_malicious_same_rite_reverts(is_perform: bool) {
     let (test_config, trove_id, rite_addr) = setup_trove_with_mock_rite();
     let user = archabbot_utils::USER;
     let rite = IRiteDispatcher { contract_address: rite_addr };
@@ -948,34 +991,19 @@ fn test_mock_rite_malicious_perform_same_rite_reverts() {
     rite.set_trove_config(next_trove_id, serialize_mock_config(config));
 
     cheat_caller_address(test_config.archabbot.contract_address, user, CheatSpan::TargetCalls(1));
-    test_config.archabbot.execute_rite(trove_id);
-}
-
-#[test]
-#[fork("MAINNET_CHANTRY")]
-#[should_panic(expected: "ARC: Execution not started")]
-fn test_mock_rite_malicious_end_reverts() {
-    let (test_config, trove_id, rite_addr) = setup_trove_with_mock_rite();
-    let user = archabbot_utils::USER;
-    let rite = IRiteDispatcher { contract_address: rite_addr };
-
-    let config = MockRiteConfig {
-        is_deposit: true,
-        num_calls: 1,
-        asset: mainnet::ETH,
-        amount: WAD_ONE / 10,
-        is_malicious: true,
-    };
-    rite.set_trove_config(trove_id, serialize_mock_config(config));
-
-    cheat_caller_address(test_config.archabbot.contract_address, user, CheatSpan::TargetCalls(1));
-    test_config.archabbot.end_rite(trove_id);
+    if is_perform {
+        test_config.archabbot.execute_rite(trove_id);
+    } else {
+        test_config.archabbot.end_rite(trove_id);
+    }
 }
 
 #[test]
 #[fork("MAINNET_CHANTRY")]
 #[should_panic(expected: "MOCK_RITE: Caller is not Archabbot")]
-fn test_mock_rite_perform_non_archabbot_caller_reverts() {
+#[test_case(true)]
+#[test_case(false)]
+fn test_mock_rite_non_archabbot_caller_reverts(is_perform: bool) {
     let (_test_config, trove_id, rite_addr) = setup_trove_with_mock_rite();
     let user = archabbot_utils::USER;
     let rite = IRiteDispatcher { contract_address: rite_addr };
@@ -984,22 +1012,11 @@ fn test_mock_rite_perform_non_archabbot_caller_reverts() {
     rite.set_trove_config(trove_id, serialize_mock_config(config));
 
     cheat_caller_address(rite_addr, user, CheatSpan::TargetCalls(1));
-    rite.perform(trove_id);
-}
-
-#[test]
-#[fork("MAINNET_CHANTRY")]
-#[should_panic(expected: "MOCK_RITE: Caller is not Archabbot")]
-fn test_mock_rite_end_non_archabbot_caller_reverts() {
-    let (_test_config, trove_id, rite_addr) = setup_trove_with_mock_rite();
-    let user = archabbot_utils::USER;
-    let rite = IRiteDispatcher { contract_address: rite_addr };
-
-    let config = default_mock_config();
-    rite.set_trove_config(trove_id, serialize_mock_config(config));
-
-    cheat_caller_address(rite_addr, user, CheatSpan::TargetCalls(1));
-    rite.end(trove_id);
+    if is_perform {
+        rite.perform(trove_id);
+    } else {
+        rite.end(trove_id);
+    }
 }
 
 #[test]
