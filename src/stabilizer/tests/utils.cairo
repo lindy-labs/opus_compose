@@ -20,7 +20,7 @@ pub mod stabilizer_utils {
         CheatSpan, ContractClass, ContractClassTrait, DeclareResultTrait, cheat_caller_address,
         declare, start_cheat_caller_address, stop_cheat_caller_address,
     };
-    use starknet::ContractAddress;
+    use starknet::{ContractAddress, SyscallResultTrait};
     use wadray::{RAY_ONE, Wad};
 
     pub const USDC_DECIMALS_DIFF_SCALE: u256 = 1000000000000; // 10 ** 12
@@ -36,10 +36,8 @@ pub mod stabilizer_utils {
     //
 
     pub fn setup(stabilizer_class: Option<ContractClass>) -> StabilizerTestConfig {
-        let stabilizer_class = match stabilizer_class {
-            Option::Some(class) => class,
-            Option::None => *(declare("stabilizer").unwrap().contract_class()),
-        };
+        let stabilizer_class = stabilizer_class
+            .unwrap_or_else(|| *declare("stabilizer").unwrap_syscall().contract_class());
 
         let mut calldata: Array<felt252> = array![
             mainnet::SHRINE.into(),
@@ -49,7 +47,7 @@ pub mod stabilizer_utils {
         ];
         POOL_KEY().serialize(ref calldata);
         BOUNDS().serialize(ref calldata);
-        let (stabilizer_addr, _) = stabilizer_class.deploy(@calldata).unwrap();
+        let (stabilizer_addr, _) = stabilizer_class.deploy(@calldata).unwrap_syscall();
 
         // Clear out surplus
         let equalizer = IEqualizerDispatcher { contract_address: mainnet::EQUALIZER };
@@ -68,8 +66,8 @@ pub mod stabilizer_utils {
             .grant_role(adjust_budget_role, mainnet::MULTISIG);
         stop_cheat_caller_address(mainnet::SHRINE);
 
-        let fdp_class = declare("stabilizer_fdp").unwrap().contract_class();
-        let (fdp_addr, _) = fdp_class.deploy(@array![]).unwrap();
+        let fdp_class = declare("stabilizer_fdp").unwrap_syscall().contract_class();
+        let (fdp_addr, _) = fdp_class.deploy(@array![]).unwrap_syscall();
 
         StabilizerTestConfig {
             stabilizer: IStabilizerDispatcher { contract_address: stabilizer_addr },

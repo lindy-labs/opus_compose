@@ -170,9 +170,7 @@ pub mod stabilizer {
             let position: GetTokenInfoResult = self
                 .ekubo_positions
                 .read()
-                .get_token_info(
-                    token_id.into(), self.pool_key.read().into(), self.bounds.read().into(),
-                );
+                .get_token_info(token_id, self.pool_key.read().into(), self.bounds.read().into());
             assert!(position.liquidity.is_non_zero(), "STB: No liquidity found");
 
             // Get updated yield state based on total liquidity before adding this position's

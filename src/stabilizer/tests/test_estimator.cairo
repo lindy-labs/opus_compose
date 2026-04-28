@@ -15,7 +15,7 @@ use opus_compose::stabilizer::periphery::estimator::{
     IEstimatorDispatcher, IEstimatorDispatcherTrait,
 };
 use snforge_std::{CheatSpan, ContractClassTrait, DeclareResultTrait, cheat_caller_address, declare};
-use starknet::ContractAddress;
+use starknet::{ContractAddress, SyscallResultTrait};
 use wadray::WAD_ONE;
 
 const MAX_ITERATIONS: u8 = 20;
@@ -30,9 +30,9 @@ const USDC_INPUT_AMT: u128 = INPUT_AMT * USDC_SCALE;
 //
 
 fn deploy_estimator() -> IEstimatorDispatcher {
-    let estimator_class = declare("estimator").unwrap().contract_class();
+    let estimator_class = declare("estimator").unwrap_syscall().contract_class();
     let calldata: Array<felt252> = array![mainnet::EKUBO_CORE.into()];
-    let (estimator_addr, _) = estimator_class.deploy(@calldata).unwrap();
+    let (estimator_addr, _) = estimator_class.deploy(@calldata).unwrap_syscall();
 
     IEstimatorDispatcher { contract_address: estimator_addr }
 }

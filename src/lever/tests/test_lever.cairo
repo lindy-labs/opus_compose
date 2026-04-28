@@ -25,7 +25,7 @@ use snforge_std::{
     cheat_caller_address, declare, spy_events, start_cheat_caller_address,
     stop_cheat_caller_address,
 };
-use starknet::ContractAddress;
+use starknet::{ContractAddress, SyscallResultTrait};
 use wadray::{RAY_ONE, Ray, WAD_ONE, Wad};
 
 //
@@ -33,7 +33,7 @@ use wadray::{RAY_ONE, Ray, WAD_ONE, Wad};
 //
 
 fn deploy_lever() -> ILeverDispatcher {
-    let lever_class = declare("lever").unwrap().contract_class();
+    let lever_class = declare("lever").unwrap_syscall().contract_class();
 
     let calldata: Array<felt252> = array![
         mainnet::SHRINE.into(),
@@ -43,7 +43,7 @@ fn deploy_lever() -> ILeverDispatcher {
         mainnet::EKUBO_ROUTER.into(),
     ];
 
-    let (lever_addr, _) = lever_class.deploy(@calldata).unwrap();
+    let (lever_addr, _) = lever_class.deploy(@calldata).unwrap_syscall();
 
     start_cheat_caller_address(mainnet::SHRINE, mainnet::MULTISIG);
     IAccessControlDispatcher { contract_address: mainnet::SHRINE }
@@ -59,13 +59,13 @@ fn deploy_lever() -> ILeverDispatcher {
 }
 
 fn deploy_malicious_lever(lever: ContractAddress) -> IMaliciousLeverDispatcher {
-    let malicious_lever_class = declare("malicious_lever").unwrap().contract_class();
+    let malicious_lever_class = declare("malicious_lever").unwrap_syscall().contract_class();
 
     let calldata: Array<felt252> = array![
         mainnet::SHRINE.into(), mainnet::FLASH_MINT.into(), lever.into(),
     ];
 
-    let (malicious_lever_addr, _) = malicious_lever_class.deploy(@calldata).unwrap();
+    let (malicious_lever_addr, _) = malicious_lever_class.deploy(@calldata).unwrap_syscall();
 
     IMaliciousLeverDispatcher { contract_address: malicious_lever_addr }
 }
@@ -726,7 +726,7 @@ fn test_lever_down_exceeds_max_ltv_fail() {
 
     // Remove the first swap, so total amount swapped is 790.75 CASH worth of ETH
     let mut modified_swaps = lever_down_swaps();
-    modified_swaps.pop_front();
+    let _ = modified_swaps.pop_front();
 
     let debt_to_repay: u128 = 790750000000000000000;
 
