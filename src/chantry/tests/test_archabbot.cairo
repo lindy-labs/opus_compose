@@ -21,6 +21,7 @@ use starknet::{ContractAddress, SyscallResultTrait};
 use wadray::{WAD_ONE, Wad};
 
 const EXISTING_TROVE_ID: u64 = 1;
+const EXISTING_TROVE_IDS: [u64; 2] = [EXISTING_TROVE_ID, 282];
 
 //
 // Deployment
@@ -271,6 +272,21 @@ fn test_forge_success() {
 
 #[test]
 #[fork("MAINNET_CHANTRY")]
+#[should_panic(expected: "ARC: Not trove owner")]
+fn test_forge_not_owner_reverts() {
+    let test_config = archabbot_utils::archabbot_deploy(None);
+    let user: ContractAddress = archabbot_utils::USER;
+    let archabbot = IAbbotDispatcher { contract_address: test_config.archabbot.contract_address };
+    let trove_id: u64 = archabbot_utils::open_trove_for_user(archabbot, user);
+
+    // Forge additional CASH
+    let forge_amount: Wad = WAD_ONE.into();
+    cheat_caller_address(test_config.archabbot.contract_address, archabbot_utils::BAD_GUY, CheatSpan::TargetCalls(1));
+    archabbot.forge(trove_id, forge_amount, Zero::zero());
+}
+
+#[test]
+#[fork("MAINNET_CHANTRY")]
 fn test_melt_success() {
     let test_config = archabbot_utils::archabbot_deploy(None);
     let user: ContractAddress = archabbot_utils::USER;
@@ -285,6 +301,29 @@ fn test_melt_success() {
     IERC20Dispatcher { contract_address: test_config.shrine.contract_address }
         .approve(test_config.archabbot.contract_address, melt_amount.into());
     cheat_caller_address(test_config.archabbot.contract_address, user, CheatSpan::TargetCalls(1));
+    archabbot.melt(trove_id, melt_amount);
+
+    let after_health: Health = test_config.shrine.get_trove_health(trove_id);
+    let expected_debt: Wad = before_health.debt - melt_amount;
+    assert_eq!(after_health.debt, expected_debt, "Wrong debt");
+}
+
+#[test]
+#[fork("MAINNET_CHANTRY")]
+fn test_melt_non_owner_success() {
+    let test_config = archabbot_utils::archabbot_deploy(None);
+    let user: ContractAddress = archabbot_utils::USER;
+    let archabbot = IAbbotDispatcher { contract_address: test_config.archabbot.contract_address };
+    let trove_id: u64 = archabbot_utils::open_trove_for_user(archabbot, user);
+
+    let before_health: Health = test_config.shrine.get_trove_health(trove_id);
+
+    // Forge additional CASH
+    let melt_amount: Wad = (WAD_ONE / 10).into();
+    cheat_caller_address(test_config.shrine.contract_address, user, CheatSpan::TargetCalls(1));
+    IERC20Dispatcher { contract_address: test_config.shrine.contract_address }
+        .approve(test_config.archabbot.contract_address, melt_amount.into());
+    cheat_caller_address(test_config.archabbot.contract_address, mainnet::MULTISIG, CheatSpan::TargetCalls(1));
     archabbot.melt(trove_id, melt_amount);
 
     let after_health: Health = test_config.shrine.get_trove_health(trove_id);
@@ -310,6 +349,43 @@ fn test_legacy_trove_ownership() {
     let owner = archabbot.get_trove_owner(EXISTING_TROVE_ID);
     assert!(owner.is_some(), "no owner");
     assert!(owner.unwrap() == user, "wrong owner");
+
+    let trove_ids = archabbot.get_user_trove_ids(user);
+    assert_eq!(trove_ids, EXISTING_TROVE_IDS.span(), "Incorrect trove IDs");
+}
+
+#[test]
+#[fork("MAINNET_CHANTRY")]
+fn test_legacy_trove_ownership_with_new_trove() {
+    let test_config = archabbot_utils::archabbot_deploy(None);
+    let user: ContractAddress = mainnet::EXISTING_TROVE_OWNER;
+    let yang = mainnet::ETH;
+    let yang_amount: u128 = WAD_ONE / 10; // 0.1 ETH
+    let forge_amount: Wad = (50 * WAD_ONE).into(); // 50 CASH
+    let max_forge_fee_pct: Wad = Zero::zero();
+
+    let archabbot = IAbbotDispatcher { contract_address: test_config.archabbot.contract_address };
+
+    archabbot_utils::fund_user_eth(user, yang_amount.into());
+    archabbot_utils::approve_gate_for_user(test_config.eth_gate, yang, user);
+
+    // Open trove
+    cheat_caller_address(test_config.archabbot.contract_address, user, CheatSpan::TargetCalls(1));
+    let trove_id = archabbot
+        .open_trove(
+            array![AssetBalance { address: yang, amount: yang_amount }].span(),
+            forge_amount,
+            max_forge_fee_pct,
+        );
+
+    let mut expected_trove_ids: Array<u64> = Default::default();
+    for i in EXISTING_TROVE_IDS.span() {
+        expected_trove_ids.append(*i);
+    }
+    expected_trove_ids.append(trove_id);
+
+    let trove_ids = archabbot.get_user_trove_ids(user);
+    assert_eq!(trove_ids, expected_trove_ids.span(), "Incorrect trove IDs");
 }
 
 #[test]
