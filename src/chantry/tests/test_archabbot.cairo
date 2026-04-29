@@ -483,6 +483,22 @@ fn test_existing_trove_withdraw_not_owner_reverts() {
 #[test]
 #[fork("MAINNET_CHANTRY")]
 #[should_panic(expected: "ARC: Not trove owner")]
+fn test_existing_trove_forge_not_owner_reverts() {
+    let test_config = archabbot_utils::archabbot_deploy(None);
+
+    let archabbot = IAbbotDispatcher { contract_address: test_config.archabbot.contract_address };
+
+    cheat_caller_address(
+        test_config.archabbot.contract_address, archabbot_utils::BAD_GUY, CheatSpan::TargetCalls(1),
+    );
+    let forge_amount: Wad = WAD_ONE.into();
+    let max_forge_fee_pct: Wad = Zero::zero();
+    archabbot.forge(EXISTING_TROVE_ID, forge_amount, max_forge_fee_pct);
+}
+
+#[test]
+#[fork("MAINNET_CHANTRY")]
+#[should_panic(expected: "ARC: Not trove owner")]
 fn test_existing_trove_set_config_not_owner_reverts() {
     let test_config = archabbot_utils::archabbot_deploy(None);
 
