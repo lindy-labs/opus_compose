@@ -9,13 +9,13 @@ use opus::interfaces::{
 use opus::types::{AssetBalance, Health};
 use opus::utils::assertions::assert_equalish;
 use opus_compose::addresses::mainnet;
-use opus_compose::chantry::contracts::archabbot::archabbot as archabbot_contract;
-use opus_compose::chantry::interfaces::lever::{ILeverDispatcher, ILeverDispatcherTrait};
-use opus_compose::chantry::tests::mocks::malicious_lever::{
+use opus_compose::archabbot::contracts::archabbot::archabbot as archabbot_contract;
+use opus_compose::archabbot::interfaces::lever::{ILeverDispatcher, ILeverDispatcherTrait};
+use opus_compose::archabbot::tests::mocks::malicious_lever::{
     IMaliciousLeverDispatcher, IMaliciousLeverDispatcherTrait,
 };
-use opus_compose::chantry::tests::utils::archabbot_utils;
-use opus_compose::chantry::types::{
+use opus_compose::archabbot::tests::utils::archabbot_utils;
+use opus_compose::archabbot::types::{
     LeverDownParams, LeverUpParams, ModifyLeverAction, ModifyLeverParams,
 };
 use snforge_std::{

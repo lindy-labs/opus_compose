@@ -5,15 +5,15 @@ pub mod EkuboDcaComponent {
     use ekubo::interfaces::positions::{IPositionsDispatcher, IPositionsDispatcherTrait};
     use ekubo::types::keys::PoolKey;
     use opus::types::AssetBalance;
-    use opus_compose::chantry::contracts::rites::dca::types::{
+    use opus_compose::archabbot::contracts::rites::dca::types::{
         ConsolidatedOrderData, DcaDurationTrait, DcaOrder, DcaOrderDuration, OrderStatus, OrderType,
     };
-    use opus_compose::chantry::contracts::rites::dca::utils::dca_utils;
-    use opus_compose::chantry::contracts::rites::types::{EkuboPoolParams, EkuboPoolParamsTrait};
-    use opus_compose::chantry::interfaces::archabbot::{
-        IArchabbotDispatcher, IArchabbotDispatcherTrait,
+    use opus_compose::archabbot::contracts::rites::dca::utils::dca_utils;
+    use opus_compose::archabbot::contracts::rites::types::{EkuboPoolParams, EkuboPoolParamsTrait};
+    use opus_compose::archabbot::interfaces::celebrant::{
+        ICelebrantDispatcher, ICelebrantDispatcherTrait,
     };
-    use opus_compose::chantry::types::Action;
+    use opus_compose::archabbot::types::Action;
     use opus_compose::interfaces::erc20::{IERC20Dispatcher, IERC20DispatcherTrait};
     use starknet::storage::{
         Map, StorageMapReadAccess, StorageMapWriteAccess, StoragePointerReadAccess,
@@ -120,7 +120,7 @@ pub mod EkuboDcaComponent {
         fn close_order(
             ref self: ComponentState<TContractState>,
             yin: IERC20Dispatcher,
-            archabbot: IArchabbotDispatcher,
+            archabbot: ICelebrantDispatcher,
             trove_id: u64,
             asset: ContractAddress,
             order: DcaOrder,
@@ -217,7 +217,7 @@ pub mod EkuboDcaComponent {
         fn create_order(
             ref self: ComponentState<TContractState>,
             yin: IERC20Dispatcher,
-            archabbot: IArchabbotDispatcher,
+            archabbot: ICelebrantDispatcher,
             trove_id: u64,
             asset: ContractAddress,
             pool_params: EkuboPoolParams,

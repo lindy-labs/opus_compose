@@ -1,9 +1,9 @@
-use opus_compose::chantry::contracts::rites::dca::types::{
+use opus_compose::archabbot::contracts::rites::dca::types::{
     DcaOrder, DcaOrderDuration, OrderType, PriceConditions, PriceDcaDurations, TimeDcaConditions,
 };
-use opus_compose::chantry::contracts::rites::topup::types::TopupConditions;
-use opus_compose::chantry::contracts::rites::types::EkuboPoolParams;
-use opus_compose::chantry::types::TroveConfig;
+use opus_compose::archabbot::contracts::rites::topup::types::TopupConditions;
+use opus_compose::archabbot::contracts::rites::types::EkuboPoolParams;
+use opus_compose::archabbot::types::TroveConfig;
 use starknet::storage_access::StorePacking;
 use wadray::{RAY_ONE, RAY_PERCENT, Ray, WAD_ONE, Wad};
 

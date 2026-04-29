@@ -1,4 +1,4 @@
-use opus_compose::chantry::types::{LeverDownParams, LeverUpParams};
+use opus_compose::archabbot::types::{LeverDownParams, LeverUpParams};
 use wadray::Wad;
 
 #[starknet::interface]
@@ -12,7 +12,7 @@ pub trait IMaliciousLever<TContractState> {
 #[starknet::contract]
 pub mod malicious_lever {
     use opus::interfaces::{IFlashMintDispatcher, IFlashMintDispatcherTrait};
-    use opus_compose::chantry::types::{
+    use opus_compose::archabbot::types::{
         LeverDownParams, LeverUpParams, ModifyLeverAction, ModifyLeverParams,
     };
     use starknet::storage::{StoragePointerReadAccess, StoragePointerWriteAccess};

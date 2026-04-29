@@ -48,7 +48,7 @@ pub mod stabilizer {
     }
 }
 
-pub mod chantry {
+pub mod archabbot {
     pub mod contracts {
         pub mod archabbot;
         pub mod restricted_archabbot;
@@ -72,7 +72,7 @@ pub mod chantry {
         }
     }
     pub mod interfaces {
-        pub mod archabbot;
+        pub mod celebrant;
         pub mod lever;
         pub mod rite;
     }

@@ -5,13 +5,13 @@ use opus::interfaces::{
 use opus::types::{AssetBalance, Health};
 use opus::utils::assertions::assert_equalish;
 use opus_compose::addresses::mainnet;
-use opus_compose::chantry::contracts::archabbot::archabbot as archabbot_contract;
-use opus_compose::chantry::interfaces::archabbot::IArchabbotDispatcherTrait;
-use opus_compose::chantry::interfaces::rite::{IRiteDispatcher, IRiteDispatcherTrait};
-use opus_compose::chantry::tests::mocks::mock_rite::MockRiteConfig;
-use opus_compose::chantry::tests::mocks::reentrant_rite::ReentrantRiteConfig;
-use opus_compose::chantry::tests::utils::archabbot_utils;
-use opus_compose::chantry::types::{Action, TroveConfig};
+use opus_compose::archabbot::contracts::archabbot::archabbot as archabbot_contract;
+use opus_compose::archabbot::interfaces::celebrant::ICelebrantDispatcherTrait;
+use opus_compose::archabbot::interfaces::rite::{IRiteDispatcher, IRiteDispatcherTrait};
+use opus_compose::archabbot::tests::mocks::mock_rite::MockRiteConfig;
+use opus_compose::archabbot::tests::mocks::reentrant_rite::ReentrantRiteConfig;
+use opus_compose::archabbot::tests::utils::archabbot_utils;
+use opus_compose::archabbot::types::{Action, TroveConfig};
 use opus_compose::interfaces::erc20::{IERC20Dispatcher, IERC20DispatcherTrait};
 use snforge_std::{
     CheatSpan, ContractClassTrait, DeclareResultTrait, EventSpyAssertionsTrait,

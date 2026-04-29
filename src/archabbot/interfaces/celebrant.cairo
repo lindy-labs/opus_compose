@@ -1,8 +1,8 @@
-use opus_compose::chantry::types::{Action, TroveConfig};
+use opus_compose::archabbot::types::{Action, TroveConfig};
 use starknet::ContractAddress;
 
 #[starknet::interface]
-pub trait IArchabbot<TContractState> {
+pub trait ICelebrant<TContractState> {
     // Config functions
     fn set_trove_config(ref self: TContractState, trove_id: u64, config: TroveConfig);
     fn get_trove_config(self: @TContractState, trove_id: u64) -> TroveConfig;

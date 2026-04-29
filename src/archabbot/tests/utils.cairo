@@ -8,8 +8,8 @@ pub mod archabbot_utils {
     };
     use opus::types::AssetBalance;
     use opus_compose::addresses::mainnet;
-    use opus_compose::chantry::interfaces::archabbot::IArchabbotDispatcher;
-    use opus_compose::chantry::types::TroveConfig;
+    use opus_compose::archabbot::interfaces::celebrant::ICelebrantDispatcher;
+    use opus_compose::archabbot::types::TroveConfig;
     use snforge_std::{
         CheatSpan, ContractClass, ContractClassTrait, DeclareResultTrait, cheat_caller_address,
         declare, start_cheat_caller_address, stop_cheat_caller_address,
@@ -35,7 +35,7 @@ pub mod archabbot_utils {
 
     #[derive(Copy, Drop)]
     pub struct ArchabbotTestConfig {
-        pub archabbot: IArchabbotDispatcher,
+        pub archabbot: ICelebrantDispatcher,
         pub abbot: IAbbotDispatcher,
         pub sentinel: ISentinelDispatcher,
         pub shrine: IShrineDispatcher,
@@ -73,7 +73,7 @@ pub mod archabbot_utils {
             .unwrap()
             .deploy(@calldata)
             .expect('archabbot deploy fail');
-        let archabbot_dispatcher = IArchabbotDispatcher { contract_address: archabbot_addr };
+        let archabbot_dispatcher = ICelebrantDispatcher { contract_address: archabbot_addr };
 
         // Grant access control to Archabbot
         cheat_caller_address(mainnet::SHRINE, mainnet::MULTISIG, CheatSpan::TargetCalls(1));

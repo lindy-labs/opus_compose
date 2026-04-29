@@ -13,10 +13,10 @@ pub mod archabbot {
         IShrineDispatcherTrait,
     };
     use opus::types::{AssetBalance, Health};
-    use opus_compose::chantry::interfaces::archabbot::IArchabbot;
-    use opus_compose::chantry::interfaces::lever::ILever;
-    use opus_compose::chantry::interfaces::rite::{IRITE_ID, IRiteDispatcher, IRiteDispatcherTrait};
-    use opus_compose::chantry::types::{
+    use opus_compose::archabbot::interfaces::celebrant::ICelebrant;
+    use opus_compose::archabbot::interfaces::lever::ILever;
+    use opus_compose::archabbot::interfaces::rite::{IRITE_ID, IRiteDispatcher, IRiteDispatcherTrait};
+    use opus_compose::archabbot::types::{
         Action, LeverDownParams, LeverUpParams, ModifyLeverAction, ModifyLeverParams, TroveConfig,
     };
     use opus_compose::interfaces::erc20::{IERC20Dispatcher, IERC20DispatcherTrait};
@@ -395,7 +395,7 @@ pub mod archabbot {
     }
 
     #[abi(embed_v0)]
-    impl IArchabbotImpl of IArchabbot<ContractState> {
+    impl ICelebrantImpl of ICelebrant<ContractState> {
         //
         // Config
         //

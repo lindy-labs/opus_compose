@@ -1,4 +1,4 @@
-use opus_compose::chantry::contracts::rites::topup::types::SwapParams;
+use opus_compose::archabbot::contracts::rites::topup::types::SwapParams;
 
 #[starknet::interface]
 pub trait ITopupRite<TContractState> {
@@ -18,16 +18,16 @@ pub mod topup_rite {
     use ekubo::types::keys::PoolKey;
     use ekubo::types::pool_price::PoolPrice;
     use opus::interfaces::{IAbbotDispatcher, IAbbotDispatcherTrait};
-    use opus_compose::chantry::contracts::rites::topup::constants::MAX_SLIPPAGE;
-    use opus_compose::chantry::contracts::rites::topup::types::{SwapParams, TopupConfig};
-    use opus_compose::chantry::contracts::rites::types::{EkuboPoolParams, EkuboPoolParamsTrait};
-    use opus_compose::chantry::contracts::rites::utils::rites_utils;
-    use opus_compose::chantry::interfaces::archabbot::{
-        IArchabbotDispatcher, IArchabbotDispatcherTrait,
+    use opus_compose::archabbot::contracts::rites::topup::constants::MAX_SLIPPAGE;
+    use opus_compose::archabbot::contracts::rites::topup::types::{SwapParams, TopupConfig};
+    use opus_compose::archabbot::contracts::rites::types::{EkuboPoolParams, EkuboPoolParamsTrait};
+    use opus_compose::archabbot::contracts::rites::utils::rites_utils;
+    use opus_compose::archabbot::interfaces::celebrant::{
+        ICelebrantDispatcher, ICelebrantDispatcherTrait,
     };
-    use opus_compose::chantry::interfaces::rite::{IRITE_ID, IRite};
-    use opus_compose::chantry::types::Action;
-    use opus_compose::chantry::utils::sqrt_ratio_limit::calculate_sqrt_ratio_limit;
+    use opus_compose::archabbot::interfaces::rite::{IRITE_ID, IRite};
+    use opus_compose::archabbot::types::Action;
+    use opus_compose::archabbot::utils::sqrt_ratio_limit::calculate_sqrt_ratio_limit;
     use opus_compose::interfaces::erc20::{IERC20Dispatcher, IERC20DispatcherTrait};
     use opus_compose::shared::components::src5::SRC5Component;
     use starknet::storage::{
@@ -50,7 +50,7 @@ pub mod topup_rite {
         #[substorage(v0)]
         src5: SRC5Component::Storage,
         yin: IERC20Dispatcher,
-        archabbot: IArchabbotDispatcher,
+        archabbot: ICelebrantDispatcher,
         ekubo_core: ICoreDispatcher,
         ekubo_router: IRouterDispatcher,
         topup_configs: Map<u64, TopupConfig> // ATU trove ID -> config
@@ -94,7 +94,7 @@ pub mod topup_rite {
         ekubo_core: ContractAddress,
     ) {
         self.yin.write(IERC20Dispatcher { contract_address: yin });
-        self.archabbot.write(IArchabbotDispatcher { contract_address: archabbot });
+        self.archabbot.write(ICelebrantDispatcher { contract_address: archabbot });
 
         self.ekubo_core.write(ICoreDispatcher { contract_address: ekubo_core });
         self.ekubo_router.write(IRouterDispatcher { contract_address: ekubo_router });

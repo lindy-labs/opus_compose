@@ -2,16 +2,16 @@ use core::num::traits::Zero;
 use opus::interfaces::{IAbbotDispatcher, IShrineDispatcher, IShrineDispatcherTrait};
 use opus::types::Health;
 use opus_compose::addresses::mainnet;
-use opus_compose::chantry::contracts::archabbot::archabbot as archabbot_contract;
-use opus_compose::chantry::contracts::rites::topup::constants::MAX_SLIPPAGE;
-use opus_compose::chantry::contracts::rites::topup::topup_rite::{
+use opus_compose::archabbot::contracts::archabbot::archabbot as archabbot_contract;
+use opus_compose::archabbot::contracts::rites::topup::constants::MAX_SLIPPAGE;
+use opus_compose::archabbot::contracts::rites::topup::topup_rite::{
     ITopupRiteDispatcher, ITopupRiteDispatcherTrait, topup_rite as topup_rite_contract,
 };
-use opus_compose::chantry::contracts::rites::topup::types::{TopupConditions, TopupConfig};
-use opus_compose::chantry::contracts::rites::types::EkuboPoolParams;
-use opus_compose::chantry::interfaces::archabbot::{IArchabbotDispatcher, IArchabbotDispatcherTrait};
-use opus_compose::chantry::interfaces::rite::{IRITE_ID, IRiteDispatcher, IRiteDispatcherTrait};
-use opus_compose::chantry::tests::utils::archabbot_utils;
+use opus_compose::archabbot::contracts::rites::topup::types::{TopupConditions, TopupConfig};
+use opus_compose::archabbot::contracts::rites::types::EkuboPoolParams;
+use opus_compose::archabbot::interfaces::celebrant::{ICelebrantDispatcher, ICelebrantDispatcherTrait};
+use opus_compose::archabbot::interfaces::rite::{IRITE_ID, IRiteDispatcher, IRiteDispatcherTrait};
+use opus_compose::archabbot::tests::utils::archabbot_utils;
 use opus_compose::interfaces::erc20::{IERC20Dispatcher, IERC20DispatcherTrait};
 use opus_compose::shared::components::src5::{ISRC5Dispatcher, ISRC5DispatcherTrait};
 use snforge_std::{
@@ -61,7 +61,7 @@ fn serialize_config(config: TopupConfig) -> Span<felt252> {
 }
 
 // Open a trove via Archabbot, deploy a topup rite, and attach it.
-fn setup_trove_with_topup_rite() -> (IArchabbotDispatcher, u64, ContractAddress) {
+fn setup_trove_with_topup_rite() -> (ICelebrantDispatcher, u64, ContractAddress) {
     let test_config = archabbot_utils::archabbot_deploy(None);
     let user = archabbot_utils::USER;
 
@@ -75,7 +75,7 @@ fn setup_trove_with_topup_rite() -> (IArchabbotDispatcher, u64, ContractAddress)
     // Attach rite to trove
     cheat_caller_address(test_config.archabbot.contract_address, user, CheatSpan::TargetCalls(2));
     test_config.archabbot.set_rite(trove_id, rite_addr);
-    IArchabbotDispatcherTrait::set_trove_config(
+    ICelebrantDispatcherTrait::set_trove_config(
         test_config.archabbot, trove_id, archabbot_utils::BASE_TROVE_CONFIG(),
     );
 

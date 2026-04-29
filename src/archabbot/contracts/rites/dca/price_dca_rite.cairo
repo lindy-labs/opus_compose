@@ -2,14 +2,14 @@
 pub mod price_dca_rite {
     use core::num::traits::Zero;
     use opus::interfaces::{IAbbotDispatcher, IAbbotDispatcherTrait};
-    use opus_compose::chantry::contracts::rites::dca::ekubo_dca_component::EkuboDcaComponent;
-    use opus_compose::chantry::contracts::rites::dca::ekubo_oracle_component::EkuboOracleComponent;
-    use opus_compose::chantry::contracts::rites::dca::types::{
+    use opus_compose::archabbot::contracts::rites::dca::ekubo_dca_component::EkuboDcaComponent;
+    use opus_compose::archabbot::contracts::rites::dca::ekubo_oracle_component::EkuboOracleComponent;
+    use opus_compose::archabbot::contracts::rites::dca::types::{
         DcaOrder, OrderStatus, OrderType, PriceDcaConfig,
     };
-    use opus_compose::chantry::contracts::rites::utils::rites_utils;
-    use opus_compose::chantry::interfaces::archabbot::IArchabbotDispatcher;
-    use opus_compose::chantry::interfaces::rite::{IRITE_ID, IRite};
+    use opus_compose::archabbot::contracts::rites::utils::rites_utils;
+    use opus_compose::archabbot::interfaces::celebrant::ICelebrantDispatcher;
+    use opus_compose::archabbot::interfaces::rite::{IRITE_ID, IRite};
     use opus_compose::constants;
     use opus_compose::interfaces::erc20::IERC20Dispatcher;
     use opus_compose::shared::components::src5::SRC5Component;
@@ -42,7 +42,7 @@ pub mod price_dca_rite {
         #[substorage(v0)]
         ekubo_oracle: EkuboOracleComponent::Storage,
         yin: IERC20Dispatcher,
-        archabbot: IArchabbotDispatcher,
+        archabbot: ICelebrantDispatcher,
         price_dca_configs: Map<u64, PriceDcaConfig>,
     }
 
@@ -76,7 +76,7 @@ pub mod price_dca_rite {
         ekubo_positions: ContractAddress,
     ) {
         self.yin.write(IERC20Dispatcher { contract_address: yin });
-        self.archabbot.write(IArchabbotDispatcher { contract_address: archabbot });
+        self.archabbot.write(ICelebrantDispatcher { contract_address: archabbot });
 
         self.ekubo_oracle.set_ekubo_oracle(ekubo_oracle);
         self.ekubo_dca.set_ekubo_positions(ekubo_positions);

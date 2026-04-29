@@ -1,10 +1,10 @@
-# Opus Chantry
+# Opus Archabbot
 
-The Chantry refers to a set of modules that allows users to create and manage Smart Troves — Troves with attached rites that enable specific actions to be triggered by anyone based on pre-determined conditions.
-- Archabbot: An enhanced Abbot that manages Smart Troves. It implements the IAbbot interface and replaces the Abbot, adding support for rites, leverage, and other advanced features.
-- Rite: A mandate for a specific type of instruction that can be attached to a Smart Trove. 
+The Archabbot is a module that supersedes the Abbot and additionally supports the following features:
+1. Bidirectional leverage with flashloan;
+2. Enable specific instructions/actions to be triggered by anyone based on pre-determined conditions (also referred to as a "Rite").
 
-For simplicity, each Smart Trove can have at most one Rite attached to it at any time. Once a Smart Trove has an attached Rite, anyone can check if the preconditions for executing the Rite are met, and to execute the Rite if so.
+For simplicity, each Trove can have at most one Rite attached to it at any time. Once a Trove has an attached Rite, anyone can check if the preconditions for executing the Rite are met, and to execute the Rite if so.
 
 ## Examples of Rites
 

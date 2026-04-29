@@ -18,12 +18,12 @@ pub struct MockRiteConfig {
 #[starknet::contract]
 pub mod mock_rite {
     use opus::types::AssetBalance;
-    use opus_compose::chantry::contracts::rites::utils::rites_utils;
-    use opus_compose::chantry::interfaces::archabbot::{
-        IArchabbotDispatcher, IArchabbotDispatcherTrait,
+    use opus_compose::archabbot::contracts::rites::utils::rites_utils;
+    use opus_compose::archabbot::interfaces::celebrant::{
+        ICelebrantDispatcher, ICelebrantDispatcherTrait,
     };
-    use opus_compose::chantry::interfaces::rite::{IRITE_ID, IRite};
-    use opus_compose::chantry::types::Action;
+    use opus_compose::archabbot::interfaces::rite::{IRITE_ID, IRite};
+    use opus_compose::archabbot::types::Action;
     use opus_compose::interfaces::erc20::{IERC20Dispatcher, IERC20DispatcherTrait};
     use opus_compose::shared::components::src5::SRC5Component;
     use starknet::storage::{
@@ -44,7 +44,7 @@ pub mod mock_rite {
     struct Storage {
         #[substorage(v0)]
         src5: SRC5Component::Storage,
-        archabbot: IArchabbotDispatcher,
+        archabbot: ICelebrantDispatcher,
         configs: Map<u64, MockRiteConfig> // trove_id -> config
     }
 
@@ -57,7 +57,7 @@ pub mod mock_rite {
 
     #[constructor]
     fn constructor(ref self: ContractState, archabbot: ContractAddress) {
-        self.archabbot.write(IArchabbotDispatcher { contract_address: archabbot });
+        self.archabbot.write(ICelebrantDispatcher { contract_address: archabbot });
         self.src5.register_interface(IRITE_ID);
     }
 

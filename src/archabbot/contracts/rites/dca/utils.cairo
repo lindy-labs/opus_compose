@@ -1,7 +1,7 @@
 pub mod dca_utils {
     use core::num::traits::Zero;
     use ekubo::interfaces::extensions::twamm::OrderKey;
-    use opus_compose::chantry::contracts::rites::dca::types::{DcaOrder, OrderType};
+    use opus_compose::archabbot::contracts::rites::dca::types::{DcaOrder, OrderType};
     use starknet::ContractAddress;
 
     pub fn get_order_key_from_order(
