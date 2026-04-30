@@ -23,7 +23,7 @@ The call sequence for an action is as follows:
 3. `rite.perform(...)` calls `archabbot.on_rite_actions(...)` to perform the necessary action(s) on the Trove
 4. Execution returns to `rite.perform(...)`
 5. Steps (3) and (4) may be repeated more than once
-6. The execution logic for (4) is completed, and execution returns to `archabbot.execute_rite(...)` which checks the smart trove's LTV
+6. The execution logic for (4) is completed, and execution returns to `archabbot.execute_rite(...)` which checks the trove's LTV
 
 ## General principles for designing a Rite
 

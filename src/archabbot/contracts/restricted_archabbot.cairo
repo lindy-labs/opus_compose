@@ -1,5 +1,5 @@
 #[starknet::contract]
-pub mod restricted_archabbot {
+pub mod archabbot {
     use core::cmp::min;
     use core::num::traits::{Bounded, Zero};
     use core::option::OptionTrait;
@@ -79,7 +79,7 @@ pub mod restricted_archabbot {
         // (user) -> (number of troves opened)
         user_troves_count: Map<ContractAddress, u64>,
         user_troves: Map<(ContractAddress, u64), u64>,
-        // Smart trove ID -> owner
+        // Trove ID -> owner
         trove_owner: Map<u64, ContractAddress>,
         //
         // Rite storage
@@ -110,7 +110,7 @@ pub mod restricted_archabbot {
         Withdraw: Withdraw,
         TroveOpened: TroveOpened,
         TroveClosed: TroveClosed,
-        // Rite events
+        // Celebrant events
         ConfigUpdated: ConfigUpdated,
         RiteSet: RiteSet,
         RiteExecuted: RiteExecuted,
@@ -238,9 +238,12 @@ pub mod restricted_archabbot {
     ) {
         self.shrine.write(IShrineDispatcher { contract_address: shrine });
         self.sentinel.write(ISentinelDispatcher { contract_address: sentinel });
-        self.abbot.write(IAbbotDispatcher { contract_address: abbot });
+        let abbot = IAbbotDispatcher { contract_address: abbot };
+        self.abbot.write(abbot);
         self.flash_mint.write(IFlashMintDispatcher { contract_address: flash_mint });
         self.ekubo_router.write(IRouterDispatcher { contract_address: ekubo_router });
+
+        self.troves_count.write(abbot.get_troves_count());
     }
 
     // Replicates existing Abbot's implementation
@@ -431,8 +434,6 @@ pub mod restricted_archabbot {
         // that has not ended so as to prevent a rite from bricking a trove for whatever reason.
         fn set_rite(ref self: ContractState, trove_id: u64, rite: ContractAddress) {
             let caller: ContractAddress = get_caller_address();
-            // This also checks that the trove is a smart trove.
-            // Otherwise, the owner would be zero address.
             self.assert_trove_owner(caller, trove_id);
 
             let rite_src5 = ISRC5Dispatcher { contract_address: rite };
@@ -445,6 +446,7 @@ pub mod restricted_archabbot {
 
         // Note that this does not check:
         // 1. the configured max forge fee % is less than the current value;
+        //    (because the configured Rite may not forge)
         // 2. the LTV does not exceed the relative threhsold at the end of the rite;
         fn can_execute_rite(self: @ContractState, trove_id: u64) -> bool {
             let rite = self.rites.read(trove_id);
@@ -512,7 +514,7 @@ pub mod restricted_archabbot {
         }
 
         // Batch callback function to be called by `rite.perform(...)` and `rite.end(...)`
-        // Checks the caller is the rite specified for the smart trove.
+        // Checks the caller is the rite specified for the trove.
         // Checks the trove ID locked in the initial rite call.
         fn on_rite_actions(ref self: ContractState, trove_id: u64, actions: Span<Action>) {
             let caller: ContractAddress = get_caller_address();
@@ -524,7 +526,7 @@ pub mod restricted_archabbot {
             let sentinel = self.sentinel.read();
             let trove_owner: ContractAddress = self
                 .get_trove_owner(trove_id)
-                .expect('ARC: No trove owner');
+                .expect('ARC: Trove does not exist');
             let archabbot: ContractAddress = get_contract_address();
             for action in actions {
                 self
@@ -578,7 +580,7 @@ pub mod restricted_archabbot {
         // 2. Repay yin for trove
         // 3. Withdraw collateral asset from trove
         // 4. Purchase yin with withdrawn collateral asset via Ekubo
-        // 5. Transfer remainder collateral asset to user
+        // 5. Re-deposit remainder collateral asset to trove
         fn down(ref self: ContractState, amount: Wad, lever_down_params: LeverDownParams) {
             let user: ContractAddress = get_caller_address();
             let trove_id: u64 = lever_down_params.trove_id;
@@ -602,8 +604,6 @@ pub mod restricted_archabbot {
         }
     }
 
-    // Lever actions are not subject to the relative threshold since they are
-    // manually initiated by the user.
     #[abi(embed_v0)]
     impl IFlashBorrowerImpl of IFlashBorrower<ContractState> {
         // The flash mint contract that is used should not charge any fee.
@@ -685,7 +685,7 @@ pub mod restricted_archabbot {
                     let yang_erc20 = IERC20Dispatcher { contract_address: yang };
 
                     // Use the flash minted yin to repay the trove's debt
-                    self.melt(trove_id, amount.try_into().unwrap());
+                    shrine.melt(archabbot, trove_id, amount.try_into().unwrap());
 
                     // Withdraw collateral to this contract
                     let asset_amt: u128 = self
@@ -819,7 +819,7 @@ pub mod restricted_archabbot {
         }
 
         //
-        // Rite helpers
+        // Celebrant helpers
         //
 
         fn assert_callback(self: @ContractState) {

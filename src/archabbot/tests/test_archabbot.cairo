@@ -77,8 +77,8 @@ fn test_open_trove_success() {
     assert_eq!(count, expected_count, "Wrong troves count");
 
     let trove_owner = archabbot.get_trove_owner(trove_id);
-    assert!(trove_owner.is_some(), "Smart Trove owner should exist");
-    assert!(trove_owner.unwrap() == user, "Smart Trove owner mismatch");
+    assert!(trove_owner.is_some(), "Trove owner should exist");
+    assert!(trove_owner.unwrap() == user, "Trove owner mismatch");
 
     // Verify user's trove IDs
     let trove_ids = archabbot.get_user_trove_ids(user);

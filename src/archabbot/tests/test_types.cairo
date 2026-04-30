@@ -94,43 +94,43 @@ fn test_dca_order_packing_all_types() {
 
 // --- TroveConfig packing tests ---
 
-fn assert_smart_trove_config_roundtrip(
+fn assert_trove_config_roundtrip(
     relative_threshold: Ray, max_forge_fee_pct: Wad, incentive: Wad,
 ) {
     let config = TroveConfig { relative_threshold, max_forge_fee_pct, incentive };
     let unpacked: TroveConfig = StorePacking::unpack(StorePacking::pack(config));
-    assert_eq!(config, unpacked, "smart trove config roundtrip failed");
+    assert_eq!(config, unpacked, "trove config roundtrip failed");
 }
 
 #[test]
-fn test_smart_trove_config_packing_zero() {
-    assert_smart_trove_config_roundtrip(0_u128.into(), 0_u128.into(), 0_u128.into());
+fn test_trove_config_packing_zero() {
+    assert_trove_config_roundtrip(0_u128.into(), 0_u128.into(), 0_u128.into());
 }
 
 #[test]
-fn test_smart_trove_config_packing_max_threshold() {
+fn test_trove_config_packing_max_threshold() {
     // relative_threshold capped at RAY_ONE (90 bits)
-    assert_smart_trove_config_roundtrip(RAY_ONE.into(), 0_u128.into(), 0_u128.into());
+    assert_trove_config_roundtrip(RAY_ONE.into(), 0_u128.into(), 0_u128.into());
 }
 
 #[test]
-fn test_smart_trove_config_packing_max_fee_pct() {
+fn test_trove_config_packing_max_fee_pct() {
     // max_forge_fee_pct capped at 4 * WAD_ONE (62 bits)
-    assert_smart_trove_config_roundtrip(0_u128.into(), (4 * WAD_ONE).into(), 0_u128.into());
+    assert_trove_config_roundtrip(0_u128.into(), (4 * WAD_ONE).into(), 0_u128.into());
 }
 
 #[test]
-fn test_smart_trove_config_packing_max_incentive() {
+fn test_trove_config_packing_max_incentive() {
     // incentive capped at 2^99 - 1 (99 bits) — the maximum that fits in the packing layout
     // Note: archabbot.cairo MAX_INCENTIVE = 0x7FFFFFFFFFFFFFFFFFFFFFFFFFFF (2^111-1) exceeds
     // the 99-bit allocation and would not roundtrip correctly through packing.
     let max_incentive: u128 = 0x7FFFFFFFFFFFFFFFFFFFFFFFF; // 2^99 - 1
-    assert_smart_trove_config_roundtrip(0_u128.into(), 0_u128.into(), max_incentive.into());
+    assert_trove_config_roundtrip(0_u128.into(), 0_u128.into(), max_incentive.into());
 }
 
 #[test]
-fn test_smart_trove_config_packing_typical() {
-    assert_smart_trove_config_roundtrip(
+fn test_trove_config_packing_typical() {
+    assert_trove_config_roundtrip(
         (RAY_PERCENT * 80).into(), // 0.8 relative threshold
         (WAD_ONE / 100).into(), // 1% max forge fee
         (WAD_ONE * 5).into() // 5 CASH incentive

@@ -40,7 +40,7 @@ pub mod time_dca_rite {
         yin: IERC20Dispatcher,
         archabbot: ICelebrantDispatcher,
         time_dca_configs: Map<u64, TimeDcaConfig>,
-        // Mapping of smart trove ID to the latest order's timestamp
+        // Mapping of trove ID to the latest order's timestamp
         last_order_ts: Map<u64, u64>,
     }
 

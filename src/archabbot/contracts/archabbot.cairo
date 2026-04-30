@@ -79,7 +79,7 @@ pub mod archabbot {
         // (user) -> (number of troves opened)
         user_troves_count: Map<ContractAddress, u64>,
         user_troves: Map<(ContractAddress, u64), u64>,
-        // Smart trove ID -> owner
+        // Trove ID -> owner
         trove_owner: Map<u64, ContractAddress>,
         //
         // Rite storage
@@ -513,7 +513,7 @@ pub mod archabbot {
         }
 
         // Batch callback function to be called by `rite.perform(...)` and `rite.end(...)`
-        // Checks the caller is the rite specified for the smart trove.
+        // Checks the caller is the rite specified for the trove.
         // Checks the trove ID locked in the initial rite call.
         fn on_rite_actions(ref self: ContractState, trove_id: u64, actions: Span<Action>) {
             let caller: ContractAddress = get_caller_address();
