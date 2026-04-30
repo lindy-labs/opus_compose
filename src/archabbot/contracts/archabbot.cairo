@@ -110,7 +110,7 @@ pub mod archabbot {
         Withdraw: Withdraw,
         TroveOpened: TroveOpened,
         TroveClosed: TroveClosed,
-        // Rite events
+        // Celebrant events
         ConfigUpdated: ConfigUpdated,
         RiteSet: RiteSet,
         RiteExecuted: RiteExecuted,
@@ -433,8 +433,6 @@ pub mod archabbot {
         // that has not ended so as to prevent a rite from bricking a trove for whatever reason.
         fn set_rite(ref self: ContractState, trove_id: u64, rite: ContractAddress) {
             let caller: ContractAddress = get_caller_address();
-            // This also checks that the trove is a smart trove.
-            // Otherwise, the owner would be zero address.
             self.assert_trove_owner(caller, trove_id);
 
             let rite_src5 = ISRC5Dispatcher { contract_address: rite };
@@ -447,6 +445,7 @@ pub mod archabbot {
 
         // Note that this does not check:
         // 1. the configured max forge fee % is less than the current value;
+        //    (because the configured Rite may not forge)
         // 2. the LTV does not exceed the relative threhsold at the end of the rite;
         fn can_execute_rite(self: @ContractState, trove_id: u64) -> bool {
             let rite = self.rites.read(trove_id);
@@ -517,7 +516,6 @@ pub mod archabbot {
         // Checks the caller is the rite specified for the smart trove.
         // Checks the trove ID locked in the initial rite call.
         fn on_rite_actions(ref self: ContractState, trove_id: u64, actions: Span<Action>) {
-            println!(" on rite actions");
             let caller: ContractAddress = get_caller_address();
             let rite = self.rites.read(trove_id);
             assert!(caller == rite.contract_address, "ARC: Caller not rite");
@@ -530,7 +528,6 @@ pub mod archabbot {
                 .expect('ARC: Trove does not exist');
             let archabbot: ContractAddress = get_contract_address();
             for action in actions {
-                println!("executing action");
                 self
                     .execute_action(
                         shrine,
@@ -582,7 +579,7 @@ pub mod archabbot {
         // 2. Repay yin for trove
         // 3. Withdraw collateral asset from trove
         // 4. Purchase yin with withdrawn collateral asset via Ekubo
-        // 5. Transfer remainder collateral asset to user
+        // 5. Re-deposit remainder collateral asset to trove
         fn down(ref self: ContractState, amount: Wad, lever_down_params: LeverDownParams) {
             let user: ContractAddress = get_caller_address();
             let trove_id: u64 = lever_down_params.trove_id;
@@ -606,8 +603,6 @@ pub mod archabbot {
         }
     }
 
-    // Lever actions are not subject to the relative threshold since they are
-    // manually initiated by the user.
     #[abi(embed_v0)]
     impl IFlashBorrowerImpl of IFlashBorrower<ContractState> {
         // The flash mint contract that is used should not charge any fee.
@@ -823,7 +818,7 @@ pub mod archabbot {
         }
 
         //
-        // Rite helpers
+        // Celebrant helpers
         //
 
         fn assert_callback(self: @ContractState) {
