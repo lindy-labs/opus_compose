@@ -15,7 +15,9 @@ pub mod archabbot {
     use opus::types::{AssetBalance, Health};
     use opus_compose::archabbot::interfaces::celebrant::ICelebrant;
     use opus_compose::archabbot::interfaces::lever::ILever;
-    use opus_compose::archabbot::interfaces::rite::{IRITE_ID, IRiteDispatcher, IRiteDispatcherTrait};
+    use opus_compose::archabbot::interfaces::rite::{
+        IRITE_ID, IRiteDispatcher, IRiteDispatcherTrait,
+    };
     use opus_compose::archabbot::types::{
         Action, LeverDownParams, LeverUpParams, ModifyLeverAction, ModifyLeverParams, TroveConfig,
     };

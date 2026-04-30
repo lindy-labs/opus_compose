@@ -71,9 +71,9 @@ pub mod trove_opening_rite {
 
         fn set_trove_config(ref self: ContractState, trove_id: u64, config: Span<felt252>) {
             let mut config = config;
-            let config: TroveOpeningRiteConfig = Serde::<TroveOpeningRiteConfig>::deserialize(
-                    ref config,
-                )
+            let config: TroveOpeningRiteConfig = Serde::<
+                TroveOpeningRiteConfig,
+            >::deserialize(ref config)
                 .expect('TROVE_OPEN_RITE: bad config');
             self.configs.write(trove_id, config);
         }
@@ -105,11 +105,13 @@ pub mod trove_opening_rite {
             // Open a new trove — this contract becomes the owner
             let config = self.configs.read(trove_id);
             let abbot = IAbbotDispatcher { contract_address: archabbot.contract_address };
-            let new_trove_id = abbot.open_trove(
-                array![AssetBalance { address: config.yang, amount: config.asset_amount }].span(),
-                config.forge_amount.into(),
-                config.max_forge_fee_pct.into(),
-            );
+            let new_trove_id = abbot
+                .open_trove(
+                    array![AssetBalance { address: config.yang, amount: config.asset_amount }]
+                        .span(),
+                    config.forge_amount.into(),
+                    config.max_forge_fee_pct.into(),
+                );
 
             // Try to end_rite on the new trove — assert_trove_owner passes
             // (rite is the owner), but transient_trove_id is set → PANIC

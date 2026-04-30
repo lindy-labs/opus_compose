@@ -9,7 +9,9 @@ use opus_compose::archabbot::contracts::rites::topup::topup_rite::{
 };
 use opus_compose::archabbot::contracts::rites::topup::types::{TopupConditions, TopupConfig};
 use opus_compose::archabbot::contracts::rites::types::EkuboPoolParams;
-use opus_compose::archabbot::interfaces::celebrant::{ICelebrantDispatcher, ICelebrantDispatcherTrait};
+use opus_compose::archabbot::interfaces::celebrant::{
+    ICelebrantDispatcher, ICelebrantDispatcherTrait,
+};
 use opus_compose::archabbot::interfaces::rite::{IRITE_ID, IRiteDispatcher, IRiteDispatcherTrait};
 use opus_compose::archabbot::tests::utils::archabbot_utils;
 use opus_compose::interfaces::erc20::{IERC20Dispatcher, IERC20DispatcherTrait};

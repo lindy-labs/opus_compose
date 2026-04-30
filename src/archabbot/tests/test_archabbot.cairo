@@ -282,7 +282,9 @@ fn test_forge_not_owner_reverts() {
 
     // Forge additional CASH
     let forge_amount: Wad = WAD_ONE.into();
-    cheat_caller_address(test_config.archabbot.contract_address, archabbot_utils::BAD_GUY, CheatSpan::TargetCalls(1));
+    cheat_caller_address(
+        test_config.archabbot.contract_address, archabbot_utils::BAD_GUY, CheatSpan::TargetCalls(1),
+    );
     archabbot.forge(trove_id, forge_amount, Zero::zero());
 }
 
@@ -324,7 +326,9 @@ fn test_melt_non_owner_success() {
     cheat_caller_address(test_config.shrine.contract_address, user, CheatSpan::TargetCalls(1));
     IERC20Dispatcher { contract_address: test_config.shrine.contract_address }
         .approve(test_config.archabbot.contract_address, melt_amount.into());
-    cheat_caller_address(test_config.archabbot.contract_address, mainnet::MULTISIG, CheatSpan::TargetCalls(1));
+    cheat_caller_address(
+        test_config.archabbot.contract_address, mainnet::MULTISIG, CheatSpan::TargetCalls(1),
+    );
     archabbot.melt(trove_id, melt_amount);
 
     let after_health: Health = test_config.shrine.get_trove_health(trove_id);
@@ -1286,10 +1290,7 @@ fn test_end_rite_parallel_execution_reverts() {
 
     let rite = IRiteDispatcher { contract_address: rite_addr };
     let config = TroveOpeningRiteConfig {
-        yang,
-        asset_amount,
-        forge_amount: 5 * WAD_ONE,
-        max_forge_fee_pct: 0,
+        yang, asset_amount, forge_amount: 5 * WAD_ONE, max_forge_fee_pct: 0,
     };
     let mut config_serialized: Array<felt252> = Default::default();
     config.serialize(ref config_serialized);
