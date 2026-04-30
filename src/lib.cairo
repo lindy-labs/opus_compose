@@ -88,10 +88,12 @@ pub mod archabbot {
         pub mod test_types;
         pub mod utils;
         pub mod mocks {
+            pub mod fake_src5_rite;
             pub mod malicious_lever;
             pub mod mock_rite;
             pub mod no_callback_rite;
             pub mod reentrant_rite;
+            pub mod trove_opening_rite;
         }
         pub mod rites {
             pub mod test_topup_rite;

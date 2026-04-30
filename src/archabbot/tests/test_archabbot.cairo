@@ -10,6 +10,7 @@ use opus_compose::archabbot::interfaces::celebrant::ICelebrantDispatcherTrait;
 use opus_compose::archabbot::interfaces::rite::{IRiteDispatcher, IRiteDispatcherTrait};
 use opus_compose::archabbot::tests::mocks::mock_rite::MockRiteConfig;
 use opus_compose::archabbot::tests::mocks::reentrant_rite::ReentrantRiteConfig;
+use opus_compose::archabbot::tests::mocks::trove_opening_rite::TroveOpeningRiteConfig;
 use opus_compose::archabbot::tests::utils::archabbot_utils;
 use opus_compose::archabbot::types::{Action, TroveConfig};
 use opus_compose::interfaces::erc20::{IERC20Dispatcher, IERC20DispatcherTrait};
@@ -752,6 +753,25 @@ fn test_set_invalid_rite() {
 
 #[test]
 #[fork("MAINNET_CHANTRY")]
+#[should_panic(expected: "ARC: Rite interface not supported")]
+fn test_set_rite_src5_without_rite_interface_reverts() {
+    let test_config = archabbot_utils::archabbot_deploy(None);
+    let user: ContractAddress = archabbot_utils::USER;
+    let trove_id: u64 = archabbot_utils::open_trove_for_user(
+        IAbbotDispatcher { contract_address: test_config.archabbot.contract_address }, user,
+    );
+
+    // Deploy a contract that implements SRC5 but does NOT register the IRite interface
+    let fake_class = declare("fake_src5_rite").unwrap_syscall().contract_class();
+    let calldata: Array<felt252> = array![];
+    let (fake_rite_addr, _) = fake_class.deploy(@calldata).expect('fake src5 rite deploy fail');
+
+    cheat_caller_address(test_config.archabbot.contract_address, user, CheatSpan::TargetCalls(1));
+    test_config.archabbot.set_rite(trove_id, fake_rite_addr);
+}
+
+#[test]
+#[fork("MAINNET_CHANTRY")]
 #[should_panic(expected: "ARC: Not trove owner")]
 fn test_end_rite_not_owner() {
     let test_config = archabbot_utils::archabbot_deploy(None);
@@ -1162,23 +1182,18 @@ fn setup_trove_with_no_callback_rite() -> (
 #[test]
 #[fork("MAINNET_CHANTRY")]
 #[should_panic(expected: "ARC: Callback not executed")]
-fn test_no_callback_rite_execute_reverts() {
+#[test_case(true)]
+#[test_case(false)]
+fn test_no_callback_rite_reverts(is_perform: bool) {
     let (test_config, trove_id, _rite_addr) = setup_trove_with_no_callback_rite();
     let user = archabbot_utils::USER;
 
     cheat_caller_address(test_config.archabbot.contract_address, user, CheatSpan::TargetCalls(1));
-    test_config.archabbot.execute_rite(trove_id);
-}
-
-#[test]
-#[fork("MAINNET_CHANTRY")]
-#[should_panic(expected: "ARC: Callback not executed")]
-fn test_no_callback_rite_end_reverts() {
-    let (test_config, trove_id, _rite_addr) = setup_trove_with_no_callback_rite();
-    let user = archabbot_utils::USER;
-
-    cheat_caller_address(test_config.archabbot.contract_address, user, CheatSpan::TargetCalls(1));
-    test_config.archabbot.end_rite(trove_id);
+    if is_perform {
+        test_config.archabbot.execute_rite(trove_id);
+    } else {
+        test_config.archabbot.end_rite(trove_id);
+    }
 }
 
 //
@@ -1239,3 +1254,51 @@ fn test_execute_rite_parallel_execution_reverts() {
     test_config.archabbot.execute_rite(trove_id_1);
 }
 
+#[test]
+#[fork("MAINNET_CHANTRY")]
+#[should_panic(expected: "ARC: Another trove in execution")]
+fn test_end_rite_parallel_execution_reverts() {
+    let test_config = archabbot_utils::archabbot_deploy(None);
+    let user = archabbot_utils::USER;
+    let archabbot_abbot = IAbbotDispatcher {
+        contract_address: test_config.archabbot.contract_address,
+    };
+
+    let trove_id = archabbot_utils::open_trove_for_user(archabbot_abbot, user);
+
+    // Deploy trove_opening_rite — in end(), it opens a new trove (becoming the
+    // owner) and then calls end_rite on it. No caller cheating needed for the
+    // reentrant path: the rite IS the natural owner of the new trove.
+    let rite_class = declare("trove_opening_rite").unwrap_syscall().contract_class();
+    let calldata: Array<felt252> = array![test_config.archabbot.contract_address.into()];
+    let (rite_addr, _) = rite_class.deploy(@calldata).expect('trove opening rite deploy fail');
+
+    // Pre-fund the rite so it can open a trove during end()
+    let yang = mainnet::ETH;
+    let asset_amount: u128 = WAD_ONE;
+    archabbot_utils::fund_user_eth(rite_addr, asset_amount.into());
+    archabbot_utils::approve_gate_for_user(test_config.eth_gate, yang, rite_addr);
+
+    // Attach rite to trove and configure it
+    cheat_caller_address(test_config.archabbot.contract_address, user, CheatSpan::TargetCalls(2));
+    test_config.archabbot.set_rite(trove_id, rite_addr);
+    test_config.archabbot.set_trove_config(trove_id, archabbot_utils::BASE_TROVE_CONFIG());
+
+    let rite = IRiteDispatcher { contract_address: rite_addr };
+    let config = TroveOpeningRiteConfig {
+        yang,
+        asset_amount,
+        forge_amount: 5 * WAD_ONE,
+        max_forge_fee_pct: 0,
+    };
+    let mut config_serialized: Array<felt252> = Default::default();
+    config.serialize(ref config_serialized);
+    cheat_caller_address(rite_addr, user, CheatSpan::TargetCalls(1));
+    rite.set_trove_config(trove_id, config_serialized.span());
+
+    // end_rite(trove_id) → rite.end() opens a new trove (rite is the owner)
+    // → rite calls end_rite(new_trove_id) → assert_trove_owner passes
+    // → transient_trove_id is still set → PANIC
+    cheat_caller_address(test_config.archabbot.contract_address, user, CheatSpan::TargetCalls(1));
+    test_config.archabbot.end_rite(trove_id);
+}

@@ -515,6 +515,7 @@ pub mod archabbot {
         // Checks the caller is the rite specified for the smart trove.
         // Checks the trove ID locked in the initial rite call.
         fn on_rite_actions(ref self: ContractState, trove_id: u64, actions: Span<Action>) {
+            println!(" on rite actions");
             let caller: ContractAddress = get_caller_address();
             let rite = self.rites.read(trove_id);
             assert!(caller == rite.contract_address, "ARC: Caller not rite");
@@ -524,9 +525,10 @@ pub mod archabbot {
             let sentinel = self.sentinel.read();
             let trove_owner: ContractAddress = self
                 .get_trove_owner(trove_id)
-                .expect('ARC: No trove owner');
+                .expect('ARC: Trove does not exist');
             let archabbot: ContractAddress = get_contract_address();
             for action in actions {
+                println!("executing action");
                 self
                     .execute_action(
                         shrine,
