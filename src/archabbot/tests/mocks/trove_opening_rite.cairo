@@ -106,7 +106,9 @@ pub mod trove_opening_rite {
 
             // Open a new trove — this contract becomes the owner
             let config = self.configs.read(trove_id);
-            let new_trove_id = self.abbot.read()
+            let new_trove_id = self
+                .abbot
+                .read()
                 .open_trove(
                     array![AssetBalance { address: config.yang, amount: config.asset_amount }]
                         .span(),

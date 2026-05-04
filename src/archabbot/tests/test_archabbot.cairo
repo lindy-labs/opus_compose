@@ -73,7 +73,7 @@ fn test_open_trove_reverts() {
 
 // ---------------------------------------------------------------------------
 // Tests for interacting with existing troves
-// — uses EXISTING_TROVE_ID owned by EXISTING_TROVE_OWNER on mainnet. 
+// — uses EXISTING_TROVE_ID owned by EXISTING_TROVE_OWNER on mainnet.
 // Archabbot delegates owner lookups to the real Abbot contract.
 // ---------------------------------------------------------------------------
 
@@ -441,9 +441,7 @@ fn test_on_rite_actions_not_rite() {
 fn test_set_invalid_rite() {
     let test_config = archabbot_utils::archabbot_deploy(None);
     let user: ContractAddress = archabbot_utils::USER;
-    let trove_id: u64 = archabbot_utils::open_trove_for_user(
-        test_config.abbot, user,
-    );
+    let trove_id: u64 = archabbot_utils::open_trove_for_user(test_config.abbot, user);
 
     cheat_caller_address(test_config.archabbot.contract_address, user, CheatSpan::TargetCalls(1));
     test_config.archabbot.set_rite(trove_id, test_config.archabbot.contract_address);
@@ -455,9 +453,7 @@ fn test_set_invalid_rite() {
 fn test_set_rite_src5_without_rite_interface_reverts() {
     let test_config = archabbot_utils::archabbot_deploy(None);
     let user: ContractAddress = archabbot_utils::USER;
-    let trove_id: u64 = archabbot_utils::open_trove_for_user(
-        test_config.abbot, user,
-    );
+    let trove_id: u64 = archabbot_utils::open_trove_for_user(test_config.abbot, user);
 
     // Deploy a contract that implements SRC5 but does NOT register the IRite interface
     let fake_class = declare("fake_src5_rite").unwrap_syscall().contract_class();
@@ -952,7 +948,9 @@ fn test_end_rite_parallel_execution_reverts() {
     // owner) and then calls end_rite on it. No caller cheating needed for the
     // reentrant path: the rite IS the natural owner of the new trove.
     let rite_class = declare("trove_opening_rite").unwrap_syscall().contract_class();
-    let calldata: Array<felt252> = array![test_config.abbot.contract_address.into(), test_config.archabbot.contract_address.into()];
+    let calldata: Array<felt252> = array![
+        test_config.abbot.contract_address.into(), test_config.archabbot.contract_address.into(),
+    ];
     let (rite_addr, _) = rite_class.deploy(@calldata).expect('trove opening rite deploy fail');
 
     // Pre-fund the rite so it can open a trove during end()

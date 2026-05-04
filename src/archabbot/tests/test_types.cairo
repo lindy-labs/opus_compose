@@ -94,9 +94,7 @@ fn test_dca_order_packing_all_types() {
 
 // --- TroveConfig packing tests ---
 
-fn assert_trove_config_roundtrip(
-    relative_threshold: Ray, max_forge_fee_pct: Wad, incentive: Wad,
-) {
+fn assert_trove_config_roundtrip(relative_threshold: Ray, max_forge_fee_pct: Wad, incentive: Wad) {
     let config = TroveConfig { relative_threshold, max_forge_fee_pct, incentive };
     let unpacked: TroveConfig = StorePacking::unpack(StorePacking::pack(config));
     assert_eq!(config, unpacked, "trove config roundtrip failed");

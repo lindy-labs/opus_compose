@@ -26,7 +26,7 @@ pub mod fake_src5_rite {
     }
 
     #[constructor]
-    fn constructor(ref self: ContractState) {// Intentionally do NOT register IRITE_ID.
+    fn constructor(ref self: ContractState) { // Intentionally do NOT register IRITE_ID.
     // This contract supports SRC5 but claims no rite interface.
     }
 }

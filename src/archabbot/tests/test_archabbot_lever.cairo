@@ -37,7 +37,8 @@ fn lever_open_trove_helper(
     archabbot_utils::approve_gate_for_user(test_config.eth_gate, yang, user);
 
     cheat_caller_address(test_config.abbot.contract_address, user, CheatSpan::TargetCalls(1));
-    let trove_id: u64 = test_config.abbot
+    let trove_id: u64 = test_config
+        .abbot
         .open_trove(
             array![AssetBalance { address: yang, amount: eth_asset_amt }].span(),
             forge_amount,
