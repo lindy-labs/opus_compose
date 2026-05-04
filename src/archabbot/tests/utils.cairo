@@ -116,7 +116,7 @@ pub mod archabbot_utils {
         stop_cheat_caller_address(token);
     }
 
-    pub fn open_trove_for_user(archabbot: IAbbotDispatcher, user: ContractAddress) -> u64 {
+    pub fn open_trove_for_user(abbot: IAbbotDispatcher, user: ContractAddress) -> u64 {
         let yang = mainnet::ETH;
         let yang_amount: u128 = WAD_ONE;
         let forge_amount: Wad = (5 * WAD_ONE).into();
@@ -127,8 +127,8 @@ pub mod archabbot_utils {
         approve_gate_for_user(IGateDispatcher { contract_address: mainnet::ETH_GATE }, yang, user);
 
         // Open trove as user
-        cheat_caller_address(archabbot.contract_address, user, CheatSpan::TargetCalls(1));
-        archabbot
+        cheat_caller_address(abbot.contract_address, user, CheatSpan::TargetCalls(1));
+        abbot
             .open_trove(
                 array![AssetBalance { address: yang, amount: yang_amount }].span(),
                 forge_amount,

@@ -51,7 +51,6 @@ pub mod stabilizer {
 pub mod archabbot {
     pub mod contracts {
         pub mod archabbot;
-        pub mod restricted_archabbot;
         pub mod rites {
             pub mod interfaces;
             pub mod types;

@@ -32,13 +32,13 @@ const EXISTING_TROVE_IDS: [u64; 2] = [EXISTING_TROVE_ID, 282];
 #[fork("MAINNET_CHANTRY")]
 fn test_archabbot_deployment() {
     let abbot = IAbbotDispatcher { contract_address: mainnet::ABBOT };
-    let legacy_troves_count: u64 = abbot.get_troves_count();
+    let expected_troves_count: u64 = abbot.get_troves_count();
 
     let test_config = archabbot_utils::archabbot_deploy(None);
     let archabbot = IAbbotDispatcher { contract_address: test_config.archabbot.contract_address };
 
     let troves_count = archabbot.get_troves_count();
-    assert_eq!(troves_count, legacy_troves_count, "Wrong starting troves count");
+    assert_eq!(troves_count, expected_troves_count, "Wrong starting troves count");
 }
 
 //
@@ -47,7 +47,8 @@ fn test_archabbot_deployment() {
 
 #[test]
 #[fork("MAINNET_CHANTRY")]
-fn test_open_trove_success() {
+#[should_panic(expected: "ARC: Disabled")]
+fn test_open_trove_reverts() {
     let test_config = archabbot_utils::archabbot_deploy(None);
     let user = archabbot_utils::USER;
     let yang = mainnet::ETH;
@@ -56,301 +57,35 @@ fn test_open_trove_success() {
     let max_forge_fee_pct: Wad = Zero::zero();
 
     let archabbot = IAbbotDispatcher { contract_address: test_config.archabbot.contract_address };
-    let count = archabbot.get_troves_count();
 
-    archabbot_utils::fund_user_eth(user, yang_amount.into());
-    archabbot_utils::approve_gate_for_user(test_config.eth_gate, yang, user);
-
-    let before_yin_balance = test_config.shrine.get_yin(user);
-
-    // Open trove
-    cheat_caller_address(test_config.archabbot.contract_address, user, CheatSpan::TargetCalls(1));
-    let trove_id = archabbot
-        .open_trove(
-            array![AssetBalance { address: yang, amount: yang_amount }].span(),
-            forge_amount,
-            max_forge_fee_pct,
-        );
-
-    let expected_count = count + 1;
-    let count = archabbot.get_troves_count();
-    assert_eq!(count, expected_count, "Wrong troves count");
-
-    let trove_owner = archabbot.get_trove_owner(trove_id);
-    assert!(trove_owner.is_some(), "Trove owner should exist");
-    assert!(trove_owner.unwrap() == user, "Trove owner mismatch");
-
-    // Verify user's trove IDs
-    let trove_ids = archabbot.get_user_trove_ids(user);
-    assert_eq!(trove_ids.len(), 1, "Should have 1 trove");
-    assert_eq!(*trove_ids.at(0), trove_id, "Trove IDs mismatch");
-
-    // Verify trove deposit via shrine
-    let deposit = test_config.shrine.get_deposit(yang, trove_id);
-    assert!(deposit.is_non_zero(), "Yang not deposited");
-
-    // Verify trove debt
-    let trove_health: Health = test_config.shrine.get_trove_health(trove_id);
-    assert_eq!(trove_health.debt, forge_amount, "Wrong trove debt");
-
-    // Verify user's yin balance (forged CASH)
-    let after_yin_balance = test_config.shrine.get_yin(user);
-    assert_eq!(after_yin_balance - before_yin_balance, forge_amount, "Wrong yin amount");
-}
-
-#[test]
-#[fork("MAINNET_CHANTRY")]
-fn test_close_trove_success() {
-    let test_config = archabbot_utils::archabbot_deploy(None);
-    let user: ContractAddress = archabbot_utils::USER;
-    let yang = mainnet::ETH;
-    let yang_amount: u128 = WAD_ONE;
-    let forge_amount: Wad = (5 * WAD_ONE).into();
-    let max_forge_fee_pct: Wad = Zero::zero();
-
-    let archabbot = IAbbotDispatcher { contract_address: test_config.archabbot.contract_address };
-
-    // Setup
     archabbot_utils::fund_user_eth(user, yang_amount.into());
     archabbot_utils::approve_gate_for_user(test_config.eth_gate, yang, user);
 
     // Open trove
     cheat_caller_address(test_config.archabbot.contract_address, user, CheatSpan::TargetCalls(1));
-    let trove_id = archabbot
+    let _trove_id = archabbot
         .open_trove(
             array![AssetBalance { address: yang, amount: yang_amount }].span(),
             forge_amount,
             max_forge_fee_pct,
         );
-
-    // Close trove
-    cheat_caller_address(test_config.shrine.contract_address, user, CheatSpan::TargetCalls(1));
-    IERC20Dispatcher { contract_address: test_config.shrine.contract_address }
-        .approve(test_config.archabbot.contract_address, forge_amount.into());
-    cheat_caller_address(test_config.archabbot.contract_address, user, CheatSpan::TargetCalls(1));
-    archabbot.close_trove(trove_id);
-
-    let owner = archabbot.get_trove_owner(trove_id);
-    assert!(owner.is_some(), "owner should still exist");
-
-    // Verify trove deposit is zero after close
-    let deposit = test_config.shrine.get_deposit(yang, trove_id);
-    assert!(deposit.is_zero(), "deposit should be zero");
-
-    // Verify trove debt is zero after close
-    let trove_health: Health = test_config.shrine.get_trove_health(trove_id);
-    assert!(trove_health.debt.is_zero(), "debt should be zero");
-}
-
-#[test]
-#[fork("MAINNET_CHANTRY")]
-#[should_panic(expected: "ARC: Not trove owner")]
-fn test_close_trove_not_owner_reverts() {
-    let test_config = archabbot_utils::archabbot_deploy(None);
-    let user: ContractAddress = archabbot_utils::USER;
-
-    let archabbot = IAbbotDispatcher { contract_address: test_config.archabbot.contract_address };
-
-    let trove_id: u64 = archabbot_utils::open_trove_for_user(archabbot, user);
-
-    cheat_caller_address(
-        test_config.archabbot.contract_address, archabbot_utils::BAD_GUY, CheatSpan::TargetCalls(1),
-    );
-    archabbot.close_trove(trove_id);
-}
-
-#[test]
-#[fork("MAINNET_CHANTRY")]
-fn test_deposit_success() {
-    let test_config = archabbot_utils::archabbot_deploy(None);
-    let user: ContractAddress = archabbot_utils::USER;
-    let yang: ContractAddress = mainnet::ETH;
-    let deposit_amount: u128 = WAD_ONE / 10; // 0.1 ETH
-
-    let archabbot = IAbbotDispatcher { contract_address: test_config.archabbot.contract_address };
-
-    let trove_id: u64 = archabbot_utils::open_trove_for_user(archabbot, user);
-    let before_yang_deposit: Wad = test_config.shrine.get_deposit(yang, trove_id);
-
-    // Deposit additional collateral
-    archabbot_utils::fund_user_eth(user, deposit_amount.into());
-    archabbot_utils::approve_gate_for_user(test_config.eth_gate, yang, user);
-    cheat_caller_address(test_config.archabbot.contract_address, user, CheatSpan::TargetCalls(1));
-    archabbot.deposit(trove_id, AssetBalance { address: yang, amount: deposit_amount });
-
-    let after_yang_deposit: Wad = test_config.shrine.get_deposit(yang, trove_id);
-    let expected_yang_deposit: Wad = before_yang_deposit + deposit_amount.into();
-    let error_margin: Wad = 20_u128.into();
-    assert_equalish(
-        after_yang_deposit, expected_yang_deposit, error_margin, 'Wrong yang deposit amount',
-    );
-}
-
-#[test]
-#[fork("MAINNET_CHANTRY")]
-#[should_panic(expected: "ARC: Not trove owner")]
-fn test_deposit_not_owner_reverts() {
-    let test_config = archabbot_utils::archabbot_deploy(None);
-    let user: ContractAddress = archabbot_utils::USER;
-    let yang: ContractAddress = mainnet::ETH;
-    let deposit_amount: u128 = WAD_ONE / 10; // 0.1 ETH
-
-    let archabbot = IAbbotDispatcher { contract_address: test_config.archabbot.contract_address };
-    let trove_id: u64 = archabbot_utils::open_trove_for_user(archabbot, user);
-
-    cheat_caller_address(
-        test_config.archabbot.contract_address, archabbot_utils::BAD_GUY, CheatSpan::TargetCalls(1),
-    );
-    archabbot.deposit(trove_id, AssetBalance { address: yang, amount: deposit_amount });
-}
-
-#[test]
-#[fork("MAINNET_CHANTRY")]
-fn test_withdraw_success() {
-    let test_config = archabbot_utils::archabbot_deploy(None);
-    let user: ContractAddress = archabbot_utils::USER;
-    let yang: ContractAddress = mainnet::ETH;
-    let yang_erc20 = IERC20Dispatcher { contract_address: yang };
-    let deposit_amount: u128 = WAD_ONE / 10; // 0.1 ETH
-
-    let archabbot = IAbbotDispatcher { contract_address: test_config.archabbot.contract_address };
-    let trove_id: u64 = archabbot_utils::open_trove_for_user(archabbot, user);
-
-    let before_yang_balance: u256 = yang_erc20.balance_of(user);
-
-    // Repay and withdraw collateral
-    let trove_health: Health = test_config.shrine.get_trove_health(trove_id);
-    let repay_amount: Wad = trove_health.debt;
-    cheat_caller_address(test_config.shrine.contract_address, user, CheatSpan::TargetCalls(1));
-    IERC20Dispatcher { contract_address: test_config.shrine.contract_address }
-        .approve(test_config.archabbot.contract_address, repay_amount.into());
-    cheat_caller_address(test_config.archabbot.contract_address, user, CheatSpan::TargetCalls(2));
-    archabbot.melt(trove_id, trove_health.debt);
-    archabbot.withdraw(trove_id, AssetBalance { address: yang, amount: deposit_amount });
-
-    let after_yang_balance: u256 = yang_erc20.balance_of(user);
-    let expected_yang_balance: u256 = before_yang_balance + deposit_amount.into();
-    let error_margin: u256 = 1_u128.into();
-    assert_equalish(after_yang_balance, expected_yang_balance, error_margin, 'Wrong yang balance');
-}
-
-#[test]
-#[fork("MAINNET_CHANTRY")]
-#[should_panic(expected: "ARC: Not trove owner")]
-fn test_withdraw_not_owner_reverts() {
-    let test_config = archabbot_utils::archabbot_deploy(None);
-    let user: ContractAddress = archabbot_utils::USER;
-    let yang: ContractAddress = mainnet::ETH;
-
-    let archabbot = IAbbotDispatcher { contract_address: test_config.archabbot.contract_address };
-    let trove_id: u64 = archabbot_utils::open_trove_for_user(archabbot, user);
-
-    cheat_caller_address(
-        test_config.archabbot.contract_address, archabbot_utils::BAD_GUY, CheatSpan::TargetCalls(1),
-    );
-    archabbot.withdraw(trove_id, AssetBalance { address: yang, amount: WAD_ONE / 100 });
-}
-
-#[test]
-#[fork("MAINNET_CHANTRY")]
-fn test_forge_success() {
-    let test_config = archabbot_utils::archabbot_deploy(None);
-    let user: ContractAddress = archabbot_utils::USER;
-    let archabbot = IAbbotDispatcher { contract_address: test_config.archabbot.contract_address };
-    let trove_id: u64 = archabbot_utils::open_trove_for_user(archabbot, user);
-
-    let before_balance: Wad = test_config.shrine.get_yin(user);
-
-    // Forge additional CASH
-    let forge_amount: Wad = WAD_ONE.into();
-    cheat_caller_address(test_config.archabbot.contract_address, user, CheatSpan::TargetCalls(1));
-    archabbot.forge(trove_id, forge_amount, Zero::zero());
-
-    let after_balance: Wad = test_config.shrine.get_yin(user);
-    let expected_balance: Wad = before_balance + forge_amount;
-    assert_eq!(after_balance, expected_balance, "Wrong yin balance");
-}
-
-#[test]
-#[fork("MAINNET_CHANTRY")]
-#[should_panic(expected: "ARC: Not trove owner")]
-fn test_forge_not_owner_reverts() {
-    let test_config = archabbot_utils::archabbot_deploy(None);
-    let user: ContractAddress = archabbot_utils::USER;
-    let archabbot = IAbbotDispatcher { contract_address: test_config.archabbot.contract_address };
-    let trove_id: u64 = archabbot_utils::open_trove_for_user(archabbot, user);
-
-    // Forge additional CASH
-    let forge_amount: Wad = WAD_ONE.into();
-    cheat_caller_address(
-        test_config.archabbot.contract_address, archabbot_utils::BAD_GUY, CheatSpan::TargetCalls(1),
-    );
-    archabbot.forge(trove_id, forge_amount, Zero::zero());
-}
-
-#[test]
-#[fork("MAINNET_CHANTRY")]
-fn test_melt_success() {
-    let test_config = archabbot_utils::archabbot_deploy(None);
-    let user: ContractAddress = archabbot_utils::USER;
-    let archabbot = IAbbotDispatcher { contract_address: test_config.archabbot.contract_address };
-    let trove_id: u64 = archabbot_utils::open_trove_for_user(archabbot, user);
-
-    let before_health: Health = test_config.shrine.get_trove_health(trove_id);
-
-    // Forge additional CASH
-    let melt_amount: Wad = (WAD_ONE / 10).into();
-    cheat_caller_address(test_config.shrine.contract_address, user, CheatSpan::TargetCalls(1));
-    IERC20Dispatcher { contract_address: test_config.shrine.contract_address }
-        .approve(test_config.archabbot.contract_address, melt_amount.into());
-    cheat_caller_address(test_config.archabbot.contract_address, user, CheatSpan::TargetCalls(1));
-    archabbot.melt(trove_id, melt_amount);
-
-    let after_health: Health = test_config.shrine.get_trove_health(trove_id);
-    let expected_debt: Wad = before_health.debt - melt_amount;
-    assert_eq!(after_health.debt, expected_debt, "Wrong debt");
-}
-
-#[test]
-#[fork("MAINNET_CHANTRY")]
-fn test_melt_non_owner_success() {
-    let test_config = archabbot_utils::archabbot_deploy(None);
-    let user: ContractAddress = archabbot_utils::USER;
-    let archabbot = IAbbotDispatcher { contract_address: test_config.archabbot.contract_address };
-    let trove_id: u64 = archabbot_utils::open_trove_for_user(archabbot, user);
-
-    let before_health: Health = test_config.shrine.get_trove_health(trove_id);
-
-    // Forge additional CASH
-    let melt_amount: Wad = (WAD_ONE / 10).into();
-    cheat_caller_address(test_config.shrine.contract_address, user, CheatSpan::TargetCalls(1));
-    IERC20Dispatcher { contract_address: test_config.shrine.contract_address }
-        .approve(test_config.archabbot.contract_address, melt_amount.into());
-    cheat_caller_address(
-        test_config.archabbot.contract_address, mainnet::MULTISIG, CheatSpan::TargetCalls(1),
-    );
-    archabbot.melt(trove_id, melt_amount);
-
-    let after_health: Health = test_config.shrine.get_trove_health(trove_id);
-    let expected_debt: Wad = before_health.debt - melt_amount;
-    assert_eq!(after_health.debt, expected_debt, "Wrong debt");
 }
 
 // ---------------------------------------------------------------------------
-// Existing (legacy) trove tests — uses EXISTING_TROVE_ID owned by
-// EXISTING_TROVE_OWNER on mainnet. Archabbot delegates owner lookups for legacy
-// troves to the real Abbot contract.
+// Tests for interacting with existing troves
+// — uses EXISTING_TROVE_ID owned by EXISTING_TROVE_OWNER on mainnet. 
+// Archabbot delegates owner lookups to the real Abbot contract.
 // ---------------------------------------------------------------------------
 
 #[test]
 #[fork("MAINNET_CHANTRY")]
-fn test_legacy_trove_ownership() {
+fn test_trove_ownership() {
     let test_config = archabbot_utils::archabbot_deploy(None);
 
     let user: ContractAddress = mainnet::EXISTING_TROVE_OWNER;
     let archabbot = IAbbotDispatcher { contract_address: test_config.archabbot.contract_address };
 
-    // Verify ownership of the existing legacy trove
+    // Verify ownership of the existing trove
     let owner = archabbot.get_trove_owner(EXISTING_TROVE_ID);
     assert!(owner.is_some(), "no owner");
     assert!(owner.unwrap() == user, "wrong owner");
@@ -361,41 +96,7 @@ fn test_legacy_trove_ownership() {
 
 #[test]
 #[fork("MAINNET_CHANTRY")]
-fn test_legacy_trove_ownership_with_new_trove() {
-    let test_config = archabbot_utils::archabbot_deploy(None);
-    let user: ContractAddress = mainnet::EXISTING_TROVE_OWNER;
-    let yang = mainnet::ETH;
-    let yang_amount: u128 = WAD_ONE / 10; // 0.1 ETH
-    let forge_amount: Wad = (50 * WAD_ONE).into(); // 50 CASH
-    let max_forge_fee_pct: Wad = Zero::zero();
-
-    let archabbot = IAbbotDispatcher { contract_address: test_config.archabbot.contract_address };
-
-    archabbot_utils::fund_user_eth(user, yang_amount.into());
-    archabbot_utils::approve_gate_for_user(test_config.eth_gate, yang, user);
-
-    // Open trove
-    cheat_caller_address(test_config.archabbot.contract_address, user, CheatSpan::TargetCalls(1));
-    let trove_id = archabbot
-        .open_trove(
-            array![AssetBalance { address: yang, amount: yang_amount }].span(),
-            forge_amount,
-            max_forge_fee_pct,
-        );
-
-    let mut expected_trove_ids: Array<u64> = Default::default();
-    for i in EXISTING_TROVE_IDS.span() {
-        expected_trove_ids.append(*i);
-    }
-    expected_trove_ids.append(trove_id);
-
-    let trove_ids = archabbot.get_user_trove_ids(user);
-    assert_eq!(trove_ids, expected_trove_ids.span(), "Incorrect trove IDs");
-}
-
-#[test]
-#[fork("MAINNET_CHANTRY")]
-fn test_existing_trove_deposit_success() {
+fn test_trove_deposit_success() {
     let test_config = archabbot_utils::archabbot_deploy(None);
     let user: ContractAddress = mainnet::EXISTING_TROVE_OWNER;
     let trove_id: u64 = EXISTING_TROVE_ID;
@@ -410,7 +111,7 @@ fn test_existing_trove_deposit_success() {
     archabbot_utils::fund_user_eth(user, deposit_amount.into());
     archabbot_utils::approve_gate_for_user(test_config.eth_gate, yang, user);
 
-    // Deposit into existing legacy trove
+    // Deposit into existing trove
     cheat_caller_address(test_config.archabbot.contract_address, user, CheatSpan::TargetCalls(1));
     archabbot.deposit(trove_id, AssetBalance { address: yang, amount: deposit_amount });
 
@@ -424,7 +125,7 @@ fn test_existing_trove_deposit_success() {
 
 #[test]
 #[fork("MAINNET_CHANTRY")]
-fn test_existing_trove_withdraw_success() {
+fn test_trove_withdraw_success() {
     let test_config = archabbot_utils::archabbot_deploy(None);
     let user: ContractAddress = mainnet::EXISTING_TROVE_OWNER;
     let trove_id: u64 = EXISTING_TROVE_ID;
@@ -461,7 +162,7 @@ fn test_existing_trove_withdraw_success() {
 
 #[test]
 #[fork("MAINNET_CHANTRY")]
-fn test_existing_trove_forge_success() {
+fn test_trove_forge_success() {
     let test_config = archabbot_utils::archabbot_deploy(None);
     let user: ContractAddress = mainnet::EXISTING_TROVE_OWNER;
     let trove_id: u64 = EXISTING_TROVE_ID;
@@ -470,7 +171,7 @@ fn test_existing_trove_forge_success() {
     let before_balance: Wad = test_config.shrine.get_yin(user);
     let before_trove_health: Health = test_config.shrine.get_trove_health(trove_id);
 
-    // Forge additional CASH into existing legacy trove
+    // Forge additional CASH into existing trove
     let forge_amount: Wad = WAD_ONE.into();
     cheat_caller_address(test_config.archabbot.contract_address, user, CheatSpan::TargetCalls(1));
     archabbot.forge(trove_id, forge_amount, Zero::zero());
@@ -486,7 +187,7 @@ fn test_existing_trove_forge_success() {
 
 #[test]
 #[fork("MAINNET_CHANTRY")]
-fn test_existing_trove_melt_success() {
+fn test_trove_melt_success() {
     let test_config = archabbot_utils::archabbot_deploy(None);
     let user: ContractAddress = mainnet::EXISTING_TROVE_OWNER;
     let trove_id: u64 = EXISTING_TROVE_ID;
@@ -520,7 +221,7 @@ fn test_existing_trove_melt_success() {
 #[test]
 #[fork("MAINNET_CHANTRY")]
 #[should_panic(expected: "ARC: Not trove owner")]
-fn test_existing_trove_close_not_owner_reverts() {
+fn test_trove_close_not_owner_reverts() {
     let test_config = archabbot_utils::archabbot_deploy(None);
     let archabbot = IAbbotDispatcher { contract_address: test_config.archabbot.contract_address };
 
@@ -533,7 +234,7 @@ fn test_existing_trove_close_not_owner_reverts() {
 #[test]
 #[fork("MAINNET_CHANTRY")]
 #[should_panic(expected: "ARC: Not trove owner")]
-fn test_existing_trove_deposit_not_owner_reverts() {
+fn test_trove_deposit_not_owner_reverts() {
     let test_config = archabbot_utils::archabbot_deploy(None);
     let yang: ContractAddress = mainnet::ETH;
     let deposit_amount: u128 = WAD_ONE / 10;
@@ -549,7 +250,7 @@ fn test_existing_trove_deposit_not_owner_reverts() {
 #[test]
 #[fork("MAINNET_CHANTRY")]
 #[should_panic(expected: "ARC: Not trove owner")]
-fn test_existing_trove_withdraw_not_owner_reverts() {
+fn test_trove_withdraw_not_owner_reverts() {
     let test_config = archabbot_utils::archabbot_deploy(None);
     let yang: ContractAddress = mainnet::ETH;
 
@@ -564,7 +265,7 @@ fn test_existing_trove_withdraw_not_owner_reverts() {
 #[test]
 #[fork("MAINNET_CHANTRY")]
 #[should_panic(expected: "ARC: Not trove owner")]
-fn test_existing_trove_forge_not_owner_reverts() {
+fn test_trove_forge_not_owner_reverts() {
     let test_config = archabbot_utils::archabbot_deploy(None);
 
     let archabbot = IAbbotDispatcher { contract_address: test_config.archabbot.contract_address };
@@ -580,7 +281,7 @@ fn test_existing_trove_forge_not_owner_reverts() {
 #[test]
 #[fork("MAINNET_CHANTRY")]
 #[should_panic(expected: "ARC: Not trove owner")]
-fn test_existing_trove_set_config_not_owner_reverts() {
+fn test_trove_set_config_not_owner_reverts() {
     let test_config = archabbot_utils::archabbot_deploy(None);
 
     cheat_caller_address(
@@ -599,8 +300,7 @@ fn test_existing_trove_set_config_not_owner_reverts() {
 fn test_default_config() {
     let test_config = archabbot_utils::archabbot_deploy(None);
     let user: ContractAddress = archabbot_utils::USER;
-    let archabbot = IAbbotDispatcher { contract_address: test_config.archabbot.contract_address };
-    let trove_id: u64 = archabbot_utils::open_trove_for_user(archabbot, user);
+    let trove_id: u64 = archabbot_utils::open_trove_for_user(test_config.abbot, user);
 
     // Config should exist but have default values
     let config = test_config.archabbot.get_trove_config(trove_id);
@@ -612,8 +312,7 @@ fn test_default_config() {
 fn test_set_config_capped() {
     let test_config = archabbot_utils::archabbot_deploy(None);
     let user: ContractAddress = archabbot_utils::USER;
-    let archabbot = IAbbotDispatcher { contract_address: test_config.archabbot.contract_address };
-    let trove_id: u64 = archabbot_utils::open_trove_for_user(archabbot, user);
+    let trove_id: u64 = archabbot_utils::open_trove_for_user(test_config.abbot, user);
 
     // Set config with relative_threshold far beyond max (RAY_ONE)
     let config = TroveConfig {
@@ -646,8 +345,7 @@ fn test_set_config_capped() {
 fn test_set_config_exact_max_values() {
     let test_config = archabbot_utils::archabbot_deploy(None);
     let user: ContractAddress = archabbot_utils::USER;
-    let archabbot = IAbbotDispatcher { contract_address: test_config.archabbot.contract_address };
-    let trove_id: u64 = archabbot_utils::open_trove_for_user(archabbot, user);
+    let trove_id: u64 = archabbot_utils::open_trove_for_user(test_config.abbot, user);
 
     // Set each field exactly at its maximum — should be stored unchanged (no capping)
     let config = TroveConfig {
@@ -681,8 +379,7 @@ fn test_set_config_exact_max_values() {
 fn test_set_config_not_owner() {
     let test_config = archabbot_utils::archabbot_deploy(None);
     let user: ContractAddress = archabbot_utils::USER;
-    let archabbot = IAbbotDispatcher { contract_address: test_config.archabbot.contract_address };
-    let trove_id: u64 = archabbot_utils::open_trove_for_user(archabbot, user);
+    let trove_id: u64 = archabbot_utils::open_trove_for_user(test_config.abbot, user);
 
     // Config should exist but have default values
     cheat_caller_address(
@@ -696,8 +393,7 @@ fn test_set_config_not_owner() {
 fn test_default_rite() {
     let test_config = archabbot_utils::archabbot_deploy(None);
     let user: ContractAddress = archabbot_utils::USER;
-    let archabbot = IAbbotDispatcher { contract_address: test_config.archabbot.contract_address };
-    let trove_id: u64 = archabbot_utils::open_trove_for_user(archabbot, user);
+    let trove_id: u64 = archabbot_utils::open_trove_for_user(test_config.abbot, user);
 
     assert!(test_config.archabbot.get_rite(trove_id).is_zero(), "Rite set");
 }
@@ -708,8 +404,7 @@ fn test_default_rite() {
 fn test_set_rite_not_owner() {
     let test_config = archabbot_utils::archabbot_deploy(None);
     let user: ContractAddress = archabbot_utils::USER;
-    let archabbot = IAbbotDispatcher { contract_address: test_config.archabbot.contract_address };
-    let trove_id: u64 = archabbot_utils::open_trove_for_user(archabbot, user);
+    let trove_id: u64 = archabbot_utils::open_trove_for_user(test_config.abbot, user);
 
     cheat_caller_address(
         test_config.archabbot.contract_address, archabbot_utils::BAD_GUY, CheatSpan::TargetCalls(1),
@@ -734,8 +429,7 @@ fn test_can_execute_rite_invalid_trove() {
 fn test_on_rite_actions_not_rite() {
     let test_config = archabbot_utils::archabbot_deploy(None);
     let user: ContractAddress = archabbot_utils::USER;
-    let archabbot = IAbbotDispatcher { contract_address: test_config.archabbot.contract_address };
-    let trove_id: u64 = archabbot_utils::open_trove_for_user(archabbot, user);
+    let trove_id: u64 = archabbot_utils::open_trove_for_user(test_config.abbot, user);
 
     cheat_caller_address(test_config.archabbot.contract_address, user, CheatSpan::TargetCalls(1));
     test_config.archabbot.on_rite_actions(trove_id, array![Action::None].span());
@@ -748,7 +442,7 @@ fn test_set_invalid_rite() {
     let test_config = archabbot_utils::archabbot_deploy(None);
     let user: ContractAddress = archabbot_utils::USER;
     let trove_id: u64 = archabbot_utils::open_trove_for_user(
-        IAbbotDispatcher { contract_address: test_config.archabbot.contract_address }, user,
+        test_config.abbot, user,
     );
 
     cheat_caller_address(test_config.archabbot.contract_address, user, CheatSpan::TargetCalls(1));
@@ -762,7 +456,7 @@ fn test_set_rite_src5_without_rite_interface_reverts() {
     let test_config = archabbot_utils::archabbot_deploy(None);
     let user: ContractAddress = archabbot_utils::USER;
     let trove_id: u64 = archabbot_utils::open_trove_for_user(
-        IAbbotDispatcher { contract_address: test_config.archabbot.contract_address }, user,
+        test_config.abbot, user,
     );
 
     // Deploy a contract that implements SRC5 but does NOT register the IRite interface
@@ -780,8 +474,7 @@ fn test_set_rite_src5_without_rite_interface_reverts() {
 fn test_end_rite_not_owner() {
     let test_config = archabbot_utils::archabbot_deploy(None);
     let user: ContractAddress = archabbot_utils::USER;
-    let archabbot = IAbbotDispatcher { contract_address: test_config.archabbot.contract_address };
-    let trove_id: u64 = archabbot_utils::open_trove_for_user(archabbot, user);
+    let trove_id: u64 = archabbot_utils::open_trove_for_user(test_config.abbot, user);
 
     cheat_caller_address(
         test_config.archabbot.contract_address, archabbot_utils::BAD_GUY, CheatSpan::TargetCalls(1),
@@ -822,10 +515,7 @@ fn setup_trove_with_mock_rite() -> (archabbot_utils::ArchabbotTestConfig, u64, C
     let test_config = archabbot_utils::archabbot_deploy(None);
     let user = archabbot_utils::USER;
 
-    let archabbot_abbot = IAbbotDispatcher {
-        contract_address: test_config.archabbot.contract_address,
-    };
-    let trove_id = archabbot_utils::open_trove_for_user(archabbot_abbot, user);
+    let trove_id = archabbot_utils::open_trove_for_user(test_config.abbot, user);
 
     let rite_addr = deploy_mock_rite(test_config.archabbot.contract_address);
 
@@ -1091,10 +781,7 @@ fn test_mock_rite_malicious_same_rite_reverts(is_perform: bool) {
 
     let another_user = 'another user'.try_into().unwrap();
 
-    let archabbot_abbot = IAbbotDispatcher {
-        contract_address: test_config.archabbot.contract_address,
-    };
-    let next_trove_id = archabbot_utils::open_trove_for_user(archabbot_abbot, another_user);
+    let next_trove_id = archabbot_utils::open_trove_for_user(test_config.abbot, another_user);
 
     // Attach rite to next trove ID and set trove config
     cheat_caller_address(
@@ -1168,10 +855,7 @@ fn setup_trove_with_no_callback_rite() -> (
     let test_config = archabbot_utils::archabbot_deploy(None);
     let user = archabbot_utils::USER;
 
-    let archabbot_abbot = IAbbotDispatcher {
-        contract_address: test_config.archabbot.contract_address,
-    };
-    let trove_id = archabbot_utils::open_trove_for_user(archabbot_abbot, user);
+    let trove_id = archabbot_utils::open_trove_for_user(test_config.abbot, user);
 
     let rite_addr = deploy_no_callback_rite(test_config.archabbot.contract_address);
 
@@ -1217,14 +901,11 @@ fn deploy_reentrant_rite(archabbot_address: ContractAddress) -> ContractAddress 
 fn test_execute_rite_parallel_execution_reverts() {
     let test_config = archabbot_utils::archabbot_deploy(None);
     let user = archabbot_utils::USER;
-    let archabbot_abbot = IAbbotDispatcher {
-        contract_address: test_config.archabbot.contract_address,
-    };
 
     // Open two troves: one for the reentrant rite, one as the reentry target
-    let trove_id_1 = archabbot_utils::open_trove_for_user(archabbot_abbot, user);
+    let trove_id_1 = archabbot_utils::open_trove_for_user(test_config.abbot, user);
     let another_user = 'another user'.try_into().unwrap();
-    let trove_id_2 = archabbot_utils::open_trove_for_user(archabbot_abbot, another_user);
+    let trove_id_2 = archabbot_utils::open_trove_for_user(test_config.abbot, another_user);
 
     // Deploy mocks
     let reentrant_addr = deploy_reentrant_rite(test_config.archabbot.contract_address);
@@ -1264,17 +945,14 @@ fn test_execute_rite_parallel_execution_reverts() {
 fn test_end_rite_parallel_execution_reverts() {
     let test_config = archabbot_utils::archabbot_deploy(None);
     let user = archabbot_utils::USER;
-    let archabbot_abbot = IAbbotDispatcher {
-        contract_address: test_config.archabbot.contract_address,
-    };
 
-    let trove_id = archabbot_utils::open_trove_for_user(archabbot_abbot, user);
+    let trove_id = archabbot_utils::open_trove_for_user(test_config.abbot, user);
 
     // Deploy trove_opening_rite — in end(), it opens a new trove (becoming the
     // owner) and then calls end_rite on it. No caller cheating needed for the
     // reentrant path: the rite IS the natural owner of the new trove.
     let rite_class = declare("trove_opening_rite").unwrap_syscall().contract_class();
-    let calldata: Array<felt252> = array![test_config.archabbot.contract_address.into()];
+    let calldata: Array<felt252> = array![test_config.abbot.contract_address.into(), test_config.archabbot.contract_address.into()];
     let (rite_addr, _) = rite_class.deploy(@calldata).expect('trove opening rite deploy fail');
 
     // Pre-fund the rite so it can open a trove during end()

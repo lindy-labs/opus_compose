@@ -58,8 +58,8 @@ pub mod archabbot {
     // Storage
     //
 
-    // Note that Archabbot does not keep track of troves created by Abbot previously in
-    // its storage, except for `troves_count`.
+    // Note that Archabbot does not open troves.
+    // All new troves are created via the Abbot.
     #[storage]
     struct Storage {
         #[substorage(v0)]
@@ -69,18 +69,6 @@ pub mod archabbot {
         abbot: IAbbotDispatcher,
         flash_mint: IFlashMintDispatcher,
         ekubo_router: IRouterDispatcher,
-        // Total number of troves in a Shrine; monotonically increasing
-        // also used to calculate the next ID (count+1) when opening a new trove
-        // in essence, it serves as an index / primary key in a SQL table
-        // This is initialized to the total number of troves created by Abbot previously.
-        troves_count: u64,
-        // the total number of troves of a particular address;
-        // used to build the tuple key of `user_troves` variable
-        // (user) -> (number of troves opened)
-        user_troves_count: Map<ContractAddress, u64>,
-        user_troves: Map<(ContractAddress, u64), u64>,
-        // Trove ID -> owner
-        trove_owner: Map<u64, ContractAddress>,
         //
         // Rite storage
         //
@@ -238,42 +226,24 @@ pub mod archabbot {
     ) {
         self.shrine.write(IShrineDispatcher { contract_address: shrine });
         self.sentinel.write(ISentinelDispatcher { contract_address: sentinel });
-        let abbot = IAbbotDispatcher { contract_address: abbot };
-        self.abbot.write(abbot);
+        self.abbot.write(IAbbotDispatcher { contract_address: abbot });
         self.flash_mint.write(IFlashMintDispatcher { contract_address: flash_mint });
         self.ekubo_router.write(IRouterDispatcher { contract_address: ekubo_router });
-
-        self.troves_count.write(abbot.get_troves_count());
     }
 
     // Replicates existing Abbot's implementation
     #[abi(embed_v0)]
     impl IAbbotImpl of IAbbot<ContractState> {
         fn get_trove_owner(self: @ContractState, trove_id: u64) -> Option<ContractAddress> {
-            let owner = self.trove_owner.read(trove_id);
-            if owner.is_non_zero() {
-                return Option::Some(owner);
-            }
-            // Delegate to legacy Abbot
             self.abbot.read().get_trove_owner(trove_id)
         }
 
         fn get_user_trove_ids(self: @ContractState, user: ContractAddress) -> Span<u64> {
-            let mut trove_ids: Array<u64> = ArrayTrait::new();
-            let legacy_trove_ids = self.abbot.read().get_user_trove_ids(user);
-            for legacy_trove_id in legacy_trove_ids {
-                trove_ids.append(*legacy_trove_id);
-            }
-
-            let user_troves_count: u64 = self.user_troves_count.read(user);
-            for i in 0..user_troves_count {
-                trove_ids.append(self.user_troves.read((user, i)));
-            }
-            trove_ids.span()
+            self.abbot.read().get_user_trove_ids(user)
         }
 
         fn get_troves_count(self: @ContractState) -> u64 {
-            self.troves_count.read()
+            self.abbot.read().get_troves_count()
         }
 
         fn get_trove_asset_balance(
@@ -294,33 +264,8 @@ pub mod archabbot {
             forge_amount: Wad,
             max_forge_fee_pct: Wad,
         ) -> u64 {
-            assert!(yang_assets.len().is_non_zero(), "ARC: No yangs");
-            assert!(forge_amount.is_non_zero(), "ARC: No debt forged");
-
-            let new_troves_count: u64 = self.troves_count.read() + 1;
-            self.troves_count.write(new_troves_count);
-
-            let user = get_caller_address();
-            let user_troves_count: u64 = self.user_troves_count.read(user);
-            self.user_troves_count.write(user, user_troves_count + 1);
-
-            let new_trove_id: u64 = new_troves_count;
-            self.user_troves.write((user, user_troves_count), new_trove_id);
-            self.trove_owner.write(new_trove_id, user);
-
-            // deposit all requested Yangs into the system
-            let shrine = self.shrine.read();
-            let sentinel = self.sentinel.read();
-            for yang_asset in yang_assets {
-                self.deposit_helper(shrine, sentinel, new_trove_id, user, user, *yang_asset);
-            }
-
-            // forge Yin
-            shrine.forge(user, new_trove_id, forge_amount, max_forge_fee_pct);
-
-            self.emit(TroveOpened { user, trove_id: new_trove_id });
-
-            new_trove_id
+            assert!(1 == 0, "ARC: Disabled");
+            0
         }
 
         // close a trove, repaying its debt in full and withdrawing all the Yangs

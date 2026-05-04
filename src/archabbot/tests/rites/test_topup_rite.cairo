@@ -1,5 +1,5 @@
 use core::num::traits::Zero;
-use opus::interfaces::{IAbbotDispatcher, IShrineDispatcher, IShrineDispatcherTrait};
+use opus::interfaces::{IShrineDispatcher, IShrineDispatcherTrait};
 use opus::types::Health;
 use opus_compose::addresses::mainnet;
 use opus_compose::archabbot::contracts::archabbot::archabbot as archabbot_contract;
@@ -67,10 +67,7 @@ fn setup_trove_with_topup_rite() -> (ICelebrantDispatcher, u64, ContractAddress)
     let test_config = archabbot_utils::archabbot_deploy(None);
     let user = archabbot_utils::USER;
 
-    let archabbot_abbot = IAbbotDispatcher {
-        contract_address: test_config.archabbot.contract_address,
-    };
-    let trove_id = archabbot_utils::open_trove_for_user(archabbot_abbot, user);
+    let trove_id = archabbot_utils::open_trove_for_user(test_config.abbot, user);
 
     let rite_addr = deploy_topup_rite(test_config.archabbot.contract_address);
 
@@ -83,10 +80,6 @@ fn setup_trove_with_topup_rite() -> (ICelebrantDispatcher, u64, ContractAddress)
 
     (test_config.archabbot, trove_id, rite_addr)
 }
-
-//
-// Archabbot Rite-related tests
-//
 
 //
 // Rite Tests

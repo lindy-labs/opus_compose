@@ -25,12 +25,10 @@ use snforge_std::{
 use starknet::{ContractAddress, SyscallResultTrait};
 use wadray::{RAY_ONE, Ray, WAD_ONE, Wad};
 
-// Helper function to open a trove via archabbot with the given ETH amount.
+// Helper function to open a trove with the given ETH amount.
 fn lever_open_trove_helper(
     test_config: archabbot_utils::ArchabbotTestConfig, user: ContractAddress, eth_asset_amt: u128,
 ) -> (archabbot_utils::ArchabbotTestConfig, u64) {
-    let archabbot = IAbbotDispatcher { contract_address: test_config.archabbot.contract_address };
-
     let yang = mainnet::ETH;
     let forge_amount: Wad = 1_u128.into();
     let max_forge_fee_pct: Wad = WAD_ONE.into();
@@ -38,8 +36,8 @@ fn lever_open_trove_helper(
     archabbot_utils::fund_user_eth(user, eth_asset_amt.into());
     archabbot_utils::approve_gate_for_user(test_config.eth_gate, yang, user);
 
-    cheat_caller_address(test_config.archabbot.contract_address, user, CheatSpan::TargetCalls(1));
-    let trove_id: u64 = archabbot
+    cheat_caller_address(test_config.abbot.contract_address, user, CheatSpan::TargetCalls(1));
+    let trove_id: u64 = test_config.abbot
         .open_trove(
             array![AssetBalance { address: yang, amount: eth_asset_amt }].span(),
             forge_amount,

@@ -39,6 +39,7 @@ pub mod trove_opening_rite {
     struct Storage {
         #[substorage(v0)]
         src5: SRC5Component::Storage,
+        abbot: IAbbotDispatcher,
         archabbot: ICelebrantDispatcher,
         configs: Map<u64, TroveOpeningRiteConfig>,
     }
@@ -51,7 +52,8 @@ pub mod trove_opening_rite {
     }
 
     #[constructor]
-    fn constructor(ref self: ContractState, archabbot: ContractAddress) {
+    fn constructor(ref self: ContractState, abbot: ContractAddress, archabbot: ContractAddress) {
+        self.abbot.write(IAbbotDispatcher { contract_address: abbot });
         self.archabbot.write(ICelebrantDispatcher { contract_address: archabbot });
         self.src5.register_interface(IRITE_ID);
     }
@@ -104,8 +106,7 @@ pub mod trove_opening_rite {
 
             // Open a new trove — this contract becomes the owner
             let config = self.configs.read(trove_id);
-            let abbot = IAbbotDispatcher { contract_address: archabbot.contract_address };
-            let new_trove_id = abbot
+            let new_trove_id = self.abbot.read()
                 .open_trove(
                     array![AssetBalance { address: config.yang, amount: config.asset_amount }]
                         .span(),
