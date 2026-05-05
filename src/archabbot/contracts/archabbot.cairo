@@ -94,9 +94,9 @@ pub mod archabbot {
         // Component events
         ReentrancyGuardEvent: reentrancy_guard_component::Event,
         // Original Abbot events
+        // `TroveOpened` event has been dropped
         Deposit: Deposit,
         Withdraw: Withdraw,
-        TroveOpened: TroveOpened,
         TroveClosed: TroveClosed,
         // Celebrant events
         ConfigUpdated: ConfigUpdated,
@@ -132,13 +132,7 @@ pub mod archabbot {
         pub asset_amt: u128,
     }
 
-    #[derive(Copy, Drop, starknet::Event, PartialEq)]
-    pub struct TroveOpened {
-        #[key]
-        pub user: ContractAddress,
-        #[key]
-        pub trove_id: u64,
-    }
+    // `TroveOpened` event has been dropped
 
     #[derive(Copy, Drop, starknet::Event, PartialEq)]
     pub struct TroveClosed {
