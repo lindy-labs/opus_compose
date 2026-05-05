@@ -255,9 +255,7 @@ pub mod archabbot {
                 .convert_to_assets(yang, self.shrine.read().get_deposit(yang, trove_id))
         }
 
-        // Create a new trove in the system with Yang deposits
-        // Note that since the forge amount must be greater than zero, the Shrine would also enforce
-        // that the minimum trove value has been deposited.
+        // Troves can only be opened via the Abbot
         fn open_trove(
             ref self: ContractState,
             yang_assets: Span<AssetBalance>,
