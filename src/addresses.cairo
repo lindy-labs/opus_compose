@@ -110,4 +110,8 @@ pub mod mainnet {
         0x0199741822c2dc722f6f605204f35e56dbc23bceed54818168c4c49e4fb8737e
         .try_into()
         .unwrap();
+    pub const EKUBO_TWAMM_EXTENSION: ContractAddress =
+        0x043e4f09c32d13d43a880e85f69f7de93ceda62d6cf2581a582c6db635548fdc
+        .try_into()
+        .unwrap();
 }

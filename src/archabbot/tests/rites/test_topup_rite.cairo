@@ -14,6 +14,7 @@ use opus_compose::archabbot::interfaces::celebrant::{
 };
 use opus_compose::archabbot::interfaces::rite::{IRITE_ID, IRiteDispatcher, IRiteDispatcherTrait};
 use opus_compose::archabbot::tests::utils::archabbot_utils;
+use opus_compose::constants;
 use opus_compose::interfaces::erc20::{IERC20Dispatcher, IERC20DispatcherTrait};
 use opus_compose::shared::components::src5::{ISRC5Dispatcher, ISRC5DispatcherTrait};
 use snforge_std::{
@@ -504,6 +505,112 @@ fn test_cash_topup() {
         );
 }
 
+// CASH is token0
+#[test]
+#[fork("MAINNET_CHANTRY")]
+fn test_ekubo_topup_with_incentive() {
+    let (archabbot, trove_id, rite_addr) = setup_trove_with_topup_rite();
+    let user = archabbot_utils::USER;
+    let rite = IRiteDispatcher { contract_address: rite_addr };
+
+    let mut spy = spy_events();
+
+    let mut trove_config = archabbot.get_trove_config(trove_id);
+    let incentive: Wad = WAD_ONE.into();
+    trove_config.incentive = incentive;
+
+    cheat_caller_address(archabbot.contract_address, user, CheatSpan::TargetCalls(1));
+    archabbot.set_trove_config(trove_id, trove_config);
+
+    let slippage: Ray = RAY_PERCENT.into();
+    let config = TopupConfig {
+        asset: mainnet::EKUBO,
+        pool_params: EkuboPoolParams {
+            fee: constants::CASH_EKUBO_TWAMM_POOL_FEE, tick_spacing: constants::EKUBO_TWAMM_TICK_SPACING, extension: mainnet::EKUBO_TWAMM_EXTENSION
+        },
+        conditions: TopupConditions { min_asset_balance: WAD_ONE / 20, // 0.05 EKUBO
+        slippage },
+        topup_amount: WAD_ONE / 10, // 0.1 EKUBO
+        destination: user,
+    };
+
+    cheat_caller_address(rite_addr, user, CheatSpan::TargetCalls(1));
+    rite.set_trove_config(trove_id, serialize_config(config));
+
+    assert_eq!(archabbot.get_rite(trove_id), rite_addr, "Rite not set");
+    assert!(archabbot.can_execute_rite(trove_id), "Rite should be ready");
+    assert!(rite.is_ready(trove_id), "Rite should be ready #2");
+    assert!(rite.has_ended(trove_id), "Rite should have ended");
+
+    let ekubo = IERC20Dispatcher { contract_address: mainnet::EKUBO };
+    let cash = IERC20Dispatcher { contract_address: mainnet::SHRINE };
+    let shrine = IShrineDispatcher { contract_address: mainnet::SHRINE };
+    let before_user_cash_balance: u128 = cash.balance_of(user).try_into().unwrap();
+    let before_user_ekubo_balance: u128 = ekubo.balance_of(user).try_into().unwrap();
+    let before_trove_health: Health = shrine.get_trove_health(trove_id);
+
+    let topup = ITopupRiteDispatcher { contract_address: rite_addr };
+    let swap_params = topup.get_swap_params(trove_id);
+
+    let forge_amount: u128 = swap_params.forge_amount.into();
+    assert!(forge_amount.is_non_zero(), "Wrong forge amonut");
+    assert!(swap_params.swap_data.is_some(), "Wrong swap data");
+
+    cheat_caller_address(archabbot.contract_address, user, CheatSpan::TargetCalls(1));
+    archabbot.execute_rite(trove_id);
+
+    let after_user_cash_balance: u128 = cash.balance_of(user).try_into().unwrap();
+    let expected_user_cash_balance: u128 = before_user_cash_balance + incentive.into();
+    assert_eq!(after_user_cash_balance, expected_user_cash_balance, "Wrong incentive");
+
+    let after_user_ekubo_balance: u128 = ekubo.balance_of(user).try_into().unwrap();
+    let expected_user_ekubo_balance: u128 = before_user_ekubo_balance + config.topup_amount;
+    assert_eq!(after_user_ekubo_balance, expected_user_ekubo_balance, "Topup did not happen");
+
+    let after_trove_health: Health = shrine.get_trove_health(trove_id);
+    let expected_trove_debt: Wad = before_trove_health.debt + forge_amount.into() + incentive;
+    assert_eq!(after_trove_health.debt, expected_trove_debt, "Wrong trove debt");
+
+    assert!(!archabbot.can_execute_rite(trove_id), "Rite should not be ready");
+    assert!(!rite.is_ready(trove_id), "Rite should not be ready #2");
+    assert!(rite.has_ended(trove_id), "Rite should have ended #2");
+
+    let expected_refunded: Wad = rmul_wr(forge_amount.into(), slippage);
+    let expected_forge_amount: Wad = forge_amount.into() + expected_refunded;
+    spy
+        .assert_emitted(
+            @array![
+                (
+                    rite_addr,
+                    topup_rite_contract::Event::TopupExecuted(
+                        topup_rite_contract::TopupExecuted {
+                            trove_id,
+                            forge_amount: expected_forge_amount,
+                            refunded: expected_refunded,
+                            asset: ekubo.contract_address,
+                            topup_amount: config.topup_amount,
+                            destination: user,
+                        },
+                    ),
+                ),
+            ],
+        );
+    spy
+        .assert_emitted(
+            @array![
+                (
+                    archabbot.contract_address,
+                    archabbot_contract::Event::RiteExecuted(
+                        archabbot_contract::RiteExecuted {
+                            caller: user, trove_id, rite: rite_addr, incentive,
+                        },
+                    ),
+                ),
+            ],
+        );
+}
+
+// CASH is token1
 #[test]
 #[fork("MAINNET_CHANTRY")]
 fn test_usdc_topup_with_incentive() {
