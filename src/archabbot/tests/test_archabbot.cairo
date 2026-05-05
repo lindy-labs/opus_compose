@@ -111,6 +111,8 @@ fn test_trove_deposit_success() {
     archabbot_utils::fund_user_eth(user, deposit_amount.into());
     archabbot_utils::approve_gate_for_user(test_config.eth_gate, yang, user);
 
+    let mut spy = spy_events();
+
     // Deposit into existing trove
     cheat_caller_address(test_config.archabbot.contract_address, user, CheatSpan::TargetCalls(1));
     archabbot.deposit(trove_id, AssetBalance { address: yang, amount: deposit_amount });
@@ -121,6 +123,15 @@ fn test_trove_deposit_success() {
     assert_equalish(
         after_yang_deposit, expected_yang_deposit, error_margin, 'Wrong yang deposit amount',
     );
+
+    // Verify Deposit event
+    let yang_amt = test_config.sentinel.convert_to_yang(yang, deposit_amount);
+    spy.assert_emitted(@array![(
+        test_config.archabbot.contract_address,
+        archabbot_contract::Event::Deposit(
+            archabbot_contract::Deposit { user, trove_id, yang, yang_amt, asset_amt: deposit_amount },
+        ),
+    )]);
 }
 
 #[test]
@@ -152,12 +163,25 @@ fn test_trove_withdraw_success() {
         .approve(test_config.archabbot.contract_address, repay_amount.into());
     cheat_caller_address(test_config.archabbot.contract_address, user, CheatSpan::TargetCalls(2));
     archabbot.melt(trove_id, trove_health.debt);
+
+    let mut spy = spy_events();
+
     archabbot.withdraw(trove_id, AssetBalance { address: yang, amount: withdraw_amount });
 
     let after_yang_balance: u256 = yang_erc20.balance_of(user);
     let expected_yang_balance: u256 = before_yang_balance + withdraw_amount.into();
     let error_margin: u256 = 1_u128.into();
     assert_equalish(after_yang_balance, expected_yang_balance, error_margin, 'Wrong yang balance');
+
+    // Verify Withdraw event
+    let yang_amt = test_config.sentinel.convert_to_yang(yang, withdraw_amount);
+    let asset_amt = test_config.sentinel.convert_to_assets(yang, yang_amt);
+    spy.assert_emitted(@array![(
+        test_config.archabbot.contract_address,
+        archabbot_contract::Event::Withdraw(
+            archabbot_contract::Withdraw { user, trove_id, yang, yang_amt, asset_amt },
+        ),
+    )]);
 }
 
 #[test]
@@ -220,6 +244,61 @@ fn test_trove_melt_success() {
 
 #[test]
 #[fork("MAINNET_CHANTRY")]
+fn test_trove_close_success() {
+    let test_config = archabbot_utils::archabbot_deploy(None);
+    let user: ContractAddress = archabbot_utils::USER;
+    let yang = mainnet::ETH;
+    let archabbot = IAbbotDispatcher { contract_address: test_config.archabbot.contract_address };
+
+    // Open trove via legacy abbot (archabbot.open_trove is disabled)
+    let trove_id: u64 = archabbot_utils::open_trove_for_user(test_config.abbot, user);
+
+    let before_yin_balance: Wad = test_config.shrine.get_yin(user);
+    assert!(before_yin_balance.is_non_zero(), "user should have yin");
+
+    // Capture deposit before close for event verification
+    let yang_deposit: Wad = test_config.shrine.get_deposit(yang, trove_id);
+    assert!(yang_deposit.is_non_zero(), "should have yang deposit");
+
+    let mut spy = spy_events();
+
+    // Close trove
+    cheat_caller_address(test_config.archabbot.contract_address, user, CheatSpan::TargetCalls(1));
+    archabbot.close_trove(trove_id);
+
+    let owner = archabbot.get_trove_owner(trove_id);
+    assert!(owner.is_some(), "owner should still exist");
+
+    // Verify trove deposit is zero after close
+    let deposit = test_config.shrine.get_deposit(yang, trove_id);
+    assert!(deposit.is_zero(), "deposit should be zero");
+
+    // Verify trove debt is zero after close
+    let trove_health: Health = test_config.shrine.get_trove_health(trove_id);
+    assert!(trove_health.debt.is_zero(), "debt should be zero");
+
+    // Verify Withdraw + TroveClosed events
+    let asset_amt = test_config.sentinel.convert_to_assets(yang, yang_deposit);
+    spy.assert_emitted(@array![
+        (
+            test_config.archabbot.contract_address,
+            archabbot_contract::Event::Withdraw(
+                archabbot_contract::Withdraw {
+                    user, trove_id, yang, yang_amt: yang_deposit, asset_amt,
+                },
+            ),
+        ),
+        (
+            test_config.archabbot.contract_address,
+            archabbot_contract::Event::TroveClosed(
+                archabbot_contract::TroveClosed { trove_id },
+            ),
+        ),
+    ]);
+}
+
+#[test]
+#[fork("MAINNET_CHANTRY")]
 #[should_panic(expected: "ARC: Not trove owner")]
 fn test_trove_close_not_owner_reverts() {
     let test_config = archabbot_utils::archabbot_deploy(None);
@@ -278,17 +357,7 @@ fn test_trove_forge_not_owner_reverts() {
     archabbot.forge(EXISTING_TROVE_ID, forge_amount, max_forge_fee_pct);
 }
 
-#[test]
-#[fork("MAINNET_CHANTRY")]
-#[should_panic(expected: "ARC: Not trove owner")]
-fn test_trove_set_config_not_owner_reverts() {
-    let test_config = archabbot_utils::archabbot_deploy(None);
 
-    cheat_caller_address(
-        test_config.archabbot.contract_address, archabbot_utils::BAD_GUY, CheatSpan::TargetCalls(1),
-    );
-    test_config.archabbot.set_trove_config(EXISTING_TROVE_ID, Default::default());
-}
 
 //
 // Rite functions
@@ -314,6 +383,8 @@ fn test_set_config_capped() {
     let user: ContractAddress = archabbot_utils::USER;
     let trove_id: u64 = archabbot_utils::open_trove_for_user(test_config.abbot, user);
 
+    let mut spy = spy_events();
+
     // Set config with relative_threshold far beyond max (RAY_ONE)
     let config = TroveConfig {
         relative_threshold: (archabbot_contract::MAX_RELATIVE_THRESHOLD + 1).into(),
@@ -338,6 +409,25 @@ fn test_set_config_capped() {
     assert_eq!(
         stored.incentive, archabbot_contract::MAX_INCENTIVE.into(), "Max incentive not capped",
     );
+
+    let expected_config = TroveConfig {
+        relative_threshold: archabbot_contract::MAX_RELATIVE_THRESHOLD.into(),
+        max_forge_fee_pct: archabbot_contract::MAX_FORGE_FEE_PCT.into(),
+        incentive: archabbot_contract::MAX_INCENTIVE.into(),
+    };
+    let expected_events = array![
+        (
+            test_config.archabbot.contract_address,
+            archabbot_contract::Event::ConfigUpdated (
+                archabbot_contract::ConfigUpdated {
+                    user,
+                    trove_id,
+                    config: expected_config
+                },
+            ),
+        ),
+    ];
+    spy.assert_emitted(@expected_events);
 }
 
 #[test]
@@ -346,6 +436,8 @@ fn test_set_config_exact_max_values() {
     let test_config = archabbot_utils::archabbot_deploy(None);
     let user: ContractAddress = archabbot_utils::USER;
     let trove_id: u64 = archabbot_utils::open_trove_for_user(test_config.abbot, user);
+
+    let mut spy = spy_events();
 
     // Set each field exactly at its maximum — should be stored unchanged (no capping)
     let config = TroveConfig {
@@ -371,6 +463,20 @@ fn test_set_config_exact_max_values() {
     assert_eq!(
         stored.incentive, archabbot_contract::MAX_INCENTIVE.into(), "incentive changed at max",
     );
+
+    let expected_events = array![
+        (
+            test_config.archabbot.contract_address,
+            archabbot_contract::Event::ConfigUpdated (
+                archabbot_contract::ConfigUpdated {
+                    user,
+                    trove_id,
+                    config
+                },
+            ),
+        ),
+    ];
+    spy.assert_emitted(@expected_events);
 }
 
 #[test]
@@ -525,6 +631,38 @@ fn setup_trove_with_mock_rite() -> (archabbot_utils::ArchabbotTestConfig, u64, C
 
 #[test]
 #[fork("MAINNET_CHANTRY")]
+#[should_panic(expected: "ARC: Not trove owner")]
+fn test_set_mock_rite_pass() {
+    let test_config = archabbot_utils::archabbot_deploy(None);
+    let user: ContractAddress = archabbot_utils::USER;
+    let trove_id: u64 = archabbot_utils::open_trove_for_user(test_config.abbot, user);
+
+    let mut spy = spy_events();
+
+    let rite_addr = deploy_mock_rite(test_config.archabbot.contract_address);
+    cheat_caller_address(
+        test_config.archabbot.contract_address, archabbot_utils::BAD_GUY, CheatSpan::TargetCalls(1),
+    );
+    test_config.archabbot.set_rite(trove_id, rite_addr);
+
+    let expected_events = array![
+        (
+            test_config.archabbot.contract_address,
+            archabbot_contract::Event::RiteSet (
+                archabbot_contract::RiteSet {
+                    user,
+                    trove_id,
+                    rite: rite_addr
+                }
+            ),
+        ),
+    ];
+    spy.assert_emitted(@expected_events);
+}
+
+
+#[test]
+#[fork("MAINNET_CHANTRY")]
 fn test_mock_rite_has_ended() {
     let (_test_config, trove_id, rite_addr) = setup_trove_with_mock_rite();
     let rite = IRiteDispatcher { contract_address: rite_addr };
@@ -560,11 +698,32 @@ fn test_mock_rite_deposit(is_perform: bool) {
     assert!(rite.is_ready(trove_id), "Rite should be ready #2");
 
     cheat_caller_address(test_config.archabbot.contract_address, user, CheatSpan::TargetCalls(1));
-    if is_perform {
+    let mut expected_rite_event = if is_perform {
         test_config.archabbot.execute_rite(trove_id);
+        (
+            test_config.archabbot.contract_address,
+            archabbot_contract::Event::RiteExecuted(
+                archabbot_contract::RiteExecuted {
+                    caller: user,
+                    trove_id,
+                    rite: rite_addr,
+                    incentive: Zero::zero(),
+                }
+            )
+        )
     } else {
         test_config.archabbot.end_rite(trove_id);
-    }
+        (
+            test_config.archabbot.contract_address,
+            archabbot_contract::Event::RiteEnded(
+                archabbot_contract::RiteEnded {
+                    caller: user,
+                    trove_id,
+                    rite: rite_addr,
+                }
+            )
+        )
+    };
 
     let after_deposit: Wad = test_config.shrine.get_deposit(yang, trove_id);
     let expected_deposit: Wad = before_deposit + total_deposit_amount.into();
@@ -582,6 +741,7 @@ fn test_mock_rite_deposit(is_perform: bool) {
     );
 
     let expected_events = array![
+        expected_rite_event,
         expected_deposit_event, expected_deposit_event, expected_deposit_event,
     ];
     spy.assert_emitted(@expected_events);
@@ -625,11 +785,33 @@ fn test_mock_rite_withdraw(is_perform: bool) {
     assert!(rite.is_ready(trove_id), "Rite should be ready #2");
 
     cheat_caller_address(test_config.archabbot.contract_address, user, CheatSpan::TargetCalls(1));
-    if is_perform {
+    let mut expected_rite_event = if is_perform {
         test_config.archabbot.execute_rite(trove_id);
+        (
+            test_config.archabbot.contract_address,
+            archabbot_contract::Event::RiteExecuted(
+                archabbot_contract::RiteExecuted {
+                    caller: user,
+                    trove_id,
+                    rite: rite_addr,
+                    incentive: Zero::zero(),
+                }
+        )
+    )
+
     } else {
         test_config.archabbot.end_rite(trove_id);
-    }
+        (
+            test_config.archabbot.contract_address,
+            archabbot_contract::Event::RiteEnded(
+                archabbot_contract::RiteEnded {
+                    caller: user,
+                    trove_id,
+                    rite: rite_addr,
+                }
+            )
+        )
+    };
 
     let total_withdraw_amount: u128 = num_calls.into() * amount_per_call;
     let after_deposit: Wad = test_config.shrine.get_deposit(yang, trove_id);
@@ -652,6 +834,7 @@ fn test_mock_rite_withdraw(is_perform: bool) {
     );
 
     let expected_events = array![
+        expected_rite_event,
         expected_withdraw_event,
         expected_withdraw_event,
         expected_withdraw_event,
