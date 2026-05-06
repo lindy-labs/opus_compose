@@ -1,11 +1,11 @@
 use core::cmp::minmax;
+use core::num::traits::DivRem;
 use ekubo::types::keys::PoolKey;
 use starknet::ContractAddress;
 use starknet::storage_access::StorePacking;
 
 const TWO_POW_128: felt252 = 0x100000000000000000000000000000000;
 const TWO_POW_128_U256: u256 = 0x100000000000000000000000000000000;
-const MASK_128_U256: u256 = 0xFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFF;
 
 // Ekubo pool parameters for constructing a PoolKey.
 // token0 and token1 are derived from (asset, cash) via minmax at call time.
@@ -50,9 +50,10 @@ impl EkuboPoolParamsPacking of StorePacking<EkuboPoolParams, PackedEkuboPoolPara
 
     fn unpack(value: PackedEkuboPoolParams) -> EkuboPoolParams {
         let v: u256 = value.fee_and_tick_spacing.into();
+        let (tick_spacing, fee) = DivRem::div_rem(v, TWO_POW_128_U256.try_into().unwrap());
         EkuboPoolParams {
-            fee: (v & MASK_128_U256).try_into().unwrap(),
-            tick_spacing: (v / TWO_POW_128_U256).try_into().unwrap(),
+            fee: fee.try_into().unwrap(),
+            tick_spacing: tick_spacing.try_into().unwrap(),
             extension: value.extension,
         }
     }

@@ -1,29 +1,23 @@
+use core::num::traits::DivRem;
 use ekubo::interfaces::extensions::twamm::{OrderInfo, OrderKey};
 use opus_compose::archabbot::contracts::rites::types::EkuboPoolParams;
 use starknet::ContractAddress;
 use starknet::storage_access::StorePacking;
 use wadray::Wad;
 
-// PriceDcaDurations packing shifts and masks (packed into u128)
-const TWO_POW_64_U128: u128 = 0x10000000000000000;
-const MASK_64_U128: u128 = 0xFFFFFFFFFFFFFFFF;
-const MASK_4_U128: u128 = 0xF;
+// PriceDcaDurations packing shifts (packed into u128)
+const TWO_POW_64: u128 = 0x10000000000000000;
 
-// DcaOrder packing shifts and masks (packed into u256)
-const MASK_128: u256 = 0xFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFF;
+// DcaOrder packing shifts (packed into u256)
 const TWO_POW_128: u256 = 0x100000000000000000000000000000000;
-const MASK_64: u256 = 0xFFFFFFFFFFFFFFFF;
 const TWO_POW_192: u256 = 0x1000000000000000000000000000000000000000000000000;
-const MASK_62: u256 = 0x3FFFFFFFFFFFFFFF;
 const TWO_POW_62: u256 = 0x4000000000000000;
 
-// TimeDcaConditions packing shifts and masks (packed into felt252)
+// TimeDcaConditions packing shifts (packed into felt252)
 // Layout: amount (128 bits) | order_frequency (64 bits) | order_duration (4 bits) | order_type (2
 // bits) = 198 bits
 const TWO_POW_196: u256 = 0x10000000000000000000000000000000000000000000000000;
 const TWO_POW_4: u256 = 0x10;
-const MASK_4: u256 = 0xF;
-const MASK_2: u256 = 0x3;
 
 // PriceConditions packing shifts and masks (each side packed into felt252)
 // Layout per felt252: amount (lower 128 bits) | price (upper 123 bits) = 251 bits
@@ -122,13 +116,11 @@ pub struct PriceDcaDurations {
 
 impl PriceDcaDurationsPacking of StorePacking<PriceDcaDurations, u128> {
     fn pack(value: PriceDcaDurations) -> u128 {
-        value.twap_duration.into() + (value.order_duration.into_index().into() * TWO_POW_64_U128)
+        value.twap_duration.into() + (value.order_duration.into_index().into() * TWO_POW_64)
     }
 
     fn unpack(value: u128) -> PriceDcaDurations {
-        let twap_duration = value & MASK_64_U128;
-        let order_index = (value / TWO_POW_64_U128) & MASK_4_U128;
-
+        let (order_index, twap_duration) = DivRem::div_rem(value, TWO_POW_64.try_into().unwrap());
         PriceDcaDurations {
             twap_duration: twap_duration.try_into().unwrap(),
             order_duration: IndexedEnum::<
@@ -181,18 +173,14 @@ impl PriceConditionsPacking of StorePacking<PriceConditions, PackedPriceConditio
         let buy_u256: u256 = value.buy.into();
         let sell_u256: u256 = value.sell.into();
 
-        let buy_amount: u128 = (buy_u256 & MASK_128).try_into().unwrap();
-        let buy_price: u128 = ((buy_u256 / TWO_POW_128) & MASK_123_U128.into()).try_into().unwrap();
-        let sell_amount: u128 = (sell_u256 & MASK_128).try_into().unwrap();
-        let sell_price: u128 = ((sell_u256 / TWO_POW_128) & MASK_123_U128.into())
-            .try_into()
-            .unwrap();
+        let (buy_price, buy_amount) = DivRem::div_rem(buy_u256, TWO_POW_128.try_into().unwrap());
+        let (sell_price, sell_amount) = DivRem::div_rem(sell_u256, TWO_POW_128.try_into().unwrap());
 
         PriceConditions {
-            buy_price: buy_price.into(),
-            buy_amount: buy_amount.into(),
-            sell_price: sell_price.into(),
-            sell_amount,
+            buy_price: (buy_price & MASK_123_U128.into()).try_into().unwrap(),
+            buy_amount: buy_amount.try_into().unwrap(),
+            sell_price: (sell_price & MASK_123_U128.into()).try_into().unwrap(),
+            sell_amount: sell_amount.try_into().unwrap(),
         }
     }
 }
@@ -231,16 +219,18 @@ impl TimeDcaConditionsPacking of StorePacking<TimeDcaConditions, felt252> {
 
     fn unpack(value: felt252) -> TimeDcaConditions {
         let v: u256 = value.into();
-        let duration_and_type = v / TWO_POW_192;
+        let (duration_and_type, lower) = DivRem::div_rem(v, TWO_POW_192.try_into().unwrap());
+        let (order_frequency, amount) = DivRem::div_rem(lower, TWO_POW_128.try_into().unwrap());
+        let (order_type_index, order_duration_index) = DivRem::div_rem(
+            duration_and_type, TWO_POW_4.try_into().unwrap(),
+        );
         TimeDcaConditions {
-            amount: (v & MASK_128).try_into().unwrap(),
-            order_frequency: ((v / TWO_POW_128) & MASK_64).try_into().unwrap(),
+            amount: amount.try_into().unwrap(),
+            order_frequency: order_frequency.try_into().unwrap(),
             order_duration: IndexedEnum::<
                 DcaOrderDuration,
-            >::from_index((duration_and_type & MASK_4).try_into().unwrap()),
-            order_type: IndexedEnum::<
-                OrderType,
-            >::from_index(((duration_and_type / TWO_POW_4) & MASK_2).try_into().unwrap()),
+            >::from_index(order_duration_index.try_into().unwrap()),
+            order_type: IndexedEnum::<OrderType>::from_index(order_type_index.try_into().unwrap()),
         }
     }
 }
@@ -333,14 +323,16 @@ impl DcaOrderPacking of StorePacking<DcaOrder, u256> {
     }
 
     fn unpack(value: u256) -> DcaOrder {
-        let end_time_and_type = value / TWO_POW_192;
+        let (end_time_and_type, lower) = DivRem::div_rem(value, TWO_POW_192.try_into().unwrap());
+        let (position_id, fee) = DivRem::div_rem(lower, TWO_POW_128.try_into().unwrap());
+        let (order_type_index, end_time) = DivRem::div_rem(
+            end_time_and_type, TWO_POW_62.try_into().unwrap(),
+        );
         DcaOrder {
-            fee: (value & MASK_128).try_into().unwrap(),
-            position_id: ((value / TWO_POW_128) & MASK_64).try_into().unwrap(),
-            end_time: (end_time_and_type & MASK_62).try_into().unwrap(),
-            order_type: IndexedEnum::<
-                OrderType,
-            >::from_index((end_time_and_type / TWO_POW_62).try_into().unwrap()),
+            fee: fee.try_into().unwrap(),
+            position_id: position_id.try_into().unwrap(),
+            end_time: end_time.try_into().unwrap(),
+            order_type: IndexedEnum::<OrderType>::from_index(order_type_index.try_into().unwrap()),
         }
     }
 }

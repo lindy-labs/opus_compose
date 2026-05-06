@@ -1,3 +1,4 @@
+use core::num::traits::DivRem;
 use ekubo::interfaces::router::Swap;
 use opus::types::AssetBalance;
 use starknet::ContractAddress;
@@ -21,9 +22,8 @@ pub enum Action {
 // `incentive_amount` is capped at 2^99 - 1 (99 bits)
 // Total: 90 + 62 + 99 = 251 bits ≤ felt252
 const TWO_POW_90: u256 = 0x40000000000000000000000;
+const TWO_POW_62: u256 = 0x4000000000000000;
 const TWO_POW_152: u256 = 0x100000000000000000000000000000000000000;
-const MASK_90: u256 = 0x3FFFFFFFFFFFFFFFFFFFFFF;
-const MASK_62: u256 = 0x3FFFFFFFFFFFFFFF;
 const MASK_99: u256 = 0x7FFFFFFFFFFFFFFFFFFFFFFFF;
 
 // Packs relative_threshold, max_forge_fee_pct, and incentive into a single felt252.
@@ -53,9 +53,11 @@ impl TroveConfigPacking of StorePacking<TroveConfig, felt252> {
 
     fn unpack(value: felt252) -> TroveConfig {
         let value: u256 = value.into();
-        let relative_threshold: u128 = (value & MASK_90).try_into().unwrap();
-        let max_forge_fee_pct: u128 = ((value / TWO_POW_90) & MASK_62).try_into().unwrap();
-        let incentive: u128 = ((value / TWO_POW_152) & MASK_99).try_into().unwrap();
+        let (rest, relative_threshold) = DivRem::div_rem(value, TWO_POW_90.try_into().unwrap());
+        let (incentive, max_forge_fee_pct) = DivRem::div_rem(rest, TWO_POW_62.try_into().unwrap());
+        let relative_threshold: u128 = relative_threshold.try_into().unwrap();
+        let max_forge_fee_pct: u128 = max_forge_fee_pct.try_into().unwrap();
+        let incentive: u128 = (incentive & MASK_99).try_into().unwrap();
         TroveConfig {
             relative_threshold: relative_threshold.into(),
             max_forge_fee_pct: max_forge_fee_pct.into(),

@@ -1,11 +1,11 @@
+use core::num::traits::DivRem;
 use ekubo::interfaces::router::{RouteNode, TokenAmount};
 use opus_compose::archabbot::contracts::rites::types::EkuboPoolParams;
 use starknet::ContractAddress;
 use starknet::storage_access::StorePacking;
 use wadray::{Ray, Wad};
 
-const TWO_POW_128: felt252 = 0x100000000000000000000000000000000;
-const MASK_128: u256 = 0xFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFF;
+const TWO_POW_128: u256 = 0x100000000000000000000000000000000;
 
 #[derive(Copy, Drop, Serde)]
 pub struct SwapParams {
@@ -25,15 +25,17 @@ pub struct TopupConditions {
 
 impl TopupConditionsPacking of StorePacking<TopupConditions, felt252> {
     fn pack(value: TopupConditions) -> felt252 {
-        let slippage: u128 = value.slippage.into();
-        value.min_asset_balance.into() + (slippage.into() * TWO_POW_128)
+        let slippage: u256 = value.slippage.into();
+        let packed: u256 = value.min_asset_balance.into() + (slippage * TWO_POW_128);
+        packed.try_into().unwrap()
     }
 
     fn unpack(value: felt252) -> TopupConditions {
         let value: u256 = value.into();
-        let slippage: u128 = (value / TWO_POW_128.into()).try_into().unwrap();
+        let (slippage, min_asset_balance) = DivRem::div_rem(value, TWO_POW_128.try_into().unwrap());
+        let slippage: u128 = slippage.try_into().unwrap();
         TopupConditions {
-            min_asset_balance: (value & MASK_128).try_into().unwrap(), slippage: slippage.into(),
+            min_asset_balance: min_asset_balance.try_into().unwrap(), slippage: slippage.into(),
         }
     }
 }
