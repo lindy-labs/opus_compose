@@ -31,6 +31,8 @@ pub mod archabbot {
     use starknet::{ContractAddress, get_caller_address, get_contract_address};
     use wadray::{RAY_ONE, Ray, WAD_ONE, Wad};
 
+    const OPEN_TROVE_ENABLED: bool = false;
+
     //
     // Components
     //
@@ -256,7 +258,7 @@ pub mod archabbot {
             forge_amount: Wad,
             max_forge_fee_pct: Wad,
         ) -> u64 {
-            assert!(1 == 0, "ARC: Disabled");
+            assert!(OPEN_TROVE_ENABLED, "ARC: Disabled");
             0
         }
 
@@ -383,7 +385,7 @@ pub mod archabbot {
         // Note that this does not check:
         // 1. the configured max forge fee % is less than the current value;
         //    (because the configured Rite may not forge)
-        // 2. the LTV does not exceed the relative threhsold at the end of the rite;
+        // 2. the LTV does not exceed the relative threshold at the end of the rite;
         fn can_execute_rite(self: @ContractState, trove_id: u64) -> bool {
             let rite = self.rites.read(trove_id);
             self.can_execute_rite_helper(rite, trove_id)
