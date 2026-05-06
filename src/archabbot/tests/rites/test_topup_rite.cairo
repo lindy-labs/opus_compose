@@ -508,25 +508,31 @@ fn test_cash_topup() {
 // Parametrized across EKUBO (CASH is token0) and USDC (CASH is token1)
 #[test]
 #[fork("MAINNET_CHANTRY")]
-#[test_case(name: "ekubo", (
-    mainnet::EKUBO,
-    EkuboPoolParams {
-        fee: constants::CASH_EKUBO_TWAMM_POOL_FEE,
-        tick_spacing: constants::EKUBO_TWAMM_TICK_SPACING,
-        extension: mainnet::EKUBO_TWAMM_EXTENSION,
-    },
-    WAD_ONE / 20,  // 0.05 EKUBO
-    WAD_ONE / 10,  // 0.1 EKUBO
-))]
-#[test_case(name: "usdc", (
-    mainnet::USDC,
-    EkuboPoolParams { fee: 6805647338418769825990228293189632, tick_spacing: 20, extension: Zero::zero() },
-    5000000,   // 5 USDC
-    10000000,  // 10 USDC
-))]
-fn test_swap_topup_with_incentive(
-    test_case: (ContractAddress, EkuboPoolParams, u128, u128),
-) {
+#[test_case(
+    name: "ekubo",
+    (
+        mainnet::EKUBO,
+        EkuboPoolParams {
+            fee: constants::CASH_EKUBO_TWAMM_POOL_FEE,
+            tick_spacing: constants::EKUBO_TWAMM_TICK_SPACING,
+            extension: mainnet::EKUBO_TWAMM_EXTENSION,
+        },
+        WAD_ONE / 20, // 0.05 EKUBO
+        WAD_ONE / 10 // 0.1 EKUBO
+    ),
+)]
+#[test_case(
+    name: "usdc",
+    (
+        mainnet::USDC,
+        EkuboPoolParams {
+            fee: 6805647338418769825990228293189632, tick_spacing: 20, extension: Zero::zero(),
+        },
+        5000000, // 5 USDC
+        10000000 // 10 USDC
+    ),
+)]
+fn test_swap_topup_with_incentive(test_case: (ContractAddress, EkuboPoolParams, u128, u128)) {
     let (asset, pool_params, min_asset_balance, topup_amount) = test_case;
     let (archabbot, trove_id, rite_addr) = setup_trove_with_topup_rite();
     let user = archabbot_utils::USER;

@@ -126,12 +126,19 @@ fn test_trove_deposit_success() {
 
     // Verify Deposit event
     let yang_amt = test_config.sentinel.convert_to_yang(yang, deposit_amount);
-    spy.assert_emitted(@array![(
-        test_config.archabbot.contract_address,
-        archabbot_contract::Event::Deposit(
-            archabbot_contract::Deposit { user, trove_id, yang, yang_amt, asset_amt: deposit_amount },
-        ),
-    )]);
+    spy
+        .assert_emitted(
+            @array![
+                (
+                    test_config.archabbot.contract_address,
+                    archabbot_contract::Event::Deposit(
+                        archabbot_contract::Deposit {
+                            user, trove_id, yang, yang_amt, asset_amt: deposit_amount,
+                        },
+                    ),
+                ),
+            ],
+        );
 }
 
 #[test]
@@ -176,12 +183,17 @@ fn test_trove_withdraw_success() {
     // Verify Withdraw event
     let yang_amt = test_config.sentinel.convert_to_yang(yang, withdraw_amount);
     let asset_amt = test_config.sentinel.convert_to_assets(yang, yang_amt);
-    spy.assert_emitted(@array![(
-        test_config.archabbot.contract_address,
-        archabbot_contract::Event::Withdraw(
-            archabbot_contract::Withdraw { user, trove_id, yang, yang_amt, asset_amt },
-        ),
-    )]);
+    spy
+        .assert_emitted(
+            @array![
+                (
+                    test_config.archabbot.contract_address,
+                    archabbot_contract::Event::Withdraw(
+                        archabbot_contract::Withdraw { user, trove_id, yang, yang_amt, asset_amt },
+                    ),
+                ),
+            ],
+        );
 }
 
 #[test]
@@ -279,22 +291,25 @@ fn test_trove_close_success() {
 
     // Verify Withdraw + TroveClosed events
     let asset_amt = test_config.sentinel.convert_to_assets(yang, yang_deposit);
-    spy.assert_emitted(@array![
-        (
-            test_config.archabbot.contract_address,
-            archabbot_contract::Event::Withdraw(
-                archabbot_contract::Withdraw {
-                    user, trove_id, yang, yang_amt: yang_deposit, asset_amt,
-                },
-            ),
-        ),
-        (
-            test_config.archabbot.contract_address,
-            archabbot_contract::Event::TroveClosed(
-                archabbot_contract::TroveClosed { trove_id },
-            ),
-        ),
-    ]);
+    spy
+        .assert_emitted(
+            @array![
+                (
+                    test_config.archabbot.contract_address,
+                    archabbot_contract::Event::Withdraw(
+                        archabbot_contract::Withdraw {
+                            user, trove_id, yang, yang_amt: yang_deposit, asset_amt,
+                        },
+                    ),
+                ),
+                (
+                    test_config.archabbot.contract_address,
+                    archabbot_contract::Event::TroveClosed(
+                        archabbot_contract::TroveClosed { trove_id },
+                    ),
+                ),
+            ],
+        );
 }
 
 #[test]
@@ -358,7 +373,6 @@ fn test_trove_forge_not_owner_reverts() {
 }
 
 
-
 //
 // Rite functions
 // - Additional coverage in tests for topup rite
@@ -418,12 +432,8 @@ fn test_set_config_capped() {
     let expected_events = array![
         (
             test_config.archabbot.contract_address,
-            archabbot_contract::Event::ConfigUpdated (
-                archabbot_contract::ConfigUpdated {
-                    user,
-                    trove_id,
-                    config: expected_config
-                },
+            archabbot_contract::Event::ConfigUpdated(
+                archabbot_contract::ConfigUpdated { user, trove_id, config: expected_config },
             ),
         ),
     ];
@@ -467,12 +477,8 @@ fn test_set_config_exact_max_values() {
     let expected_events = array![
         (
             test_config.archabbot.contract_address,
-            archabbot_contract::Event::ConfigUpdated (
-                archabbot_contract::ConfigUpdated {
-                    user,
-                    trove_id,
-                    config
-                },
+            archabbot_contract::Event::ConfigUpdated(
+                archabbot_contract::ConfigUpdated { user, trove_id, config },
             ),
         ),
     ];
@@ -648,12 +654,8 @@ fn test_set_mock_rite_pass() {
     let expected_events = array![
         (
             test_config.archabbot.contract_address,
-            archabbot_contract::Event::RiteSet (
-                archabbot_contract::RiteSet {
-                    user,
-                    trove_id,
-                    rite: rite_addr
-                }
+            archabbot_contract::Event::RiteSet(
+                archabbot_contract::RiteSet { user, trove_id, rite: rite_addr },
             ),
         ),
     ];
@@ -704,24 +706,17 @@ fn test_mock_rite_deposit(is_perform: bool) {
             test_config.archabbot.contract_address,
             archabbot_contract::Event::RiteExecuted(
                 archabbot_contract::RiteExecuted {
-                    caller: user,
-                    trove_id,
-                    rite: rite_addr,
-                    incentive: Zero::zero(),
-                }
-            )
+                    caller: user, trove_id, rite: rite_addr, incentive: Zero::zero(),
+                },
+            ),
         )
     } else {
         test_config.archabbot.end_rite(trove_id);
         (
             test_config.archabbot.contract_address,
             archabbot_contract::Event::RiteEnded(
-                archabbot_contract::RiteEnded {
-                    caller: user,
-                    trove_id,
-                    rite: rite_addr,
-                }
-            )
+                archabbot_contract::RiteEnded { caller: user, trove_id, rite: rite_addr },
+            ),
         )
     };
 
@@ -741,8 +736,7 @@ fn test_mock_rite_deposit(is_perform: bool) {
     );
 
     let expected_events = array![
-        expected_rite_event,
-        expected_deposit_event, expected_deposit_event, expected_deposit_event,
+        expected_rite_event, expected_deposit_event, expected_deposit_event, expected_deposit_event,
     ];
     spy.assert_emitted(@expected_events);
 }
@@ -791,25 +785,17 @@ fn test_mock_rite_withdraw(is_perform: bool) {
             test_config.archabbot.contract_address,
             archabbot_contract::Event::RiteExecuted(
                 archabbot_contract::RiteExecuted {
-                    caller: user,
-                    trove_id,
-                    rite: rite_addr,
-                    incentive: Zero::zero(),
-                }
+                    caller: user, trove_id, rite: rite_addr, incentive: Zero::zero(),
+                },
+            ),
         )
-    )
-
     } else {
         test_config.archabbot.end_rite(trove_id);
         (
             test_config.archabbot.contract_address,
             archabbot_contract::Event::RiteEnded(
-                archabbot_contract::RiteEnded {
-                    caller: user,
-                    trove_id,
-                    rite: rite_addr,
-                }
-            )
+                archabbot_contract::RiteEnded { caller: user, trove_id, rite: rite_addr },
+            ),
         )
     };
 
