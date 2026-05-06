@@ -215,7 +215,10 @@ pub mod topup_rite {
                 ekubo_router.swap(route_node, token_amount);
 
                 // Clear at least the topup amount of asset to destination
-                IClearDispatcher { contract_address: ekubo_router.contract_address }
+                let router_clear = IClearDispatcher {
+                    contract_address: ekubo_router.contract_address,
+                };
+                router_clear
                     .clear_minimum_to_recipient(
                         EkuboERC20Dispatcher { contract_address: config.asset },
                         config.topup_amount.into(),
@@ -223,7 +226,7 @@ pub mod topup_rite {
                     );
 
                 // Repay excess yin
-                refunded = IClearDispatcher { contract_address: ekubo_router.contract_address }
+                refunded = router_clear
                     .clear_minimum_to_recipient(
                         EkuboERC20Dispatcher { contract_address: yin.contract_address },
                         0,
