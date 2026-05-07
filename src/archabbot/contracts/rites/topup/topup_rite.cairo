@@ -38,12 +38,19 @@ pub mod topup_rite {
     use wadray::{RAY_ONE, Ray, Wad, rmul_wr};
     use super::ITopupRite;
 
+    //
+    // Components
+    //
+
     component!(path: SRC5Component, storage: src5, event: SRC5Event);
 
     #[abi(embed_v0)]
     impl SRC5Impl = SRC5Component::SRC5Impl<ContractState>;
-
     impl SRC5InternalImpl = SRC5Component::InternalImpl<ContractState>;
+
+    //
+    // Storage
+    //
 
     #[storage]
     struct Storage {
@@ -53,8 +60,13 @@ pub mod topup_rite {
         archabbot: ICelebrantDispatcher,
         ekubo_core: ICoreDispatcher,
         ekubo_router: IRouterDispatcher,
-        topup_configs: Map<u64, TopupConfig> // ATU trove ID -> config
+        // Mapping of trove ID -> topup config
+        topup_configs: Map<u64, TopupConfig> 
     }
+
+    //
+    // Events
+    //
 
     #[event]
     #[derive(Copy, Drop, starknet::Event, PartialEq)]
@@ -84,6 +96,10 @@ pub mod topup_rite {
         pub topup_amount: u128,
         pub destination: ContractAddress,
     }
+
+    //
+    // Constructor
+    //
 
     #[constructor]
     fn constructor(
