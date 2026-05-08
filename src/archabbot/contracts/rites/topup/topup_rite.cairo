@@ -61,7 +61,7 @@ pub mod topup_rite {
         ekubo_core: ICoreDispatcher,
         ekubo_router: IRouterDispatcher,
         // Mapping of trove ID -> topup config
-        topup_configs: Map<u64, TopupConfig> 
+        topup_configs: Map<u64, TopupConfig>,
     }
 
     //
