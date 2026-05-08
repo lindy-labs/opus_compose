@@ -29,9 +29,10 @@ const MASK_99: u256 = 0x7FFFFFFFFFFFFFFFFFFFFFFFF;
 // Packs relative_threshold, max_forge_fee_pct, and incentive into a single felt252.
 // Layout: [incentive_amount (bits 152–250, 99 bits) | max_forge_fee_pct (bits 90–151, 62 bits)
 // | relative_threshold (bits 0–89, 90 bits)]
-// `relative_threshold` is capped at RAY_ONE (10^27)
-// `max_forge_fee_pct` is capped at 4 * WAD_ONE (4 * 10^18)
-// `incentive` is capped at 2^99 - 1
+// Archabbot caps the following values:
+// `relative_threshold`: RAY_ONE (10^27)
+// `max_forge_fee_pct`: 4 * WAD_ONE (4 * 10^18)
+// `incentive`: 2^99 - 1
 #[derive(Copy, Drop, Debug, Default, PartialEq, Serde)]
 pub struct TroveConfig {
     // Maximum LTV = relative threshold * threshold
@@ -56,12 +57,10 @@ impl TroveConfigPacking of StorePacking<TroveConfig, felt252> {
         let (rest, relative_threshold) = DivRem::div_rem(value, TWO_POW_90.try_into().unwrap());
         let (incentive, max_forge_fee_pct) = DivRem::div_rem(rest, TWO_POW_62.try_into().unwrap());
         let relative_threshold: u128 = relative_threshold.try_into().unwrap();
-        let max_forge_fee_pct: u128 = max_forge_fee_pct.try_into().unwrap();
-        let incentive: u128 = (incentive & MASK_99).try_into().unwrap();
         TroveConfig {
             relative_threshold: relative_threshold.into(),
-            max_forge_fee_pct: max_forge_fee_pct.into(),
-            incentive: incentive.into(),
+            max_forge_fee_pct: max_forge_fee_pct.try_into().unwrap(),
+            incentive: incentive.try_into().unwrap(),
         }
     }
 }

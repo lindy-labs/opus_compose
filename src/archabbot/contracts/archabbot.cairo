@@ -54,6 +54,7 @@ pub mod archabbot {
 
     pub const MAX_RELATIVE_THRESHOLD: u128 = RAY_ONE;
     pub const MAX_FORGE_FEE_PCT: u128 = 4 * WAD_ONE; // From Shrine
+    // Remaining 99 bits to pack trove config into a felt252
     pub const MAX_INCENTIVE: u128 = 0x7FFFFFFFFFFFFFFFFFFFFFFFF;
 
     //
@@ -438,6 +439,7 @@ pub mod archabbot {
             self.transient_trove_id.write(trove_id);
 
             let rite = self.rites.read(trove_id);
+            assert!(rite.contract_address.is_non_zero(), "ARC: No rite set");
             rite.end(trove_id);
 
             self.assert_callback();
