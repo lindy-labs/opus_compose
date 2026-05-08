@@ -505,6 +505,47 @@ fn test_cash_topup() {
         );
 }
 
+#[test]
+#[fork("MAINNET_CHANTRY")]
+#[should_panic(expected: "ARC: LTV exceeds relative threshold")]
+fn test_cash_topup_exceeds_relative_ltv_fail() {
+    let (archabbot, trove_id, rite_addr) = setup_trove_with_topup_rite();
+    let user = archabbot_utils::USER;
+    let rite = IRiteDispatcher { contract_address: rite_addr };
+
+    let shrine = IShrineDispatcher { contract_address: mainnet::SHRINE };
+
+    let mut trove_config = archabbot.get_trove_config(trove_id);
+    let trove_health = shrine.get_trove_health(trove_id);
+    trove_config.relative_threshold = trove_health.ltv / trove_health.threshold;
+    cheat_caller_address(archabbot.contract_address, user, CheatSpan::TargetCalls(1));
+    archabbot.set_trove_config(trove_id, trove_config);
+
+    let mut config = default_topup_config(user);
+    let cash = IERC20Dispatcher { contract_address: mainnet::SHRINE };
+    let before_user_cash_balance: u128 = cash.balance_of(user).try_into().unwrap();
+
+    config.conditions.min_asset_balance = before_user_cash_balance + 1;
+
+    cheat_caller_address(rite_addr, user, CheatSpan::TargetCalls(1));
+    rite.set_trove_config(trove_id, serialize_config(config));
+
+    assert_eq!(archabbot.get_rite(trove_id), rite_addr, "Rite not set");
+    assert!(archabbot.can_execute_rite(trove_id), "Rite should be ready");
+    assert!(rite.is_ready(trove_id), "Rite should be ready #2");
+    assert!(rite.has_ended(trove_id), "Rite should have ended");
+
+    let topup = ITopupRiteDispatcher { contract_address: rite_addr };
+    let swap_params = topup.get_swap_params(trove_id);
+
+    let forge_amount: u128 = swap_params.forge_amount.into();
+    assert_eq!(forge_amount, config.topup_amount, "Wrong forge amonut");
+    assert!(swap_params.swap_data.is_none(), "Wrong swap data");
+
+    cheat_caller_address(archabbot.contract_address, user, CheatSpan::TargetCalls(1));
+    archabbot.execute_rite(trove_id);
+}
+
 // Parametrized across EKUBO (CASH is token0) and USDC (CASH is token1)
 #[test]
 #[fork("MAINNET_CHANTRY")]

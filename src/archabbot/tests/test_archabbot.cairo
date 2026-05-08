@@ -526,6 +526,29 @@ fn test_set_rite_not_owner() {
 
 #[test]
 #[fork("MAINNET_CHANTRY")]
+#[should_panic(expected: "ARC: Cannot execute rite")]
+fn test_execute_default_rite() {
+    let test_config = archabbot_utils::archabbot_deploy(None);
+    let user: ContractAddress = archabbot_utils::USER;
+    let trove_id: u64 = archabbot_utils::open_trove_for_user(test_config.abbot, user);
+
+    test_config.archabbot.execute_rite(trove_id);
+}
+
+#[test]
+#[fork("MAINNET_CHANTRY")]
+#[should_panic(expected: "ARC: No rite set")]
+fn test_end_default_rite() {
+    let test_config = archabbot_utils::archabbot_deploy(None);
+    let user: ContractAddress = archabbot_utils::USER;
+    let trove_id: u64 = archabbot_utils::open_trove_for_user(test_config.abbot, user);
+
+    cheat_caller_address(test_config.archabbot.contract_address, user, CheatSpan::TargetCalls(1));
+    test_config.archabbot.end_rite(trove_id);
+}
+
+#[test]
+#[fork("MAINNET_CHANTRY")]
 fn test_can_execute_rite_invalid_trove() {
     let test_config = archabbot_utils::archabbot_deploy(None);
 
@@ -854,6 +877,40 @@ fn test_execute_mock_rite_exceeds_relative_threshold_reverts() {
     let withdraw_amount: u128 = WAD_ONE / 10;
     let config = MockRiteConfig {
         is_deposit: false, num_calls: 1, asset: yang, amount: withdraw_amount, is_malicious: false,
+    };
+    rite.set_trove_config(trove_id, serialize_mock_config(config));
+
+    assert!(test_config.archabbot.can_execute_rite(trove_id), "Rite should be ready");
+    cheat_caller_address(test_config.archabbot.contract_address, user, CheatSpan::TargetCalls(1));
+    test_config.archabbot.execute_rite(trove_id);
+}
+
+#[test]
+#[fork("MAINNET_CHANTRY")]
+#[should_panic(expected: "ARC: LTV exceeds relative threshold")]
+fn test_execute_incentive_exceeds_relative_threshold_reverts() {
+    let (test_config, trove_id, rite_addr) = setup_trove_with_mock_rite();
+    let user = archabbot_utils::USER;
+    let rite = IRiteDispatcher { contract_address: rite_addr };
+    let yang = mainnet::ETH;
+
+    let trove_health = test_config.shrine.get_trove_health(trove_id);
+    let relative_threshold = trove_health.ltv / trove_health.threshold;
+
+    // Set relative threshold to the current LTV / threshold so
+    // that a single withdrawal of collateral will cause the LTV
+    // to fall below the relative threshold
+    let trove_config = TroveConfig {
+        relative_threshold, max_forge_fee_pct: Zero::zero(), incentive: WAD_ONE.into(),
+    };
+    cheat_caller_address(test_config.archabbot.contract_address, user, CheatSpan::TargetCalls(1));
+    test_config.archabbot.set_trove_config(trove_id, trove_config);
+
+    // Configure mock rite for a deposit
+    let deposit_amount: u128 = 100_u128.into();
+    archabbot_utils::fund_user_eth(rite_addr, deposit_amount.into());
+    let config = MockRiteConfig {
+        is_deposit: true, num_calls: 1, asset: yang, amount: deposit_amount, is_malicious: false,
     };
     rite.set_trove_config(trove_id, serialize_mock_config(config));
 
