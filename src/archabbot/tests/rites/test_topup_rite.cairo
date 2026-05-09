@@ -22,7 +22,7 @@ use snforge_std::{
     cheat_caller_address, declare, spy_events,
 };
 use starknet::{ContractAddress, SyscallResultTrait};
-use wadray::{RAY_PERCENT, Ray, WAD_ONE, Wad, rmul_wr};
+use wadray::{RAY_PERCENT, Ray, WAD_ONE, Wad};
 
 
 //
@@ -481,7 +481,6 @@ fn test_cash_topup() {
                         topup_rite_contract::TopupExecuted {
                             trove_id,
                             forge_amount: config.topup_amount.into(),
-                            refunded: Zero::zero(),
                             asset: cash.contract_address,
                             topup_amount: config.topup_amount,
                             destination: user,
@@ -638,8 +637,6 @@ fn test_swap_topup_with_incentive(test_case: (ContractAddress, EkuboPoolParams, 
     assert!(!rite.is_ready(trove_id), "Rite should not be ready #2");
     assert!(rite.has_ended(trove_id), "Rite should have ended #2");
 
-    let expected_refunded: Wad = rmul_wr(forge_amount.into(), slippage);
-    let expected_forge_amount: Wad = forge_amount.into() + expected_refunded;
     spy
         .assert_emitted(
             @array![
@@ -648,8 +645,7 @@ fn test_swap_topup_with_incentive(test_case: (ContractAddress, EkuboPoolParams, 
                     topup_rite_contract::Event::TopupExecuted(
                         topup_rite_contract::TopupExecuted {
                             trove_id,
-                            forge_amount: expected_forge_amount,
-                            refunded: expected_refunded,
+                            forge_amount: swap_params.forge_amount,
                             asset: asset_token.contract_address,
                             topup_amount: config.topup_amount,
                             destination: user,

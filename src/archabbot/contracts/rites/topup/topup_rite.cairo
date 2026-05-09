@@ -35,7 +35,7 @@ pub mod topup_rite {
         StoragePointerWriteAccess,
     };
     use starknet::{ContractAddress, get_caller_address};
-    use wadray::{RAY_ONE, Ray, Wad, rmul_wr};
+    use wadray::{Ray, Wad, rmul_wr};
     use super::ITopupRite;
 
     //
@@ -91,7 +91,6 @@ pub mod topup_rite {
         #[key]
         pub trove_id: u64,
         pub forge_amount: Wad,
-        pub refunded: Wad,
         pub asset: ContractAddress,
         pub topup_amount: u128,
         pub destination: ContractAddress,
@@ -155,12 +154,13 @@ pub mod topup_rite {
                     "{}: Invalid pool params",
                     RITE_ID(),
                 );
+                // Prevent multiple topups
+                // There is an edge case where the minimum asset balance is within the slippage
+                // allowance of the topup amount, and the swap outputs less than the minimum
+                // asset balance. However, this is acceptable since it would at most result in
+                // two top-ups.
                 assert!(
-                    config
-                        .topup_amount >= config
-                        .conditions
-                        .min_asset_balance // Prevent multiple topups
-                        ,
+                    config.topup_amount >= config.conditions.min_asset_balance,
                     "{}: Topup amount less than minimum",
                     RITE_ID(),
                 );
@@ -214,58 +214,41 @@ pub mod topup_rite {
                     yin.contract_address,
                 );
 
-            // Take slippage into account for non-CASH tokens and mint additional CASH
-            let adjusted_forge_amount: Wad = if swap_params.swap_data.is_some() {
-                rmul_wr(swap_params.forge_amount, RAY_ONE.into() + config.conditions.slippage)
-            } else {
-                swap_params.forge_amount
-            };
-
             archabbot
-                .on_rite_actions(trove_id, array![Action::Forge(adjusted_forge_amount)].span());
+                .on_rite_actions(trove_id, array![Action::Forge(swap_params.forge_amount)].span());
 
-            let mut refunded: u256 = Zero::zero();
+            let mut topup_amount = config.topup_amount;
             if let Some((route_node, token_amount)) = swap_params.swap_data {
                 let ekubo_router = self.ekubo_router.read();
-                yin.transfer(ekubo_router.contract_address, adjusted_forge_amount.into());
+                yin.transfer(ekubo_router.contract_address, swap_params.forge_amount.into());
                 ekubo_router.swap(route_node, token_amount);
 
-                // Clear at least the topup amount of asset to destination
+                // Take slippage into account for non-CASH tokens to
+                // calculate the minimum received
+                let minimum: u128 = rmul_wr(config.topup_amount.into(), config.conditions.slippage)
+                    .into();
                 let router_clear = IClearDispatcher {
                     contract_address: ekubo_router.contract_address,
                 };
-                router_clear
+                topup_amount = router_clear
                     .clear_minimum_to_recipient(
                         EkuboERC20Dispatcher { contract_address: config.asset },
-                        config.topup_amount.into(),
+                        minimum.into(),
                         config.destination,
-                    );
-
-                // Repay excess yin
-                refunded = router_clear
-                    .clear_minimum_to_recipient(
-                        EkuboERC20Dispatcher { contract_address: yin.contract_address },
-                        0,
-                        archabbot.contract_address,
-                    );
-                if refunded.is_non_zero() {
-                    archabbot
-                        .on_rite_actions(
-                            trove_id, array![Action::Melt(refunded.try_into().unwrap())].span(),
-                        );
-                }
+                    )
+                    .try_into()
+                    .unwrap();
             } else {
-                yin.transfer(config.destination, adjusted_forge_amount.into());
+                yin.transfer(config.destination, swap_params.forge_amount.into());
             }
 
             self
                 .emit(
                     TopupExecuted {
                         trove_id,
-                        forge_amount: adjusted_forge_amount,
-                        refunded: refunded.try_into().unwrap(),
+                        forge_amount: swap_params.forge_amount,
                         asset: config.asset,
-                        topup_amount: config.topup_amount,
+                        topup_amount,
                         destination: config.destination,
                     },
                 );

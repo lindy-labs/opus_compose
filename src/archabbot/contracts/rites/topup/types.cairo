@@ -20,6 +20,8 @@ pub struct SwapParams {
 #[derive(Copy, Drop, Debug, PartialEq, Serde)]
 pub struct TopupConditions {
     pub min_asset_balance: u128,
+    // Used for price impact (sqrt_ratio_limit)
+    // and output amount
     pub slippage: Ray,
 }
 
