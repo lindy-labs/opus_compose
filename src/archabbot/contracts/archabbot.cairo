@@ -598,7 +598,7 @@ pub mod archabbot {
                             sentinel,
                             trove_id,
                             user,
-                            initiator,
+                            archabbot,
                             AssetBalance { address: yang, amount: asset_amt_128 },
                         );
 
