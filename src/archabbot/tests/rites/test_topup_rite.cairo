@@ -454,8 +454,8 @@ fn test_cash_topup() {
     let swap_params = topup.get_swap_params(trove_id);
 
     let forge_amount: u128 = swap_params.forge_amount.into();
-    assert_eq!(forge_amount, config.topup_amount, "Wrong forge amonut");
-    assert!(swap_params.swap_data.is_none(), "Wrong swap data");
+    assert_eq!(forge_amount, config.topup_amount, "Wrong forge amount");
+    assert!(swap_params.route_node.is_none(), "Wrong swap data");
 
     cheat_caller_address(archabbot.contract_address, user, CheatSpan::TargetCalls(1));
     archabbot.execute_rite(trove_id);
@@ -538,8 +538,8 @@ fn test_cash_topup_exceeds_relative_ltv_fail() {
     let swap_params = topup.get_swap_params(trove_id);
 
     let forge_amount: u128 = swap_params.forge_amount.into();
-    assert_eq!(forge_amount, config.topup_amount, "Wrong forge amonut");
-    assert!(swap_params.swap_data.is_none(), "Wrong swap data");
+    assert_eq!(forge_amount, config.topup_amount, "Wrong forge amount");
+    assert!(swap_params.route_node.is_none(), "Wrong swap data");
 
     cheat_caller_address(archabbot.contract_address, user, CheatSpan::TargetCalls(1));
     archabbot.execute_rite(trove_id);
@@ -616,7 +616,7 @@ fn test_swap_topup_with_incentive(test_case: (ContractAddress, EkuboPoolParams, 
 
     let forge_amount: u128 = swap_params.forge_amount.into();
     assert!(forge_amount.is_non_zero(), "Wrong forge amount");
-    assert!(swap_params.swap_data.is_some(), "Wrong swap data");
+    assert!(swap_params.route_node.is_some(), "Wrong swap data");
 
     cheat_caller_address(archabbot.contract_address, user, CheatSpan::TargetCalls(1));
     archabbot.execute_rite(trove_id);
@@ -695,8 +695,8 @@ fn test_cash_topup_exceeds_max_forge_fee_pct_fail() {
     let swap_params = topup.get_swap_params(trove_id);
 
     let forge_amount: u128 = swap_params.forge_amount.into();
-    assert_eq!(forge_amount, config.topup_amount, "Wrong forge amonut");
-    assert!(swap_params.swap_data.is_none(), "Wrong swap data");
+    assert_eq!(forge_amount, config.topup_amount, "Wrong forge amount");
+    assert!(swap_params.route_node.is_none(), "Wrong swap data");
 
     cheat_caller_address(mainnet::SHRINE, mainnet::RECEPTOR, CheatSpan::TargetCalls(1));
     let depegged_price: Wad = (WAD_ONE - WAD_ONE / 10).into(); // 0.9

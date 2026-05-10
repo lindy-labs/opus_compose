@@ -1,5 +1,5 @@
 use core::num::traits::DivRem;
-use ekubo::interfaces::router::{RouteNode, TokenAmount};
+use ekubo::interfaces::router::RouteNode;
 use opus_compose::archabbot::contracts::rites::types::EkuboPoolParams;
 use starknet::ContractAddress;
 use starknet::storage_access::StorePacking;
@@ -7,10 +7,13 @@ use wadray::{Ray, Wad};
 
 const TWO_POW_128: u256 = 0x100000000000000000000000000000000;
 
+// Exact input swap is always used so the `TokenAmount`
+// for the swap can be constructed from `forge_amount`
+// at the call site
 #[derive(Copy, Drop, Serde)]
 pub struct SwapParams {
     pub forge_amount: Wad,
-    pub swap_data: Option<(RouteNode, TokenAmount)>,
+    pub route_node: Option<RouteNode>,
 }
 
 // Packs min_asset_balance and slippage into a felt252.

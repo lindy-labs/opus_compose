@@ -35,7 +35,7 @@ pub mod topup_rite {
         StoragePointerWriteAccess,
     };
     use starknet::{ContractAddress, get_caller_address};
-    use wadray::{Ray, Wad, rmul_wr};
+    use wadray::{RAY_ONE, Ray, Wad, rmul_wr};
     use super::ITopupRite;
 
     //
@@ -178,7 +178,6 @@ pub mod topup_rite {
             self.emit(TopupConfigUpdated { user, trove_id, config });
         }
 
-
         fn is_ready(self: @ContractState, trove_id: u64) -> bool {
             let config = self.topup_configs.read(trove_id);
             // Zero topup amount is used as a flag for disabling auto-topup
@@ -218,14 +217,21 @@ pub mod topup_rite {
                 .on_rite_actions(trove_id, array![Action::Forge(swap_params.forge_amount)].span());
 
             let mut topup_amount = config.topup_amount;
-            if let Some((route_node, token_amount)) = swap_params.swap_data {
+            if let Some(route_node) = swap_params.route_node {
                 let ekubo_router = self.ekubo_router.read();
-                yin.transfer(ekubo_router.contract_address, swap_params.forge_amount.into());
-                ekubo_router.swap(route_node, token_amount);
+                let forge_amount: u128 = swap_params.forge_amount.into();
+                yin.transfer(ekubo_router.contract_address, forge_amount.into());
+                ekubo_router
+                    .swap(
+                        route_node,
+                        TokenAmount { token: yin.contract_address, amount: forge_amount.into() },
+                    );
 
                 // Take slippage into account for non-CASH tokens to
-                // calculate the minimum received
-                let minimum: u128 = rmul_wr(config.topup_amount.into(), config.conditions.slippage)
+                // calculate the minimum amount required
+                let minimum: u128 = rmul_wr(
+                    config.topup_amount.into(), RAY_ONE.into() - config.conditions.slippage,
+                )
                     .into();
                 let router_clear = IClearDispatcher {
                     contract_address: ekubo_router.contract_address,
@@ -292,7 +298,7 @@ pub mod topup_rite {
             cash: ContractAddress,
         ) -> SwapParams {
             if asset == cash {
-                SwapParams { forge_amount: topup_amount.into(), swap_data: Option::None }
+                SwapParams { forge_amount: topup_amount.into(), route_node: Option::None }
             } else {
                 let pool_key: PoolKey = pool_params.into_pool_key(asset, cash);
                 let ekubo_core = self.ekubo_core.read();
@@ -306,17 +312,23 @@ pub mod topup_rite {
                 let route_node = RouteNode { pool_key, sqrt_ratio_limit, skip_ahead: 0 };
                 // Set amount to negative for exact output swap i.e. amount you want to get out of
                 // the pool
-                let token_amount = TokenAmount { token: asset, amount: -(topup_amount.into()) };
-                let quote_delta: Delta = ekubo_router.quote_swap(route_node, token_amount);
-                // Amount is positive i.e. amount you need to provide to the pool
-                let cash_amount: u128 = if cash_is_token0 {
+                let exact_output_token_amount = TokenAmount {
+                    token: asset, amount: -(topup_amount.into()),
+                };
+                let quote_delta: Delta = ekubo_router
+                    .quote_swap(route_node, exact_output_token_amount);
+                // Switch amount to positive for exact input swap
+                // i.e. amount you need/want to provide to the pool
+                let mut cash_amount: u128 = if cash_is_token0 {
                     quote_delta.amount0.try_into().unwrap()
                 } else {
                     quote_delta.amount1.try_into().unwrap()
                 };
+                // Add 1 wei to account for AMM rounding
+                // assuming 1 tick for the general case
+                cash_amount += 1;
                 SwapParams {
-                    forge_amount: cash_amount.into(),
-                    swap_data: Option::Some((route_node, token_amount)),
+                    forge_amount: cash_amount.into(), route_node: Option::Some(route_node),
                 }
             }
         }
