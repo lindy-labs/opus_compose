@@ -383,7 +383,7 @@ pub mod archabbot {
             self.emit(RiteSet { user: caller, trove_id, rite });
         }
 
-        // Note that this does not check:
+        // Note that this view function does not check:
         // 1. the configured max forge fee % is less than the current value;
         //    (because the configured Rite may not forge)
         // 2. the LTV does not exceed the relative threshold at the end of the rite;
@@ -392,7 +392,7 @@ pub mod archabbot {
             self.can_execute_rite_helper(rite, trove_id)
         }
 
-        // Can be called by anyone
+        // Permissionless
         fn execute_rite(ref self: ContractState, trove_id: u64) {
             let rite = self.rites.read(trove_id);
             assert!(self.can_execute_rite_helper(rite, trove_id), "ARC: Cannot execute rite");
@@ -428,7 +428,7 @@ pub mod archabbot {
                 );
         }
 
-        // Only owner can end rite
+        // Permissioned; only owner can end rite
         // Note that the relative threshold is not enforced after ending a rite because
         // it may otherwise brick the ongoing rite.
         fn end_rite(ref self: ContractState, trove_id: u64) {
@@ -445,12 +445,7 @@ pub mod archabbot {
             self.assert_callback();
             self.clear_locks();
 
-            self
-                .emit(
-                    RiteEnded {
-                        caller: get_caller_address(), trove_id, rite: rite.contract_address,
-                    },
-                );
+            self.emit(RiteEnded { caller, trove_id, rite: rite.contract_address });
         }
 
         // Batch callback function to be called by `rite.perform(...)` and `rite.end(...)`
