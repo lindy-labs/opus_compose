@@ -306,7 +306,7 @@ fn test_set_trove_config_zero_asset_reverts() {
 #[test]
 #[fork("MAINNET_CHANTRY")]
 #[should_panic(expected: "TOPUP: Invalid pool params")]
-fn test_set_trove_config_no_swap_path_reverts() {
+fn test_set_trove_config_invalid_pool_params_reverts() {
     let (_archabbot, trove_id, rite_addr) = setup_trove_with_topup_rite();
     let user = archabbot_utils::USER;
     let rite = IRiteDispatcher { contract_address: rite_addr };
@@ -314,6 +314,26 @@ fn test_set_trove_config_no_swap_path_reverts() {
     let config = TopupConfig {
         asset: mainnet::USDC,
         pool_params: EkuboPoolParams { fee: 3000_u128, tick_spacing: 0, extension: Zero::zero() },
+        ..default_topup_config(user),
+    };
+
+    cheat_caller_address(rite_addr, user, CheatSpan::TargetCalls(1));
+    rite.set_trove_config(trove_id, serialize_config(config));
+}
+
+#[test]
+#[fork("MAINNET_CHANTRY")]
+#[should_panic(expected: "TOPUP: Pool price is zero")]
+fn test_set_trove_config_non_existent_pool_reverts() {
+    let (_archabbot, trove_id, rite_addr) = setup_trove_with_topup_rite();
+    let user = archabbot_utils::USER;
+    let rite = IRiteDispatcher { contract_address: rite_addr };
+
+    let config = TopupConfig {
+        asset: mainnet::USDC,
+        pool_params: EkuboPoolParams {
+            fee: 100000000000000000, tick_spacing: 20, extension: Zero::zero(),
+        },
         ..default_topup_config(user),
     };
 

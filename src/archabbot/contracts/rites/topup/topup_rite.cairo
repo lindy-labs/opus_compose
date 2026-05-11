@@ -136,11 +136,11 @@ pub mod topup_rite {
                 .expect('TOPUP: Invalid config');
 
             let user = get_caller_address();
-            let archabbot_abbot = IAbbotDispatcher {
+            let abbot_dispatcher = IAbbotDispatcher {
                 contract_address: self.archabbot.read().contract_address,
             };
             assert!(
-                archabbot_abbot.get_trove_owner(trove_id).expect('TOPUP: Trove not found') == user,
+                abbot_dispatcher.get_trove_owner(trove_id).expect('TOPUP: Trove not found') == user,
                 "{}: Not owner",
                 RITE_ID(),
             );
@@ -171,6 +171,16 @@ pub mod topup_rite {
                     "{}: Slippage out of acceptable range",
                     RITE_ID(),
                 );
+
+                // Catch non-existent pools
+                let _swap_params: SwapParams = self
+                    .get_swap_params_helper(
+                        config.pool_params,
+                        config.asset,
+                        config.topup_amount,
+                        config.conditions.slippage,
+                        self.yin.read().contract_address,
+                    );
             }
 
             self.topup_configs.write(trove_id, config);
@@ -305,6 +315,9 @@ pub mod topup_rite {
                 let ekubo_router = self.ekubo_router.read();
 
                 let pool_price: PoolPrice = ekubo_core.get_pool_price(pool_key);
+                // Catches invalid pools
+                assert!(pool_price.sqrt_ratio.is_non_zero(), "{}: Pool price is zero", RITE_ID());
+
                 let cash_is_token0: bool = pool_key.token0 == cash;
                 let sqrt_ratio_limit = calculate_sqrt_ratio_limit(
                     pool_price.sqrt_ratio, slippage, cash_is_token0,
