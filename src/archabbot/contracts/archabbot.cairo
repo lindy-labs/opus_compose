@@ -375,8 +375,10 @@ pub mod archabbot {
             let caller: ContractAddress = get_caller_address();
             self.assert_trove_owner(caller, trove_id);
 
-            let rite_src5 = ISRC5Dispatcher { contract_address: rite };
-            assert!(rite_src5.supports_interface(IRITE_ID), "ARC: Rite interface not supported");
+            if rite.is_non_zero () {
+                let rite_src5 = ISRC5Dispatcher { contract_address: rite };
+                assert!(rite_src5.supports_interface(IRITE_ID), "ARC: Rite interface not supported");
+            }
 
             self.rites.write(trove_id, IRiteDispatcher { contract_address: rite });
 

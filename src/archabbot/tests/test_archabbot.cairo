@@ -526,6 +526,54 @@ fn test_set_rite_not_owner() {
 
 #[test]
 #[fork("MAINNET_CHANTRY")]
+fn test_set_rite_to_zero_disables_rite() {
+    let test_config = archabbot_utils::archabbot_deploy(None);
+    let user: ContractAddress = archabbot_utils::USER;
+    let trove_id: u64 = archabbot_utils::open_trove_for_user(test_config.abbot, user);
+
+    let rite_addr = deploy_mock_rite(test_config.archabbot.contract_address);
+
+    // Attach rite to trove and configure it
+    cheat_caller_address(test_config.archabbot.contract_address, user, CheatSpan::TargetCalls(2));
+    test_config.archabbot.set_rite(trove_id, rite_addr);
+    test_config.archabbot.set_trove_config(trove_id, archabbot_utils::BASE_TROVE_CONFIG());
+
+    // Configure mock rite so is_ready returns true
+    let rite = IRiteDispatcher { contract_address: rite_addr };
+    let config = default_mock_config();
+    rite.set_trove_config(trove_id, serialize_mock_config(config));
+
+    // Verify rite is attached and ready
+    assert_eq!(test_config.archabbot.get_rite(trove_id), rite_addr, "Rite not set");
+    assert!(test_config.archabbot.can_execute_rite(trove_id), "Rite should be ready");
+
+    let mut spy = spy_events();
+
+    // Reset rite to zero address
+    let zero_address: ContractAddress = Zero::zero();
+    cheat_caller_address(test_config.archabbot.contract_address, user, CheatSpan::TargetCalls(1));
+    test_config.archabbot.set_rite(trove_id, zero_address);
+
+    // Verify rite is detached
+    assert!(test_config.archabbot.get_rite(trove_id).is_zero(), "Rite should be zero");
+    assert!(!test_config.archabbot.can_execute_rite(trove_id), "Rite should not be ready");
+
+    // Verify RiteSet event with zero address
+    spy
+        .assert_emitted(
+            @array![
+                (
+                    test_config.archabbot.contract_address,
+                    archabbot_contract::Event::RiteSet(
+                        archabbot_contract::RiteSet { user, trove_id, rite: zero_address },
+                    ),
+                ),
+            ],
+        );
+}
+
+#[test]
+#[fork("MAINNET_CHANTRY")]
 #[should_panic(expected: "ARC: Cannot execute rite")]
 fn test_execute_default_rite() {
     let test_config = archabbot_utils::archabbot_deploy(None);
