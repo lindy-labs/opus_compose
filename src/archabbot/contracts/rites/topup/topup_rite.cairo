@@ -145,15 +145,25 @@ pub mod topup_rite {
                 RITE_ID(),
             );
 
-            assert!(config.asset.is_non_zero(), "{}: Invalid asset", RITE_ID());
             if config.topup_amount.is_non_zero() {
-                let cash = self.yin.read().contract_address;
-
+                assert!(config.destination.is_non_zero(), "{}: Invalid destination", RITE_ID());
                 assert!(
-                    config.asset == cash || config.pool_params.tick_spacing.is_non_zero(),
-                    "{}: Invalid pool params",
+                    config.conditions.slippage.is_non_zero()
+                        && config.conditions.slippage <= MAX_SLIPPAGE.into(),
+                    "{}: Slippage out of acceptable range",
                     RITE_ID(),
                 );
+
+                assert!(config.asset.is_non_zero(), "{}: Invalid asset", RITE_ID());
+
+                let cash = self.yin.read().contract_address;
+                if config.asset != cash {
+                    assert!(
+                        config.pool_params.tick_spacing.is_non_zero(),
+                        "{}: Invalid pool params",
+                        RITE_ID(),
+                    );
+                }
                 // Prevent multiple topups
                 // There is an edge case where the minimum asset balance is within the slippage
                 // allowance of the topup amount, and the swap outputs less than the minimum
@@ -164,14 +174,7 @@ pub mod topup_rite {
                     "{}: Topup amount less than minimum",
                     RITE_ID(),
                 );
-                assert!(config.destination.is_non_zero(), "{}: Invalid destination", RITE_ID());
-                assert!(
-                    config.conditions.slippage.is_non_zero()
-                        && config.conditions.slippage <= MAX_SLIPPAGE.into(),
-                    "{}: Slippage out of acceptable range",
-                    RITE_ID(),
-                );
-
+                
                 // Catch non-existent pools
                 let _swap_params: SwapParams = self
                     .get_swap_params_helper(
