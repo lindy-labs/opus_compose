@@ -174,7 +174,7 @@ pub mod topup_rite {
                     "{}: Topup amount less than minimum",
                     RITE_ID(),
                 );
-                
+
                 // Catch non-existent pools
                 let _swap_params: SwapParams = self
                     .get_swap_params_helper(
