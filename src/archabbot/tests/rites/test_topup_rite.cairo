@@ -691,6 +691,43 @@ fn test_swap_topup_with_incentive(test_case: (ContractAddress, EkuboPoolParams, 
 
 #[test]
 #[fork("MAINNET_CHANTRY")]
+#[should_panic(expected: 'CLEAR_AT_LEAST_MINIMUM')]
+fn test_swap_topup_clear_less_than_required_fail() {
+    let asset = mainnet::EKUBO;
+    let pool_params = EkuboPoolParams {
+        fee: constants::CASH_EKUBO_TWAMM_POOL_FEE,
+        tick_spacing: constants::EKUBO_TWAMM_TICK_SPACING,
+        extension: mainnet::EKUBO_TWAMM_EXTENSION,
+    };
+    let min_asset_balance = WAD_ONE / 20; // 0.05 EKUBO
+    let topup_amount = (50 * WAD_ONE);
+    let (archabbot, trove_id, rite_addr) = setup_trove_with_topup_rite();
+    let user = archabbot_utils::USER;
+    let rite = IRiteDispatcher { contract_address: rite_addr };
+
+    let slippage: Ray = RAY_PERCENT.into();
+    let config = TopupConfig {
+        asset,
+        pool_params,
+        conditions: TopupConditions { min_asset_balance, slippage },
+        topup_amount,
+        destination: user,
+    };
+
+    cheat_caller_address(rite_addr, user, CheatSpan::TargetCalls(1));
+    rite.set_trove_config(trove_id, serialize_config(config));
+
+    assert_eq!(archabbot.get_rite(trove_id), rite_addr, "Rite not set");
+    assert!(archabbot.can_execute_rite(trove_id), "Rite should be ready");
+    assert!(rite.is_ready(trove_id), "Rite should be ready #2");
+    assert!(rite.has_ended(trove_id), "Rite should have ended");
+
+    cheat_caller_address(archabbot.contract_address, user, CheatSpan::TargetCalls(1));
+    archabbot.execute_rite(trove_id);
+}
+
+#[test]
+#[fork("MAINNET_CHANTRY")]
 #[should_panic(expected: 'SH: forge_fee% > max_forge_fee%')]
 fn test_cash_topup_exceeds_max_forge_fee_pct_fail() {
     let (archabbot, trove_id, rite_addr) = setup_trove_with_topup_rite();
