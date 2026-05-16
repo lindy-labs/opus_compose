@@ -22,7 +22,7 @@ use snforge_std::{
     cheat_caller_address, declare, spy_events,
 };
 use starknet::{ContractAddress, SyscallResultTrait};
-use wadray::{RAY_PERCENT, Ray, WAD_ONE, Wad};
+use wadray::{RAY_ONE, RAY_PERCENT, Ray, WAD_ONE, Wad, rdiv_ww, rmul_wr};
 
 
 //
@@ -500,10 +500,11 @@ fn test_cash_topup() {
                     topup_rite_contract::Event::TopupExecuted(
                         topup_rite_contract::TopupExecuted {
                             trove_id,
-                            forge_amount: config.topup_amount.into(),
                             asset: cash.contract_address,
-                            topup_amount: config.topup_amount,
                             destination: user,
+                            forge_amount: config.topup_amount.into(),
+                            topup_amount: config.topup_amount,
+                            amount_received: config.topup_amount,
                         },
                     ),
                 ),
@@ -665,10 +666,11 @@ fn test_swap_topup_with_incentive(test_case: (ContractAddress, EkuboPoolParams, 
                     topup_rite_contract::Event::TopupExecuted(
                         topup_rite_contract::TopupExecuted {
                             trove_id,
-                            forge_amount: swap_params.forge_amount,
                             asset: asset_token.contract_address,
-                            topup_amount: config.topup_amount,
                             destination: user,
+                            forge_amount: swap_params.forge_amount,
+                            topup_amount: config.topup_amount,
+                            amount_received: config.topup_amount,
                         },
                     ),
                 ),
@@ -724,6 +726,94 @@ fn test_swap_topup_clear_less_than_required_fail() {
 
     cheat_caller_address(archabbot.contract_address, user, CheatSpan::TargetCalls(1));
     archabbot.execute_rite(trove_id);
+}
+
+#[test]
+#[fork("MAINNET_CHANTRY")]
+fn test_swap_topup_within_slippage_pass() {
+    let asset = mainnet::EKUBO;
+    let pool_params = EkuboPoolParams {
+        fee: constants::CASH_EKUBO_TWAMM_POOL_FEE,
+        tick_spacing: constants::EKUBO_TWAMM_TICK_SPACING,
+        extension: mainnet::EKUBO_TWAMM_EXTENSION,
+    };
+    let topup_amount = 24 * WAD_ONE + WAD_ONE / 2; // By trial and error
+    let min_asset_balance = WAD_ONE / 20; // 0.05 EKUBO
+    let (archabbot, trove_id, rite_addr) = setup_trove_with_topup_rite();
+    let user = archabbot_utils::USER;
+
+    let slippage: Ray = (RAY_PERCENT * 3).into(); // 3%
+    let config = TopupConfig {
+        asset,
+        pool_params,
+        conditions: TopupConditions { min_asset_balance, slippage },
+        topup_amount,
+        destination: user,
+    };
+
+    let rite = IRiteDispatcher { contract_address: rite_addr };
+    cheat_caller_address(rite_addr, user, CheatSpan::TargetCalls(1));
+    rite.set_trove_config(trove_id, serialize_config(config));
+
+    assert_eq!(archabbot.get_rite(trove_id), rite_addr, "Rite not set");
+    assert!(archabbot.can_execute_rite(trove_id), "Rite should be ready");
+
+    let topup_dispatcher = ITopupRiteDispatcher { contract_address: rite_addr };
+    let swap_params = topup_dispatcher.get_swap_params(trove_id);
+    let forge_amount: u128 = swap_params.forge_amount.into();
+    assert!(forge_amount.is_non_zero(), "forge_amount is zero");
+    assert!(swap_params.route_node.is_some(), "Expected swap route");
+
+    let asset_token = IERC20Dispatcher { contract_address: asset };
+    let before_user_asset: u128 = asset_token.balance_of(user).try_into().unwrap();
+
+    let mut spy = spy_events();
+
+    cheat_caller_address(archabbot.contract_address, user, CheatSpan::TargetCalls(1));
+    archabbot.execute_rite(trove_id);
+
+    let after_user_asset: u128 = asset_token.balance_of(user).try_into().unwrap();
+    let amount_received = after_user_asset - before_user_asset;
+    let amount_out_slippage = config.topup_amount - amount_received;
+    let max_slippage: u128 = rmul_wr(config.topup_amount.into(), slippage).into();
+    let amount_out_slippage_pct = rdiv_ww(amount_out_slippage.into(), config.topup_amount.into());
+    assert!(amount_out_slippage.is_non_zero(), "Actual out slippage is zero");
+    assert!(amount_out_slippage_pct.is_non_zero(), "Actual out slippage % is zero");
+    assert_le!(amount_out_slippage, max_slippage, "Not within slippage");
+
+    spy
+        .assert_emitted(
+            @array![
+                (
+                    rite_addr,
+                    topup_rite_contract::Event::TopupExecuted(
+                        topup_rite_contract::TopupExecuted {
+                            trove_id,
+                            asset,
+                            destination: user,
+                            forge_amount: swap_params.forge_amount,
+                            topup_amount: config.topup_amount,
+                            amount_received,
+                        },
+                    ),
+                ),
+            ],
+        );
+    spy
+        .assert_emitted(
+            @array![
+                (
+                    archabbot.contract_address,
+                    archabbot_contract::Event::RiteExecuted(
+                        archabbot_contract::RiteExecuted {
+                            caller: user, trove_id, rite: rite_addr, incentive: Zero::zero(),
+                        },
+                    ),
+                ),
+            ],
+        );
+
+    assert!(!archabbot.can_execute_rite(trove_id), "Rite should not be ready");
 }
 
 #[test]

@@ -90,10 +90,13 @@ pub mod topup_rite {
     pub struct TopupExecuted {
         #[key]
         pub trove_id: u64,
-        pub forge_amount: Wad,
+        #[key]
         pub asset: ContractAddress,
-        pub topup_amount: u128,
+        #[key]
         pub destination: ContractAddress,
+        pub forge_amount: Wad,
+        pub topup_amount: u128,
+        pub amount_received: u128,
     }
 
     //
@@ -217,22 +220,24 @@ pub mod topup_rite {
 
             let config = self.topup_configs.read(trove_id);
             let yin = self.yin.read();
-            let swap_params: SwapParams = self
-                .get_swap_params_helper(
-                    config.pool_params,
-                    config.asset,
-                    config.topup_amount,
-                    config.conditions.slippage,
-                    yin.contract_address,
-                );
+            let SwapParams {
+                forge_amount, route_node,
+            } =
+                self
+                    .get_swap_params_helper(
+                        config.pool_params,
+                        config.asset,
+                        config.topup_amount,
+                        config.conditions.slippage,
+                        yin.contract_address,
+                    );
 
-            archabbot
-                .on_rite_actions(trove_id, array![Action::Forge(swap_params.forge_amount)].span());
+            archabbot.on_rite_actions(trove_id, array![Action::Forge(forge_amount)].span());
 
-            let mut topup_amount = config.topup_amount;
-            if let Some(route_node) = swap_params.route_node {
+            let mut amount_received = config.topup_amount;
+            if let Some(route_node) = route_node {
                 let ekubo_router = self.ekubo_router.read();
-                let forge_amount: u128 = swap_params.forge_amount.into();
+                let forge_amount: u128 = forge_amount.into();
                 yin.transfer(ekubo_router.contract_address, forge_amount.into());
                 ekubo_router
                     .swap(
@@ -249,7 +254,7 @@ pub mod topup_rite {
                 let router_clear = IClearDispatcher {
                     contract_address: ekubo_router.contract_address,
                 };
-                topup_amount = router_clear
+                amount_received = router_clear
                     .clear_minimum_to_recipient(
                         EkuboERC20Dispatcher { contract_address: config.asset },
                         minimum.into(),
@@ -258,17 +263,18 @@ pub mod topup_rite {
                     .try_into()
                     .unwrap();
             } else {
-                yin.transfer(config.destination, swap_params.forge_amount.into());
+                yin.transfer(config.destination, forge_amount.into());
             }
 
             self
                 .emit(
                     TopupExecuted {
                         trove_id,
-                        forge_amount: swap_params.forge_amount,
                         asset: config.asset,
-                        topup_amount,
                         destination: config.destination,
+                        forge_amount,
+                        topup_amount: config.topup_amount,
+                        amount_received,
                     },
                 );
         }
