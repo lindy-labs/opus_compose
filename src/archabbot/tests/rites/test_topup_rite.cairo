@@ -450,17 +450,18 @@ fn test_end_rite() {
 fn test_cash_topup() {
     let (archabbot, trove_id, rite_addr) = setup_trove_with_topup_rite();
     let user = archabbot_utils::USER;
+    let destination = archabbot_utils::BAD_GUY;
     let rite = IRiteDispatcher { contract_address: rite_addr };
 
     let mut spy = spy_events();
 
-    let mut config = default_topup_config(user);
+    let mut config = default_topup_config(destination);
     let cash = IERC20Dispatcher { contract_address: mainnet::SHRINE };
     let shrine = IShrineDispatcher { contract_address: mainnet::SHRINE };
-    let before_user_cash_balance: u128 = cash.balance_of(user).try_into().unwrap();
+    let before_destination_cash_balance: u128 = cash.balance_of(destination).try_into().unwrap();
     let before_trove_health: Health = shrine.get_trove_health(trove_id);
 
-    config.conditions.min_asset_balance = before_user_cash_balance + 1;
+    config.conditions.min_asset_balance = before_destination_cash_balance + 1;
 
     cheat_caller_address(rite_addr, user, CheatSpan::TargetCalls(1));
     rite.set_trove_config(trove_id, serialize_config(config));
@@ -480,9 +481,13 @@ fn test_cash_topup() {
     cheat_caller_address(archabbot.contract_address, user, CheatSpan::TargetCalls(1));
     archabbot.execute_rite(trove_id);
 
-    let after_user_cash_balance: u128 = cash.balance_of(user).try_into().unwrap();
-    let expected_user_cash_balance: u128 = before_user_cash_balance + config.topup_amount;
-    assert_eq!(after_user_cash_balance, expected_user_cash_balance, "Topup did not happen");
+    let after_destination_cash_balance: u128 = cash.balance_of(destination).try_into().unwrap();
+    let expected_destination_cash_balance: u128 = before_destination_cash_balance
+        + config.topup_amount;
+    assert_eq!(
+        after_destination_cash_balance, expected_destination_cash_balance,
+        "Topup did not happen",
+    );
 
     let after_trove_health: Health = shrine.get_trove_health(trove_id);
     let expected_trove_debt: Wad = before_trove_health.debt + config.topup_amount.into();
@@ -501,7 +506,7 @@ fn test_cash_topup() {
                         topup_rite_contract::TopupExecuted {
                             trove_id,
                             asset: cash.contract_address,
-                            destination: user,
+                            destination,
                             forge_amount: config.topup_amount.into(),
                             topup_amount: config.topup_amount,
                             amount_received: config.topup_amount,
