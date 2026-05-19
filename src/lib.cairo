@@ -52,21 +52,12 @@ pub mod archabbot {
     pub mod contracts {
         pub mod archabbot;
         pub mod rites {
-            pub mod interfaces;
             pub mod types;
             pub mod utils;
             pub mod topup {
                 pub mod constants;
                 pub mod topup_rite;
                 pub mod types;
-            }
-            pub mod dca {
-                pub mod ekubo_dca_component;
-                pub mod ekubo_oracle_component;
-                pub mod price_dca_rite;
-                pub mod time_dca_rite;
-                pub mod types;
-                pub mod utils;
             }
         }
     }
