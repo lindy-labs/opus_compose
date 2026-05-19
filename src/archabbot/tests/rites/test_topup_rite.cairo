@@ -22,7 +22,7 @@ use snforge_std::{
     cheat_caller_address, declare, spy_events,
 };
 use starknet::{ContractAddress, SyscallResultTrait};
-use wadray::{RAY_ONE, RAY_PERCENT, Ray, WAD_ONE, Wad, rdiv_ww, rmul_wr};
+use wadray::{RAY_PERCENT, Ray, WAD_ONE, Wad, rdiv_ww, rmul_wr};
 
 
 //
@@ -485,8 +485,7 @@ fn test_cash_topup() {
     let expected_destination_cash_balance: u128 = before_destination_cash_balance
         + config.topup_amount;
     assert_eq!(
-        after_destination_cash_balance, expected_destination_cash_balance,
-        "Topup did not happen",
+        after_destination_cash_balance, expected_destination_cash_balance, "Topup did not happen",
     );
 
     let after_trove_health: Health = shrine.get_trove_health(trove_id);
