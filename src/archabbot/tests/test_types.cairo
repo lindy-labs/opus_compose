@@ -54,8 +54,7 @@ fn test_trove_config_packing_max_fee_pct() {
 #[test]
 fn test_trove_config_packing_max_incentive() {
     // incentive capped at 2^99 - 1 (99 bits) — the maximum that fits in the packing layout
-    // Note: archabbot.cairo MAX_INCENTIVE = 0x7FFFFFFFFFFFFFFFFFFFFFFFFFFF (2^111-1) exceeds
-    // the 99-bit allocation and would not roundtrip correctly through packing.
+    // This matches archabbot.cairo MAX_INCENTIVE = 0x7FFFFFFFFFFFFFFFFFFFFFFFF (2^99 - 1).
     let max_incentive: u128 = 0x7FFFFFFFFFFFFFFFFFFFFFFFF; // 2^99 - 1
     assert_trove_config_roundtrip(0_u128.into(), 0_u128.into(), max_incentive.into());
 }

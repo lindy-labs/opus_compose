@@ -87,7 +87,7 @@ fn setup_trove_with_topup_rite() -> (ICelebrantDispatcher, u64, ContractAddress)
 //
 
 #[test]
-#[fork("MAINNET_CHANTRY")]
+#[fork("MAINNET_ARCHABBOT")]
 fn test_topup_rite_constructor() {
     let test_config = archabbot_utils::archabbot_deploy(None);
     let rite_addr = deploy_topup_rite(test_config.archabbot.contract_address);
@@ -101,7 +101,7 @@ fn test_topup_rite_constructor() {
 }
 
 #[test]
-#[fork("MAINNET_CHANTRY")]
+#[fork("MAINNET_ARCHABBOT")]
 fn test_set_trove_config_cash_asset_success() {
     let (_archabbot, trove_id, rite_addr) = setup_trove_with_topup_rite();
     let user = archabbot_utils::USER;
@@ -129,7 +129,7 @@ fn test_set_trove_config_cash_asset_success() {
 }
 
 #[test]
-#[fork("MAINNET_CHANTRY")]
+#[fork("MAINNET_ARCHABBOT")]
 fn test_balance_above_minimum_asset_balance() {
     let (archabbot, trove_id, rite_addr) = setup_trove_with_topup_rite();
     let user = archabbot_utils::USER;
@@ -179,7 +179,7 @@ fn test_balance_above_minimum_asset_balance() {
 }
 
 #[test]
-#[fork("MAINNET_CHANTRY")]
+#[fork("MAINNET_ARCHABBOT")]
 fn test_disable_trove_config() {
     let (archabbot, trove_id, rite_addr) = setup_trove_with_topup_rite();
     let user = archabbot_utils::USER;
@@ -215,7 +215,7 @@ fn test_disable_trove_config() {
 }
 
 #[test]
-#[fork("MAINNET_CHANTRY")]
+#[fork("MAINNET_ARCHABBOT")]
 fn test_set_trove_config_max_slippage() {
     let (_archabbot, trove_id, rite_addr) = setup_trove_with_topup_rite();
     let user = archabbot_utils::USER;
@@ -239,7 +239,7 @@ fn test_set_trove_config_max_slippage() {
 }
 
 #[test]
-#[fork("MAINNET_CHANTRY")]
+#[fork("MAINNET_ARCHABBOT")]
 #[should_panic(expected: "TOPUP: Slippage out of acceptable range")]
 fn test_set_trove_config_zero_slippage_reverts() {
     let (_archabbot, trove_id, rite_addr) = setup_trove_with_topup_rite();
@@ -258,7 +258,7 @@ fn test_set_trove_config_zero_slippage_reverts() {
 }
 
 #[test]
-#[fork("MAINNET_CHANTRY")]
+#[fork("MAINNET_ARCHABBOT")]
 #[should_panic(expected: "TOPUP: Slippage out of acceptable range")]
 fn test_set_trove_config_slippage_exceeds_max_reverts() {
     let (_archabbot, trove_id, rite_addr) = setup_trove_with_topup_rite();
@@ -277,7 +277,7 @@ fn test_set_trove_config_slippage_exceeds_max_reverts() {
 }
 
 #[test]
-#[fork("MAINNET_CHANTRY")]
+#[fork("MAINNET_ARCHABBOT")]
 #[should_panic(expected: "TOPUP: Not owner")]
 fn test_set_trove_config_not_owner_reverts() {
     let (_archabbot, trove_id, rite_addr) = setup_trove_with_topup_rite();
@@ -290,7 +290,7 @@ fn test_set_trove_config_not_owner_reverts() {
 }
 
 #[test]
-#[fork("MAINNET_CHANTRY")]
+#[fork("MAINNET_ARCHABBOT")]
 #[should_panic(expected: "TOPUP: Invalid asset")]
 fn test_set_trove_config_zero_asset_reverts() {
     let (_archabbot, trove_id, rite_addr) = setup_trove_with_topup_rite();
@@ -304,7 +304,7 @@ fn test_set_trove_config_zero_asset_reverts() {
 }
 
 #[test]
-#[fork("MAINNET_CHANTRY")]
+#[fork("MAINNET_ARCHABBOT")]
 #[should_panic(expected: "TOPUP: Invalid pool params")]
 fn test_set_trove_config_invalid_pool_params_reverts() {
     let (_archabbot, trove_id, rite_addr) = setup_trove_with_topup_rite();
@@ -322,7 +322,7 @@ fn test_set_trove_config_invalid_pool_params_reverts() {
 }
 
 #[test]
-#[fork("MAINNET_CHANTRY")]
+#[fork("MAINNET_ARCHABBOT")]
 #[should_panic(expected: "TOPUP: Pool price is zero")]
 fn test_set_trove_config_non_existent_pool_reverts() {
     let (_archabbot, trove_id, rite_addr) = setup_trove_with_topup_rite();
@@ -342,7 +342,7 @@ fn test_set_trove_config_non_existent_pool_reverts() {
 }
 
 #[test]
-#[fork("MAINNET_CHANTRY")]
+#[fork("MAINNET_ARCHABBOT")]
 #[should_panic(expected: "TOPUP: Topup amount less than minimum")]
 fn test_set_trove_config_topup_amount_below_min_balance_reverts() {
     let (_archabbot, trove_id, rite_addr) = setup_trove_with_topup_rite();
@@ -359,7 +359,7 @@ fn test_set_trove_config_topup_amount_below_min_balance_reverts() {
 }
 
 #[test]
-#[fork("MAINNET_CHANTRY")]
+#[fork("MAINNET_ARCHABBOT")]
 #[should_panic(expected: "TOPUP: Invalid destination")]
 fn test_set_trove_config_zero_destination_reverts() {
     let (_archabbot, trove_id, rite_addr) = setup_trove_with_topup_rite();
@@ -373,7 +373,7 @@ fn test_set_trove_config_zero_destination_reverts() {
 }
 
 #[test]
-#[fork("MAINNET_CHANTRY")]
+#[fork("MAINNET_ARCHABBOT")]
 fn test_is_ready_returns_false_when_no_config() {
     let test_config = archabbot_utils::archabbot_deploy(None);
     let rite_addr = deploy_topup_rite(test_config.archabbot.contract_address);
@@ -384,7 +384,7 @@ fn test_is_ready_returns_false_when_no_config() {
 }
 
 #[test]
-#[fork("MAINNET_CHANTRY")]
+#[fork("MAINNET_ARCHABBOT")]
 #[should_panic(expected: "TOPUP: Caller is not Archabbot")]
 fn test_perform_non_archabbot_caller_reverts() {
     let (_archabbot, trove_id, rite_addr) = setup_trove_with_topup_rite();
@@ -400,7 +400,7 @@ fn test_perform_non_archabbot_caller_reverts() {
 }
 
 #[test]
-#[fork("MAINNET_CHANTRY")]
+#[fork("MAINNET_ARCHABBOT")]
 #[should_panic(expected: "TOPUP: Caller is not Archabbot")]
 fn test_end_non_archabbot_caller_reverts() {
     let (_archabbot, trove_id, rite_addr) = setup_trove_with_topup_rite();
@@ -416,7 +416,7 @@ fn test_end_non_archabbot_caller_reverts() {
 }
 
 #[test]
-#[fork("MAINNET_CHANTRY")]
+#[fork("MAINNET_ARCHABBOT")]
 fn test_end_rite() {
     let (archabbot, trove_id, rite_addr) = setup_trove_with_topup_rite();
     let user = archabbot_utils::USER;
@@ -446,7 +446,7 @@ fn test_end_rite() {
 }
 
 #[test]
-#[fork("MAINNET_CHANTRY")]
+#[fork("MAINNET_ARCHABBOT")]
 fn test_cash_topup() {
     let (archabbot, trove_id, rite_addr) = setup_trove_with_topup_rite();
     let user = archabbot_utils::USER;
@@ -530,7 +530,7 @@ fn test_cash_topup() {
 }
 
 #[test]
-#[fork("MAINNET_CHANTRY")]
+#[fork("MAINNET_ARCHABBOT")]
 #[should_panic(expected: "ARC: LTV exceeds relative threshold")]
 fn test_cash_topup_exceeds_relative_ltv_fail() {
     let (archabbot, trove_id, rite_addr) = setup_trove_with_topup_rite();
@@ -572,7 +572,7 @@ fn test_cash_topup_exceeds_relative_ltv_fail() {
 
 // Parametrized across EKUBO (CASH is token0) and USDC (CASH is token1)
 #[test]
-#[fork("MAINNET_CHANTRY")]
+#[fork("MAINNET_ARCHABBOT")]
 #[test_case(
     name: "ekubo",
     (
@@ -696,7 +696,7 @@ fn test_swap_topup_with_incentive(test_case: (ContractAddress, EkuboPoolParams, 
 }
 
 #[test]
-#[fork("MAINNET_CHANTRY")]
+#[fork("MAINNET_ARCHABBOT")]
 #[should_panic(expected: 'CLEAR_AT_LEAST_MINIMUM')]
 fn test_swap_topup_clear_less_than_required_fail() {
     let asset = mainnet::EKUBO;
@@ -733,7 +733,7 @@ fn test_swap_topup_clear_less_than_required_fail() {
 }
 
 #[test]
-#[fork("MAINNET_CHANTRY")]
+#[fork("MAINNET_ARCHABBOT")]
 fn test_swap_topup_within_slippage_pass() {
     let asset = mainnet::EKUBO;
     let pool_params = EkuboPoolParams {
@@ -821,7 +821,7 @@ fn test_swap_topup_within_slippage_pass() {
 }
 
 #[test]
-#[fork("MAINNET_CHANTRY")]
+#[fork("MAINNET_ARCHABBOT")]
 #[should_panic(expected: 'SH: forge_fee% > max_forge_fee%')]
 fn test_cash_topup_exceeds_max_forge_fee_pct_fail() {
     let (archabbot, trove_id, rite_addr) = setup_trove_with_topup_rite();

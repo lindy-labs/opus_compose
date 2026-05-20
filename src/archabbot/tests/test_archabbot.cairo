@@ -29,7 +29,7 @@ const EXISTING_TROVE_IDS: [u64; 2] = [EXISTING_TROVE_ID, 282];
 //
 
 #[test]
-#[fork("MAINNET_CHANTRY")]
+#[fork("MAINNET_ARCHABBOT")]
 fn test_archabbot_deployment() {
     let abbot = IAbbotDispatcher { contract_address: mainnet::ABBOT };
     let expected_troves_count: u64 = abbot.get_troves_count();
@@ -46,7 +46,7 @@ fn test_archabbot_deployment() {
 //
 
 #[test]
-#[fork("MAINNET_CHANTRY")]
+#[fork("MAINNET_ARCHABBOT")]
 #[should_panic(expected: "ARC: Disabled")]
 fn test_open_trove_reverts() {
     let test_config = archabbot_utils::archabbot_deploy(None);
@@ -78,7 +78,7 @@ fn test_open_trove_reverts() {
 // ---------------------------------------------------------------------------
 
 #[test]
-#[fork("MAINNET_CHANTRY")]
+#[fork("MAINNET_ARCHABBOT")]
 fn test_trove_ownership() {
     let test_config = archabbot_utils::archabbot_deploy(None);
 
@@ -95,7 +95,7 @@ fn test_trove_ownership() {
 }
 
 #[test]
-#[fork("MAINNET_CHANTRY")]
+#[fork("MAINNET_ARCHABBOT")]
 fn test_trove_deposit_success() {
     let test_config = archabbot_utils::archabbot_deploy(None);
     let user: ContractAddress = mainnet::EXISTING_TROVE_OWNER;
@@ -142,7 +142,7 @@ fn test_trove_deposit_success() {
 }
 
 #[test]
-#[fork("MAINNET_CHANTRY")]
+#[fork("MAINNET_ARCHABBOT")]
 fn test_trove_withdraw_success() {
     let test_config = archabbot_utils::archabbot_deploy(None);
     let user: ContractAddress = mainnet::EXISTING_TROVE_OWNER;
@@ -197,7 +197,7 @@ fn test_trove_withdraw_success() {
 }
 
 #[test]
-#[fork("MAINNET_CHANTRY")]
+#[fork("MAINNET_ARCHABBOT")]
 fn test_trove_forge_success() {
     let test_config = archabbot_utils::archabbot_deploy(None);
     let user: ContractAddress = mainnet::EXISTING_TROVE_OWNER;
@@ -222,7 +222,7 @@ fn test_trove_forge_success() {
 }
 
 #[test]
-#[fork("MAINNET_CHANTRY")]
+#[fork("MAINNET_ARCHABBOT")]
 fn test_trove_melt_success() {
     let test_config = archabbot_utils::archabbot_deploy(None);
     let user: ContractAddress = mainnet::EXISTING_TROVE_OWNER;
@@ -255,7 +255,7 @@ fn test_trove_melt_success() {
 }
 
 #[test]
-#[fork("MAINNET_CHANTRY")]
+#[fork("MAINNET_ARCHABBOT")]
 fn test_trove_close_success() {
     let test_config = archabbot_utils::archabbot_deploy(None);
     let user: ContractAddress = archabbot_utils::USER;
@@ -313,7 +313,7 @@ fn test_trove_close_success() {
 }
 
 #[test]
-#[fork("MAINNET_CHANTRY")]
+#[fork("MAINNET_ARCHABBOT")]
 #[should_panic(expected: "ARC: Not trove owner")]
 fn test_trove_close_not_owner_reverts() {
     let test_config = archabbot_utils::archabbot_deploy(None);
@@ -326,7 +326,7 @@ fn test_trove_close_not_owner_reverts() {
 }
 
 #[test]
-#[fork("MAINNET_CHANTRY")]
+#[fork("MAINNET_ARCHABBOT")]
 #[should_panic(expected: "ARC: Not trove owner")]
 fn test_trove_deposit_not_owner_reverts() {
     let test_config = archabbot_utils::archabbot_deploy(None);
@@ -342,7 +342,7 @@ fn test_trove_deposit_not_owner_reverts() {
 }
 
 #[test]
-#[fork("MAINNET_CHANTRY")]
+#[fork("MAINNET_ARCHABBOT")]
 #[should_panic(expected: "ARC: Not trove owner")]
 fn test_trove_withdraw_not_owner_reverts() {
     let test_config = archabbot_utils::archabbot_deploy(None);
@@ -357,7 +357,7 @@ fn test_trove_withdraw_not_owner_reverts() {
 }
 
 #[test]
-#[fork("MAINNET_CHANTRY")]
+#[fork("MAINNET_ARCHABBOT")]
 #[should_panic(expected: "ARC: Not trove owner")]
 fn test_trove_forge_not_owner_reverts() {
     let test_config = archabbot_utils::archabbot_deploy(None);
@@ -379,7 +379,7 @@ fn test_trove_forge_not_owner_reverts() {
 //
 
 #[test]
-#[fork("MAINNET_CHANTRY")]
+#[fork("MAINNET_ARCHABBOT")]
 fn test_default_config() {
     let test_config = archabbot_utils::archabbot_deploy(None);
     let user: ContractAddress = archabbot_utils::USER;
@@ -391,7 +391,7 @@ fn test_default_config() {
 }
 
 #[test]
-#[fork("MAINNET_CHANTRY")]
+#[fork("MAINNET_ARCHABBOT")]
 fn test_set_config_capped() {
     let test_config = archabbot_utils::archabbot_deploy(None);
     let user: ContractAddress = archabbot_utils::USER;
@@ -441,7 +441,7 @@ fn test_set_config_capped() {
 }
 
 #[test]
-#[fork("MAINNET_CHANTRY")]
+#[fork("MAINNET_ARCHABBOT")]
 fn test_set_config_exact_max_values() {
     let test_config = archabbot_utils::archabbot_deploy(None);
     let user: ContractAddress = archabbot_utils::USER;
@@ -486,7 +486,7 @@ fn test_set_config_exact_max_values() {
 }
 
 #[test]
-#[fork("MAINNET_CHANTRY")]
+#[fork("MAINNET_ARCHABBOT")]
 #[should_panic(expected: "ARC: Not trove owner")]
 fn test_set_config_not_owner() {
     let test_config = archabbot_utils::archabbot_deploy(None);
@@ -501,7 +501,7 @@ fn test_set_config_not_owner() {
 }
 
 #[test]
-#[fork("MAINNET_CHANTRY")]
+#[fork("MAINNET_ARCHABBOT")]
 fn test_default_rite() {
     let test_config = archabbot_utils::archabbot_deploy(None);
     let user: ContractAddress = archabbot_utils::USER;
@@ -511,7 +511,7 @@ fn test_default_rite() {
 }
 
 #[test]
-#[fork("MAINNET_CHANTRY")]
+#[fork("MAINNET_ARCHABBOT")]
 #[should_panic(expected: "ARC: Not trove owner")]
 fn test_set_rite_not_owner() {
     let test_config = archabbot_utils::archabbot_deploy(None);
@@ -525,7 +525,7 @@ fn test_set_rite_not_owner() {
 }
 
 #[test]
-#[fork("MAINNET_CHANTRY")]
+#[fork("MAINNET_ARCHABBOT")]
 fn test_set_rite_to_zero_disables_rite() {
     let test_config = archabbot_utils::archabbot_deploy(None);
     let user: ContractAddress = archabbot_utils::USER;
@@ -573,7 +573,7 @@ fn test_set_rite_to_zero_disables_rite() {
 }
 
 #[test]
-#[fork("MAINNET_CHANTRY")]
+#[fork("MAINNET_ARCHABBOT")]
 #[should_panic(expected: "ARC: Cannot execute rite")]
 fn test_execute_default_rite() {
     let test_config = archabbot_utils::archabbot_deploy(None);
@@ -584,7 +584,7 @@ fn test_execute_default_rite() {
 }
 
 #[test]
-#[fork("MAINNET_CHANTRY")]
+#[fork("MAINNET_ARCHABBOT")]
 #[should_panic(expected: "ARC: No rite set")]
 fn test_end_default_rite() {
     let test_config = archabbot_utils::archabbot_deploy(None);
@@ -596,7 +596,7 @@ fn test_end_default_rite() {
 }
 
 #[test]
-#[fork("MAINNET_CHANTRY")]
+#[fork("MAINNET_ARCHABBOT")]
 fn test_can_execute_rite_invalid_trove() {
     let test_config = archabbot_utils::archabbot_deploy(None);
 
@@ -607,7 +607,7 @@ fn test_can_execute_rite_invalid_trove() {
 }
 
 #[test]
-#[fork("MAINNET_CHANTRY")]
+#[fork("MAINNET_ARCHABBOT")]
 #[should_panic(expected: "ARC: Caller not rite")]
 fn test_on_rite_actions_not_rite() {
     let test_config = archabbot_utils::archabbot_deploy(None);
@@ -619,7 +619,7 @@ fn test_on_rite_actions_not_rite() {
 }
 
 #[test]
-#[fork("MAINNET_CHANTRY")]
+#[fork("MAINNET_ARCHABBOT")]
 #[should_panic(expected: 'ENTRYPOINT_NOT_FOUND')]
 fn test_set_invalid_rite() {
     let test_config = archabbot_utils::archabbot_deploy(None);
@@ -631,7 +631,7 @@ fn test_set_invalid_rite() {
 }
 
 #[test]
-#[fork("MAINNET_CHANTRY")]
+#[fork("MAINNET_ARCHABBOT")]
 #[should_panic(expected: "ARC: Rite interface not supported")]
 fn test_set_rite_src5_without_rite_interface_reverts() {
     let test_config = archabbot_utils::archabbot_deploy(None);
@@ -648,7 +648,7 @@ fn test_set_rite_src5_without_rite_interface_reverts() {
 }
 
 #[test]
-#[fork("MAINNET_CHANTRY")]
+#[fork("MAINNET_ARCHABBOT")]
 #[should_panic(expected: "ARC: Not trove owner")]
 fn test_end_rite_not_owner() {
     let test_config = archabbot_utils::archabbot_deploy(None);
@@ -707,7 +707,7 @@ fn setup_trove_with_mock_rite() -> (archabbot_utils::ArchabbotTestConfig, u64, C
 }
 
 #[test]
-#[fork("MAINNET_CHANTRY")]
+#[fork("MAINNET_ARCHABBOT")]
 #[should_panic(expected: "ARC: Not trove owner")]
 fn test_set_mock_rite_pass() {
     let test_config = archabbot_utils::archabbot_deploy(None);
@@ -735,7 +735,7 @@ fn test_set_mock_rite_pass() {
 
 
 #[test]
-#[fork("MAINNET_CHANTRY")]
+#[fork("MAINNET_ARCHABBOT")]
 fn test_mock_rite_has_ended() {
     let (_test_config, trove_id, rite_addr) = setup_trove_with_mock_rite();
     let rite = IRiteDispatcher { contract_address: rite_addr };
@@ -744,7 +744,7 @@ fn test_mock_rite_has_ended() {
 }
 
 #[test]
-#[fork("MAINNET_CHANTRY")]
+#[fork("MAINNET_ARCHABBOT")]
 #[test_case(true)]
 #[test_case(false)]
 fn test_mock_rite_deposit(is_perform: bool) {
@@ -813,7 +813,7 @@ fn test_mock_rite_deposit(is_perform: bool) {
 }
 
 #[test]
-#[fork("MAINNET_CHANTRY")]
+#[fork("MAINNET_ARCHABBOT")]
 #[test_case(true)]
 #[test_case(false)]
 fn test_mock_rite_withdraw(is_perform: bool) {
@@ -901,7 +901,7 @@ fn test_mock_rite_withdraw(is_perform: bool) {
 }
 
 #[test]
-#[fork("MAINNET_CHANTRY")]
+#[fork("MAINNET_ARCHABBOT")]
 #[should_panic(expected: "ARC: LTV exceeds relative threshold")]
 fn test_execute_mock_rite_exceeds_relative_threshold_reverts() {
     let (test_config, trove_id, rite_addr) = setup_trove_with_mock_rite();
@@ -934,7 +934,7 @@ fn test_execute_mock_rite_exceeds_relative_threshold_reverts() {
 }
 
 #[test]
-#[fork("MAINNET_CHANTRY")]
+#[fork("MAINNET_ARCHABBOT")]
 #[should_panic(expected: "ARC: LTV exceeds relative threshold")]
 fn test_execute_incentive_exceeds_relative_threshold_reverts() {
     let (test_config, trove_id, rite_addr) = setup_trove_with_mock_rite();
@@ -968,7 +968,7 @@ fn test_execute_incentive_exceeds_relative_threshold_reverts() {
 }
 
 #[test]
-#[fork("MAINNET_CHANTRY")]
+#[fork("MAINNET_ARCHABBOT")]
 fn test_end_mock_rite_exceeds_relative_threshold_pass() {
     let (test_config, trove_id, rite_addr) = setup_trove_with_mock_rite();
     let user = archabbot_utils::USER;
@@ -1003,7 +1003,7 @@ fn test_end_mock_rite_exceeds_relative_threshold_pass() {
 }
 
 #[test]
-#[fork("MAINNET_CHANTRY")]
+#[fork("MAINNET_ARCHABBOT")]
 #[should_panic(expected: "ARC: Caller not rite")]
 #[test_case(true)]
 #[test_case(false)]
@@ -1031,7 +1031,7 @@ fn test_mock_rite_malicious_different_rite_reverts(is_perform: bool) {
 }
 
 #[test]
-#[fork("MAINNET_CHANTRY")]
+#[fork("MAINNET_ARCHABBOT")]
 #[should_panic(expected: "ARC: Execution not started")]
 #[test_case(true)]
 #[test_case(false)]
@@ -1072,7 +1072,7 @@ fn test_mock_rite_malicious_same_rite_reverts(is_perform: bool) {
 }
 
 #[test]
-#[fork("MAINNET_CHANTRY")]
+#[fork("MAINNET_ARCHABBOT")]
 #[should_panic(expected: "MOCK_RITE: Caller is not Archabbot")]
 #[test_case(true)]
 #[test_case(false)]
@@ -1093,7 +1093,7 @@ fn test_mock_rite_non_archabbot_caller_reverts(is_perform: bool) {
 }
 
 #[test]
-#[fork("MAINNET_CHANTRY")]
+#[fork("MAINNET_ARCHABBOT")]
 #[should_panic(expected: "ARC: Cannot execute rite")]
 fn test_mock_rite_execute_not_ready_reverts() {
     let (test_config, trove_id, _rite_addr) = setup_trove_with_mock_rite();
@@ -1138,7 +1138,7 @@ fn setup_trove_with_no_callback_rite() -> (
 }
 
 #[test]
-#[fork("MAINNET_CHANTRY")]
+#[fork("MAINNET_ARCHABBOT")]
 #[should_panic(expected: "ARC: Callback not executed")]
 #[test_case(true)]
 #[test_case(false)]
@@ -1166,7 +1166,7 @@ fn deploy_reentrant_rite(archabbot_address: ContractAddress) -> ContractAddress 
 }
 
 #[test]
-#[fork("MAINNET_CHANTRY")]
+#[fork("MAINNET_ARCHABBOT")]
 #[should_panic(expected: "ARC: Another trove in execution")]
 fn test_execute_rite_parallel_execution_reverts() {
     let test_config = archabbot_utils::archabbot_deploy(None);
@@ -1210,7 +1210,7 @@ fn test_execute_rite_parallel_execution_reverts() {
 }
 
 #[test]
-#[fork("MAINNET_CHANTRY")]
+#[fork("MAINNET_ARCHABBOT")]
 #[should_panic(expected: "ARC: Another trove in execution")]
 fn test_end_rite_parallel_execution_reverts() {
     let test_config = archabbot_utils::archabbot_deploy(None);

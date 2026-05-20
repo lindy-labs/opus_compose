@@ -48,6 +48,6 @@ block_id.number = "1060000"
 
 
 [[tool.snforge.fork]]
-name = "MAINNET_CHANTRY"
+name = "MAINNET_ARCHABBOT"
 url = "$NODE_URL"
 block_id.number = "7407535"
