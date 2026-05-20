@@ -602,29 +602,21 @@ pub mod archabbot {
                         );
 
                     // Borrow yin from trove and send to this contract to repay the flash mint
-                    shrine
-                        .forge(initiator, trove_id, amount.try_into().unwrap(), max_forge_fee_pct);
+                    let amount: Wad = amount.try_into().unwrap();
+                    shrine.forge(initiator, trove_id, amount, max_forge_fee_pct);
 
                     let trove_health: Health = shrine.get_trove_health(trove_id);
                     assert!(trove_health.ltv <= max_ltv, "ARC: Exceeds max LTV");
 
-                    self
-                        .emit(
-                            LeverUp {
-                                user,
-                                trove_id,
-                                amount: amount.try_into().unwrap(),
-                                yang,
-                                min_asset_amount,
-                            },
-                        );
+                    self.emit(LeverUp { user, trove_id, amount, yang, min_asset_amount });
                 },
                 ModifyLeverAction::LeverDown(params) => {
                     let LeverDownParams { trove_id, max_ltv, yang, yang_amt, swaps } = params;
                     let yang_erc20 = IERC20Dispatcher { contract_address: yang };
 
                     // Use the flash minted yin to repay the trove's debt
-                    shrine.melt(archabbot, trove_id, amount.try_into().unwrap());
+                    let amount_wad: Wad = amount.try_into().unwrap();
+                    shrine.melt(archabbot, trove_id, amount_wad);
 
                     // Withdraw collateral to this contract
                     let asset_amt: u128 = self
@@ -673,7 +665,7 @@ pub mod archabbot {
                             LeverDown {
                                 user,
                                 trove_id,
-                                amount: amount.try_into().unwrap(),
+                                amount: amount_wad,
                                 yang,
                                 yang_asset_amount_withdrawn: asset_amt,
                                 yang_asset_amount_redeposited: remainder_asset,
