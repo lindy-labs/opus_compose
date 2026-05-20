@@ -185,7 +185,7 @@ pub mod topup_rite {
                         config.asset,
                         config.topup_amount,
                         config.conditions.slippage,
-                        self.yin.read().contract_address,
+                        cash,
                     );
             }
 
