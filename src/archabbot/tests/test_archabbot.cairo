@@ -526,6 +526,18 @@ fn test_set_rite_not_owner() {
 
 #[test]
 #[fork("MAINNET_ARCHABBOT")]
+#[should_panic(expected: "ARC: Not trove owner")]
+fn test_set_rite_nonexistent_trove_reverts() {
+    let test_config = archabbot_utils::archabbot_deploy(None);
+    let user: ContractAddress = archabbot_utils::USER;
+    let nonexistent_trove_id: u64 = 999999;
+
+    cheat_caller_address(test_config.archabbot.contract_address, user, CheatSpan::TargetCalls(1));
+    test_config.archabbot.set_rite(nonexistent_trove_id, user);
+}
+
+#[test]
+#[fork("MAINNET_ARCHABBOT")]
 fn test_set_rite_to_zero_disables_rite() {
     let test_config = archabbot_utils::archabbot_deploy(None);
     let user: ContractAddress = archabbot_utils::USER;
