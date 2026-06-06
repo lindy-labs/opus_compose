@@ -95,6 +95,7 @@ pub mod topup_rite {
         #[key]
         pub destination: ContractAddress,
         pub forge_amount: Wad,
+        pub excess: Wad,
         pub topup_amount: u128,
         pub amount_received: u128,
     }
@@ -235,11 +236,12 @@ pub mod topup_rite {
             archabbot.on_rite_actions(trove_id, array![Action::Forge(forge_amount)].span());
 
             let mut amount_received = config.topup_amount;
+            let mut excess: Wad = Zero::zero();
             if let Some(route_node) = route_node {
                 let ekubo_router = self.ekubo_router.read();
                 let forge_amount: u128 = forge_amount.into();
                 yin.transfer(ekubo_router.contract_address, forge_amount.into());
-                ekubo_router
+                let delta = ekubo_router
                     .swap(
                         route_node,
                         TokenAmount { token: yin.contract_address, amount: forge_amount.into() },
@@ -262,6 +264,25 @@ pub mod topup_rite {
                     )
                     .try_into()
                     .unwrap();
+
+                // Handle partial fills when sqrt ratio hits limit
+                let cash_is_token0: bool = route_node.pool_key.token0 == yin.contract_address;
+                let cash_delta = if cash_is_token0 {
+                    delta.amount0
+                } else {
+                    delta.amount1
+                };
+                if cash_delta != forge_amount.into() {
+                    excess = router_clear
+                        .clear_minimum_to_recipient(
+                            EkuboERC20Dispatcher { contract_address: yin.contract_address },
+                            0,
+                            archabbot.contract_address,
+                        )
+                        .try_into()
+                        .unwrap();
+                    archabbot.on_rite_actions(trove_id, array![Action::Melt(excess)].span())
+                }
             } else {
                 yin.transfer(config.destination, forge_amount.into());
             }
@@ -273,6 +294,7 @@ pub mod topup_rite {
                         asset: config.asset,
                         destination: config.destination,
                         forge_amount,
+                        excess,
                         topup_amount: config.topup_amount,
                         amount_received,
                     },
@@ -341,14 +363,11 @@ pub mod topup_rite {
                     .quote_swap(route_node, exact_output_token_amount);
                 // Switch amount to positive for exact input swap
                 // i.e. amount you need/want to provide to the pool
-                let mut cash_amount: u128 = if cash_is_token0 {
+                let cash_amount: u128 = if cash_is_token0 {
                     quote_delta.amount0.try_into().unwrap()
                 } else {
                     quote_delta.amount1.try_into().unwrap()
                 };
-                // Add 1 wei to account for AMM rounding
-                // assuming 1 tick for the general case
-                cash_amount += 1;
                 SwapParams {
                     forge_amount: cash_amount.into(), route_node: Option::Some(route_node),
                 }

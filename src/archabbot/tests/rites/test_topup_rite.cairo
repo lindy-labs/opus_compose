@@ -1,6 +1,7 @@
 use core::num::traits::Zero;
 use opus::interfaces::{IShrineDispatcher, IShrineDispatcherTrait};
 use opus::types::Health;
+use opus::utils::assertions::assert_equalish;
 use opus_compose::addresses::mainnet;
 use opus_compose::archabbot::contracts::archabbot::archabbot as archabbot_contract;
 use opus_compose::archabbot::contracts::rites::topup::constants::MAX_SLIPPAGE;
@@ -507,6 +508,7 @@ fn test_cash_topup() {
                             asset: cash.contract_address,
                             destination,
                             forge_amount: config.topup_amount.into(),
+                            excess: Zero::zero(),
                             topup_amount: config.topup_amount,
                             amount_received: config.topup_amount,
                         },
@@ -651,8 +653,9 @@ fn test_swap_topup_with_incentive(test_case: (ContractAddress, EkuboPoolParams, 
     assert_eq!(after_user_cash_balance, expected_user_cash_balance, "Wrong incentive");
 
     let after_user_asset_balance: u128 = asset_token.balance_of(user).try_into().unwrap();
-    let expected_user_asset_balance: u128 = before_user_asset_balance + config.topup_amount;
-    assert_eq!(after_user_asset_balance, expected_user_asset_balance, "Topup did not happen");
+    let asset_topped_up: u128 = after_user_asset_balance - before_user_asset_balance;
+    let error_margin: u128 = 1;
+    assert_equalish(asset_topped_up, config.topup_amount, error_margin, 'Topup did not happen');
 
     let after_trove_health: Health = shrine.get_trove_health(trove_id);
     let expected_trove_debt: Wad = before_trove_health.debt + forge_amount.into() + incentive;
@@ -673,8 +676,9 @@ fn test_swap_topup_with_incentive(test_case: (ContractAddress, EkuboPoolParams, 
                             asset: asset_token.contract_address,
                             destination: user,
                             forge_amount: swap_params.forge_amount,
+                            excess: Zero::zero(),
                             topup_amount: config.topup_amount,
-                            amount_received: config.topup_amount,
+                            amount_received: asset_topped_up,
                         },
                     ),
                 ),
@@ -796,6 +800,7 @@ fn test_swap_topup_within_slippage_pass() {
                             asset,
                             destination: user,
                             forge_amount: swap_params.forge_amount,
+                            excess: Zero::zero(),
                             topup_amount: config.topup_amount,
                             amount_received,
                         },
