@@ -148,18 +148,16 @@ pub mod topup_rite {
                 "{}: Not owner",
                 RITE_ID(),
             );
+            assert!(config.destination.is_non_zero(), "{}: Invalid destination", RITE_ID());
+            assert!(
+                config.conditions.slippage.is_non_zero()
+                    && config.conditions.slippage <= MAX_SLIPPAGE.into(),
+                "{}: Slippage out of acceptable range",
+                RITE_ID(),
+            );
+            assert!(config.asset.is_non_zero(), "{}: Invalid asset", RITE_ID());
 
             if config.topup_amount.is_non_zero() {
-                assert!(config.destination.is_non_zero(), "{}: Invalid destination", RITE_ID());
-                assert!(
-                    config.conditions.slippage.is_non_zero()
-                        && config.conditions.slippage <= MAX_SLIPPAGE.into(),
-                    "{}: Slippage out of acceptable range",
-                    RITE_ID(),
-                );
-
-                assert!(config.asset.is_non_zero(), "{}: Invalid asset", RITE_ID());
-
                 let cash = self.yin.read().contract_address;
                 if config.asset != cash {
                     assert!(
