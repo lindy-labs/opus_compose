@@ -361,6 +361,10 @@ pub mod topup_rite {
                     .quote_swap(route_node, exact_output_token_amount);
                 // Switch amount to positive for exact input swap
                 // i.e. amount you need/want to provide to the pool
+                // There may be a negligible discrepancy due to AMM rounding depending on the
+                // number of ticks crossed. No workarounds are implemented to guarantee the exact
+                // topup amount to the smallest decimal so as to preserve the simplicity and
+                // efficiency of the existing flow.
                 let cash_amount: u128 = if cash_is_token0 {
                     quote_delta.amount0.try_into().unwrap()
                 } else {
