@@ -9,16 +9,18 @@ pub trait ITopupRite<TContractState> {
 pub mod topup_rite {
     use core::num::traits::Zero;
     use ekubo::components::clear::{IClearDispatcher, IClearDispatcherTrait};
+    use ekubo::extensions::oracle::{IOracleDispatcher, IOracleDispatcherTrait};
     use ekubo::interfaces::core::{ICoreDispatcher, ICoreDispatcherTrait};
     use ekubo::interfaces::erc20::IERC20Dispatcher as EkuboERC20Dispatcher;
     use ekubo::interfaces::router::{
         IRouterDispatcher, IRouterDispatcherTrait, RouteNode, TokenAmount,
     };
+    use ekubo::math::ticks::tick_to_sqrt_ratio;
     use ekubo::types::delta::Delta;
     use ekubo::types::keys::PoolKey;
     use ekubo::types::pool_price::PoolPrice;
     use opus::interfaces::{IAbbotDispatcher, IAbbotDispatcherTrait};
-    use opus_compose::archabbot::contracts::rites::topup::constants::MAX_SLIPPAGE;
+    use opus_compose::archabbot::contracts::rites::topup::constants::{MAX_SLIPPAGE, TWAP_PERIOD};
     use opus_compose::archabbot::contracts::rites::topup::types::{SwapParams, TopupConfig};
     use opus_compose::archabbot::contracts::rites::types::{EkuboPoolParams, EkuboPoolParamsTrait};
     use opus_compose::archabbot::contracts::rites::utils::rites_utils;
@@ -60,6 +62,7 @@ pub mod topup_rite {
         archabbot: ICelebrantDispatcher,
         ekubo_core: ICoreDispatcher,
         ekubo_router: IRouterDispatcher,
+        ekubo_oracle: IOracleDispatcher,
         // Mapping of trove ID -> topup config
         topup_configs: Map<u64, TopupConfig>,
     }
@@ -111,12 +114,14 @@ pub mod topup_rite {
         archabbot: ContractAddress,
         ekubo_router: ContractAddress,
         ekubo_core: ContractAddress,
+        ekubo_oracle: ContractAddress,
     ) {
         self.yin.write(IERC20Dispatcher { contract_address: yin });
         self.archabbot.write(ICelebrantDispatcher { contract_address: archabbot });
 
         self.ekubo_core.write(ICoreDispatcher { contract_address: ekubo_core });
         self.ekubo_router.write(IRouterDispatcher { contract_address: ekubo_router });
+        self.ekubo_oracle.write(IOracleDispatcher { contract_address: ekubo_oracle });
 
         self.src5.register_interface(IRITE_ID);
     }
@@ -347,9 +352,16 @@ pub mod topup_rite {
                 // Catches invalid pools
                 assert!(pool_price.sqrt_ratio.is_non_zero(), "{}: Pool price is zero", RITE_ID());
 
+                // Use TWAP-derived sqrt_ratio for the limit to resist spot price manipulation.
+                // The forge amount is still sized from the spot-price quote; only the limit
+                // (which bounds the swap's worst-case execution price) is anchored to the TWAP.
+                let twap_tick = self.ekubo_oracle.read()
+                    .get_average_tick_over_last(pool_key.token0, pool_key.token1, TWAP_PERIOD);
+                let twap_sqrt_ratio: u256 = tick_to_sqrt_ratio(twap_tick);
+
                 let cash_is_token0: bool = pool_key.token0 == cash;
                 let sqrt_ratio_limit = calculate_sqrt_ratio_limit(
-                    pool_price.sqrt_ratio, slippage, cash_is_token0,
+                    twap_sqrt_ratio, slippage, cash_is_token0,
                 );
                 let route_node = RouteNode { pool_key, sqrt_ratio_limit, skip_ahead: 0 };
                 // Set amount to negative for exact output swap i.e. amount you want to get out of

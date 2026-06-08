@@ -37,6 +37,7 @@ fn deploy_topup_rite(archabbot_address: ContractAddress) -> ContractAddress {
         archabbot_address.into(),
         mainnet::EKUBO_ROUTER.into(),
         mainnet::EKUBO_CORE.into(),
+        mainnet::EKUBO_ORACLE.into(),
     ];
     let (rite_addr, _) = topup_class.deploy(@calldata).expect('topup deploy fail');
     rite_addr
