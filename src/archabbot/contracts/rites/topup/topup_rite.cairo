@@ -355,7 +355,9 @@ pub mod topup_rite {
                 // Use TWAP-derived sqrt_ratio for the limit to resist spot price manipulation.
                 // The forge amount is still sized from the spot-price quote; only the limit
                 // (which bounds the swap's worst-case execution price) is anchored to the TWAP.
-                let twap_tick = self.ekubo_oracle.read()
+                let twap_tick = self
+                    .ekubo_oracle
+                    .read()
                     .get_average_tick_over_last(pool_key.token0, pool_key.token1, TWAP_PERIOD);
                 let twap_sqrt_ratio: u256 = tick_to_sqrt_ratio(twap_tick);
 
