@@ -98,7 +98,6 @@ pub mod topup_rite {
         #[key]
         pub destination: ContractAddress,
         pub forge_amount: Wad,
-        pub excess: Wad,
         pub topup_amount: u128,
         pub amount_received: u128,
     }
@@ -239,12 +238,11 @@ pub mod topup_rite {
             archabbot.on_rite_actions(trove_id, array![Action::Forge(forge_amount)].span());
 
             let mut amount_received = config.topup_amount;
-            let mut excess: Wad = Zero::zero();
             if let Some(route_node) = route_node {
                 let ekubo_router = self.ekubo_router.read();
                 let forge_amount: u128 = forge_amount.into();
                 yin.transfer(ekubo_router.contract_address, forge_amount.into());
-                let delta = ekubo_router
+                ekubo_router
                     .swap(
                         route_node,
                         TokenAmount { token: yin.contract_address, amount: forge_amount.into() },
@@ -267,25 +265,6 @@ pub mod topup_rite {
                     )
                     .try_into()
                     .unwrap();
-
-                // Handle partial fills when sqrt ratio hits limit
-                let cash_is_token0: bool = route_node.pool_key.token0 == yin.contract_address;
-                let cash_delta = if cash_is_token0 {
-                    delta.amount0
-                } else {
-                    delta.amount1
-                };
-                if cash_delta != forge_amount.into() {
-                    excess = router_clear
-                        .clear_minimum_to_recipient(
-                            EkuboERC20Dispatcher { contract_address: yin.contract_address },
-                            0,
-                            archabbot.contract_address,
-                        )
-                        .try_into()
-                        .unwrap();
-                    archabbot.on_rite_actions(trove_id, array![Action::Melt(excess)].span())
-                }
             } else {
                 yin.transfer(config.destination, forge_amount.into());
             }
@@ -297,7 +276,6 @@ pub mod topup_rite {
                         asset: config.asset,
                         destination: config.destination,
                         forge_amount,
-                        excess,
                         topup_amount: config.topup_amount,
                         amount_received,
                     },
