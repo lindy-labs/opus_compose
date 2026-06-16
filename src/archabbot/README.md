@@ -124,16 +124,22 @@ Automatically tops up a destination address when its balance of a tracked asset 
 | `asset` | Token to top up. Can be CASH or any ERC-20. |
 | `topup_amount` | Amount to deliver. Set to **0 to disable**. |
 | `destination` | Address receiving the topped-up asset. |
-| `min_asset_balance` | Trigger threshold — when destination balance drops below this. |
-| `slippage` | Max acceptable price impact and output amount for the swap (max 20%). |
 | `pool_params` | Ekubo pool parameters (`fee`, `tick_spacing`, `extension`) for CASH-to-asset swap. |
+| `conditions` | A `TopupConditions` struct (see below) packing the trigger threshold and slippage. |
+
+`conditions` is a `TopupConditions` packed into a single `felt252`:
+
+| Field | Description |
+|---|---|
+| `min_asset_balance` | Trigger threshold — when destination balance drops below this. |
+| `slippage` | Max acceptable price impact (used for the swap's sqrt-ratio limit) and output amount (max 20%). |
 
 **Execution:**
 1. Keeper sees `destination.balanceOf(asset) < min_asset_balance`.
 2. Keeper calls `execute_rite`.
 3. Archabbot borrows CASH via `Forge`.
-4. If `asset != CASH`, CASH is swapped for the asset through Ekubo by first fetching the quote for an exact-output swap for the asset and then flipping it to an exact-input swap of CASH (plus 1 wei for AMM rounding).
-5. Asset is transferred to `destination` (via `clear_minimum_to_recipient` for slippage protection).
+4. If `asset != CASH`, CASH is swapped for the asset through Ekubo. The forge amount is sized by quoting an exact-output swap for the asset (at spot price), then flipping it to an exact-input swap of CASH. The swap's worst-case execution price is bounded by a sqrt-ratio limit derived from a **60-second TWAP** (`TWAP_PERIOD`) from Ekubo's oracle, rather than the spot price, to resist manipulation. No rounding workaround is applied; a negligible discrepancy from AMM rounding is accepted.
+5. Asset is transferred to `destination` (via `clear_minimum_to_recipient` for slippage protection on the output amount).
 6. Keeper receives incentive (if any).
 
 **Type:** One-off (completes in a single transaction). `has_ended()` always returns `true`.
