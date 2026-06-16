@@ -9,7 +9,7 @@ It implements the same `IAbbot` interface, so all standard trove operations (dep
   - **Per-trove safety configuration**: relative threshold and max forge fee to protect automated operations
 - **Leverage**: flash-loan-powered lever up and lever down in a single transaction
 
-### External Dependencies
+## External Dependencies
 
 | Contract | Role |
 |---|---|
@@ -19,6 +19,7 @@ It implements the same `IAbbot` interface, so all standard trove operations (dep
 | **Flash Mint** | EIP-3156 flash lender for leverage operations |
 | **Ekubo Router** | DEX router for swaps (leverage and rites) |
 | **Ekubo Core** | Pool price oracle (used by rites for swap quoting) |
+| **Ekubo Oracle** | TWAP oracle (used by rites for sqrt ratio limit calculation to mitigate price manipulation) |
 
 ---
 
@@ -67,7 +68,7 @@ Rites must register the `IRITE_ID` interface via SRC5 to be accepted by the Arch
 
 ### Rite Execution Flow
 
-```
+```text
 Keeper calls execute_rite(trove_id)
   │
   ├─ Archabbot checks is_ready() on the rite
@@ -204,7 +205,7 @@ Flash-mint CASH, repay trove debt, withdraw collateral, swap for CASH on Ekubo, 
 
 ## Directory Structure
 
-```
+```text
 src/archabbot/
 ├── contracts/
 │   ├── archabbot.cairo          # Main Archabbot contract
