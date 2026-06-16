@@ -720,7 +720,6 @@ fn setup_trove_with_mock_rite() -> (archabbot_utils::ArchabbotTestConfig, u64, C
 
 #[test]
 #[fork("MAINNET_ARCHABBOT")]
-#[should_panic(expected: "ARC: Not trove owner")]
 fn test_set_mock_rite_pass() {
     let test_config = archabbot_utils::archabbot_deploy(None);
     let user: ContractAddress = archabbot_utils::USER;
@@ -729,9 +728,7 @@ fn test_set_mock_rite_pass() {
     let mut spy = spy_events();
 
     let rite_addr = deploy_mock_rite(test_config.archabbot.contract_address);
-    cheat_caller_address(
-        test_config.archabbot.contract_address, archabbot_utils::BAD_GUY, CheatSpan::TargetCalls(1),
-    );
+    cheat_caller_address(test_config.archabbot.contract_address, user, CheatSpan::TargetCalls(1));
     test_config.archabbot.set_rite(trove_id, rite_addr);
 
     let expected_events = array![
