@@ -1,4 +1,11 @@
 pub mod addresses;
+pub mod constants;
+pub mod shared {
+    pub mod components {
+        pub mod reentrancy_guard;
+        pub mod src5;
+    }
+}
 pub mod interfaces {
     pub mod erc20;
 }
@@ -41,3 +48,45 @@ pub mod stabilizer {
     }
 }
 
+pub mod archabbot {
+    pub mod contracts {
+        pub mod archabbot;
+        pub mod rites {
+            pub mod types;
+            pub mod utils;
+            pub mod topup {
+                pub mod constants;
+                pub mod topup_rite;
+                pub mod types;
+            }
+        }
+    }
+    pub mod interfaces {
+        pub mod celebrant;
+        pub mod lever;
+        pub mod rite;
+    }
+    pub mod types;
+    pub mod utils {
+        pub mod sqrt_ratio_limit;
+    }
+
+    #[cfg(test)]
+    pub mod tests {
+        pub mod test_archabbot;
+        pub mod test_archabbot_lever;
+        pub mod test_types;
+        pub mod utils;
+        pub mod mocks {
+            pub mod fake_src5_rite;
+            pub mod malicious_lever;
+            pub mod mock_rite;
+            pub mod no_callback_rite;
+            pub mod reentrant_rite;
+            pub mod trove_opening_rite;
+        }
+        pub mod rites {
+            pub mod test_topup_rite;
+        }
+    }
+}

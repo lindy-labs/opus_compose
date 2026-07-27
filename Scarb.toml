@@ -45,3 +45,8 @@ block_id.number = "1047705"
 name = "MAINNET_LATEST"
 url = "$NODE_URL"
 block_id.tag = "latest"
+
+[[tool.snforge.fork]]
+name = "MAINNET_ARCHABBOT"
+url = "$NODE_URL"
+block_id.number = "7407535"

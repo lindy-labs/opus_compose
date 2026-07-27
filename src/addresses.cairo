@@ -9,6 +9,10 @@ pub mod mainnet {
         0x00Ca40fCa4208A0c2a38fc81a66C171623aAC3B913A4365F7f0BC0EB3296573C
         .try_into()
         .unwrap();
+    pub const EXISTING_TROVE_OWNER: ContractAddress =
+        0x010e05784f5734bb497f1f48666cf71f7c372b07a81fe147e40d42ea4c01914f
+        .try_into()
+        .unwrap();
 
     // Binance's address
     pub const WHALE: ContractAddress =
@@ -56,6 +60,10 @@ pub mod mainnet {
         0x06a3593f7115f8f5e0728995d8924229cb1c4109ea477655bad281b36a760f41
         .try_into()
         .unwrap();
+    pub const CARETAKER: ContractAddress =
+        0x012A5EfCb820803bA700503329567FCDDDd7731E0d05E06217ED1152f956DBB0
+        .try_into()
+        .unwrap();
     pub const EQUALIZER: ContractAddress =
         0x066e3e2ea2095b2a0424b9a2272e4058f30332df5ff226518d19c20d3ab8e842
         .try_into()
@@ -66,6 +74,10 @@ pub mod mainnet {
         .unwrap();
     pub const FLASH_MINT: ContractAddress =
         0x05e57a033bb3a03e8ac919cbb4e826faf8f3d6a58e76ff7a13854ffc78264681
+        .try_into()
+        .unwrap();
+    pub const RECEPTOR: ContractAddress =
+        0x059c159d9a87a34f17c4991e81b0d937aaf86a29f682ce0951536265bd6a1678
         .try_into()
         .unwrap();
     pub const SENTINEL: ContractAddress =
@@ -96,6 +108,10 @@ pub mod mainnet {
         .unwrap();
     pub const EKUBO_ROUTER: ContractAddress =
         0x0199741822c2dc722f6f605204f35e56dbc23bceed54818168c4c49e4fb8737e
+        .try_into()
+        .unwrap();
+    pub const EKUBO_TWAMM_EXTENSION: ContractAddress =
+        0x043e4f09c32d13d43a880e85f69f7de93ceda62d6cf2581a582c6db635548fdc
         .try_into()
         .unwrap();
 }
